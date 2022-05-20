@@ -1,0 +1,12 @@
+Source: ros-galactic-depthai-bridge
+Section: misc
+Priority: optional
+Maintainer: Sachin Guruswamy <sachin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libboost-dev, libopencv-dev, ros-galactic-ament-cmake, ros-galactic-camera-info-manager, ros-galactic-cv-bridge, ros-galactic-depthai-ros-msgs, ros-galactic-image-transport, ros-galactic-rclcpp, ros-galactic-sensor-msgs, ros-galactic-std-msgs, ros-galactic-stereo-msgs, ros-galactic-vision-msgs, ros-galactic-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-galactic-depthai-bridge
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libboost-dev, libopencv-dev, ros-galactic-camera-info-manager, ros-galactic-cv-bridge, ros-galactic-depthai-ros-msgs, ros-galactic-image-transport, ros-galactic-rclcpp, ros-galactic-robot-state-publisher, ros-galactic-sensor-msgs, ros-galactic-std-msgs, ros-galactic-stereo-msgs, ros-galactic-vision-msgs, ros-galactic-xacro, ros-galactic-ros-workspace
+Description: The depthai_bridge package
