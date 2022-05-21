@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.10.2)  # CMake version in Ubuntu 18.04 LTS
 
-project (depthai_ros_msgs VERSION 2.5.0)
+project (depthai_ros_msgs VERSION 2.5.1)
 
 if(POLICY CMP0057)
     cmake_policy(SET CMP0057 NEW)
@@ -11,7 +11,7 @@ find_package(ament_cmake QUIET)
 if ( ament_cmake_FOUND )
     # Not adding -DUSING_ROS since xml_parsing.cpp hasn't been ported to ROS2
     message(STATUS "------------------------------------------")
-    message(STATUS "Depthai Bridge is being built using AMENT.")
+    message(STATUS "Depthai ROS MSGS/INTERFACES is being built using AMENT.")
     message(STATUS "------------------------------------------")
     
     find_package(geometry_msgs REQUIRED)
