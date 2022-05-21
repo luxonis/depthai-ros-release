@@ -1,7 +1,0 @@
-ros-galactic-depthai-ros (2.5.0-1focal) focal; urgency=high
-
-  * packaging all the depthai pacakges
-
- -- sachin <sachin@luxonis.com>  Fri, 20 May 2022 07:00:00 -0000
-
-
