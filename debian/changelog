@@ -1,9 +1,0 @@
-ros-foxy-depthai-ros-msgs (2.5.0-2focal) focal; urgency=high
-
-  * Release 2.15.4
-  * add ament package:
-  * additional custom interfaces needed to publish depthai structures
-
- -- Sachin Guruswamy <sachin@luxonis.com>  Fri, 20 May 2022 07:00:00 -0000
-
-
