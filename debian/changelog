@@ -1,0 +1,22 @@
+ros-humble-depthai-examples (2.5.2-1jammy) jammy; urgency=high
+
+  * Upgraded examples
+  * Fixed bugs for Noetic
+
+ -- sachin <sachin@luxonis.com>  Wed, 01 Jun 2022 07:00:00 -0000
+
+ros-humble-depthai-examples (2.5.1-1jammy) jammy; urgency=high
+
+  * Fix Build farm issues
+
+ -- sachin <sachin@luxonis.com>  Fri, 20 May 2022 07:00:00 -0000
+
+ros-humble-depthai-examples (2.5.0-1jammy) jammy; urgency=high
+
+  * Release 2.5.0
+  * add ament package:
+  * created Bridge and Coverters to handle images, IMU and camera Info
+
+ -- sachin <sachin@luxonis.com>  Fri, 20 May 2022 07:00:00 -0000
+
+
