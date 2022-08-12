@@ -1,0 +1,12 @@
+Source: ros-foxy-depthai-ros-msgs
+Section: misc
+Priority: optional
+Maintainer: Sachin Guruswamy <sachin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), ros-foxy-ament-cmake, ros-foxy-builtin-interfaces, ros-foxy-geometry-msgs, ros-foxy-rclcpp, ros-foxy-rosidl-default-generators, ros-foxy-sensor-msgs, ros-foxy-std-msgs, ros-foxy-vision-msgs, ros-foxy-ros-workspace, ros-foxy-rosidl-typesupport-fastrtps-c, ros-foxy-rosidl-typesupport-fastrtps-cpp, ros-foxy-rosidl-typesupport-connext-c, ros-foxy-rosidl-typesupport-connext-cpp
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-foxy-depthai-ros-msgs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-foxy-builtin-interfaces, ros-foxy-geometry-msgs, ros-foxy-rclcpp, ros-foxy-rosidl-default-generators, ros-foxy-sensor-msgs, ros-foxy-std-msgs, ros-foxy-vision-msgs, ros-foxy-ros-workspace
+Description: Package to keep interface independent of the driver
