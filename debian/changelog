@@ -1,0 +1,13 @@
+ros-noetic-depthai-ros (2.6.1-2buster) buster; urgency=high
+
+  * Update docker image building
+
+ -- sachin <sachin@luxonis.com>  Tue, 10 Jan 2023 18:30:00 -0000
+
+ros-noetic-depthai-ros (2.6.0-2buster) buster; urgency=high
+
+  * Added depthai_ros_driver package
+
+ -- sachin <sachin@luxonis.com>  Tue, 10 Jan 2023 18:30:00 -0000
+
+
