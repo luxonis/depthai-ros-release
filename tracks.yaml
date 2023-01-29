@@ -14,7 +14,7 @@ tracks:
       :{release_inc} --os-name fedora
     - git-bloom-generate -y rosrpm --prefix release/:{ros_distro} :{ros_distro} -i
       :{release_inc} --os-name rhel
-    devel_branch: ros-release
+    devel_branch: foxy
     last_version: 2.5.3
     name: depthai-ros
     patches: null
@@ -40,7 +40,7 @@ tracks:
       :{release_inc} --os-name fedora
     - git-bloom-generate -y rosrpm --prefix release/:{ros_distro} :{ros_distro} -i
       :{release_inc} --os-name rhel
-    devel_branch: ros-release
+    devel_branch: galactic
     last_version: 2.5.3
     name: depthai-ros
     patches: null
@@ -66,7 +66,7 @@ tracks:
       :{release_inc} --os-name fedora
     - git-bloom-generate -y rosrpm --prefix release/:{ros_distro} :{ros_distro} -i
       :{release_inc} --os-name rhel
-    devel_branch: ros-release
+    devel_branch: humble
     last_version: 2.5.3
     name: depthai-ros
     patches: null
@@ -92,7 +92,7 @@ tracks:
       :{release_inc} --os-name fedora
     - git-bloom-generate -y rosrpm --prefix release/:{ros_distro} :{ros_distro} -i
       :{release_inc} --os-name rhel
-    devel_branch: ros-release
+    devel_branch: noetic
     last_version: 2.5.3
     name: depthai-ros
     patches: null
