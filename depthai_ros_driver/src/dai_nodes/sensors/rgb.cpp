@@ -2,25 +2,26 @@
 
 #include "cv_bridge/cv_bridge.h"
 #include "depthai_bridge/ImageConverter.hpp"
-#include "image_transport/camera_publisher.hpp"
-#include "image_transport/image_transport.hpp"
+#include "image_transport/camera_publisher.h"
+#include "image_transport/image_transport.h"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
 RGB::RGB(const std::string& daiNodeName,
-         rclcpp::Node* node,
+         ros::NodeHandle node,
          std::shared_ptr<dai::Pipeline> pipeline,
          dai::CameraBoardSocket socket = dai::CameraBoardSocket::RGB,
          sensor_helpers::ImageSensor sensor = {"IMX378", {"12mp", "4k"}, true},
          bool publish = true)
-    : BaseNode(daiNodeName, node, pipeline) {
-    RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
+    : BaseNode(daiNodeName, node, pipeline), it(node) {
+    ROS_DEBUG("Creating node %s", daiNodeName.c_str());
     setNames();
     colorCamNode = pipeline->create<dai::node::ColorCamera>();
     ph = std::make_unique<param_handlers::RGBParamHandler>(daiNodeName);
     ph->declareParams(node, colorCamNode, socket, sensor, publish);
+
     setXinXout(pipeline);
-    RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
+    ROS_DEBUG("Node %s created", daiNodeName.c_str());
 };
 void RGB::setNames() {
     ispQName = getName() + "_isp";
@@ -33,8 +34,6 @@ void RGB::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
         xoutColor = pipeline->create<dai::node::XLinkOut>();
         xoutColor->setStreamName(ispQName);
         if(ph->getParam<bool>(getROSNode(), "i_low_bandwidth")) {
-            RCLCPP_INFO(getROSNode()->get_logger(), "POE");
-
             videoEnc = pipeline->create<dai::node::VideoEncoder>();
             videoEnc->setQuality(ph->getParam<int>(getROSNode(), "i_low_bandwidth_quality"));
             videoEnc->setProfile(dai::VideoEncoderProperties::Profile::MJPEG);
@@ -59,23 +58,23 @@ void RGB::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
 void RGB::setupQueues(std::shared_ptr<dai::Device> device) {
     auto calibHandler = device->readCalibration();
     if(ph->getParam<bool>(getROSNode(), "i_publish_topic")) {
-        auto tfPrefix = std::string(getROSNode()->get_name()) + "_" + getName();
+        auto tfPrefix = std::string(getROSNode().getNamespace()) + "_" + getName();
+        tfPrefix.erase(0, 1);
         imageConverter = std::make_unique<dai::ros::ImageConverter>(tfPrefix + "_camera_optical_frame", false);
         colorQ = device->getOutputQueue(ispQName, ph->getParam<int>(getROSNode(), "i_max_q_size"), false);
         colorQ->addCallback(std::bind(&RGB::colorQCB, this, std::placeholders::_1, std::placeholders::_2));
-        rgbPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/image_raw");
-
+        rgbPub = it.advertiseCamera(getName() + "/image_raw", 1);
         if(ph->getParam<bool>(getROSNode(), "i_enable_preview")) {
             previewQ = device->getOutputQueue(previewQName, ph->getParam<int>(getROSNode(), "i_max_q_size"), false);
             previewQ->addCallback(std::bind(&RGB::colorQCB, this, std::placeholders::_1, std::placeholders::_2));
-            previewPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/preview/image_raw");
+            previewPub = it.advertiseCamera(getName() + "/preview/image_raw", 1);
             try {
                 previewInfo = imageConverter->calibrationToCameraInfo(calibHandler,
                                                                       static_cast<dai::CameraBoardSocket>(ph->getParam<int>(getROSNode(), "i_board_socket_id")),
                                                                       ph->getParam<int>(getROSNode(), "i_preview_size"),
                                                                       ph->getParam<int>(getROSNode(), "i_preview_size"));
             } catch(std::runtime_error& e) {
-                RCLCPP_ERROR(getROSNode()->get_logger(), "No calibration! Publishing empty camera_info.");
+                ROS_ERROR("No calibration! Publishing empty camera_info.");
             }
         };
         try {
@@ -84,7 +83,7 @@ void RGB::setupQueues(std::shared_ptr<dai::Device> device) {
                                                               ph->getParam<int>(getROSNode(), "i_width"),
                                                               ph->getParam<int>(getROSNode(), "i_height"));
         } catch(std::runtime_error& e) {
-            RCLCPP_ERROR(getROSNode()->get_logger(), "No calibration! Publishing empty camera_info.");
+            ROS_ERROR("No calibration! Publishing empty camera_info.");
         }
     }
     controlQ = device->getInputQueue(controlQName);
@@ -102,7 +101,7 @@ void RGB::closeQueues() {
 
 void RGB::colorQCB(const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
     auto img = std::dynamic_pointer_cast<dai::ImgFrame>(data);
-    std::deque<sensor_msgs::msg::Image> deq;
+    std::deque<sensor_msgs::Image> deq;
     if(ph->getParam<bool>(getROSNode(), "i_low_bandwidth"))
         imageConverter->toRosMsgFromBitStream(img, deq, dai::RawImgFrame::Type::BGR888i, rgbInfo);
     else
@@ -132,8 +131,8 @@ void RGB::link(const dai::Node::Input& in, int linkType) {
     }
 }
 
-void RGB::updateParams(const std::vector<rclcpp::Parameter>& params) {
-    auto ctrl = ph->setRuntimeParams(getROSNode(), params);
+void RGB::updateParams(parametersConfig& config) {
+    auto ctrl = ph->setRuntimeParams(getROSNode(), config);
     controlQ->send(ctrl);
 }
 

@@ -10,9 +10,13 @@
 
   <license>MIT</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  <depend>rclcpp</depend>
-  <depend>rclcpp_components</depend>
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>rospy</depend>
+  <depend>camera_info_manager</depend>
+  <depend>dynamic_reconfigure</depend>
+  <depend>message_filters</depend>
   <depend>sensor_msgs</depend>
   <depend>vision_msgs</depend>
   <depend>diagnostic_msgs</depend>
@@ -24,10 +28,10 @@
   <depend>image_pipeline</depend>
   <depend>depthai</depend>
   <depend>depthai_bridge</depend>
-  <test_depend>ament_lint_auto</test_depend>
-  <test_depend>ament_lint_common</test_depend>
+  <depend>nodelet</depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <nodelet plugin="${prefix}/nodelet_plugins.xml" />
+    <build_type>catkin</build_type>
   </export>
 </package>

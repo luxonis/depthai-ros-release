@@ -2,26 +2,24 @@
 
 #include "cv_bridge/cv_bridge.h"
 #include "depthai_ros_driver/dai_nodes/nn/nn_helpers.hpp"
-#include "image_transport/camera_publisher.hpp"
-#include "image_transport/image_transport.hpp"
-#include "sensor_msgs/msg/camera_info.hpp"
-#include "sensor_msgs/msg/image.hpp"
+#include "image_transport/camera_publisher.h"
+#include "image_transport/image_transport.h"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
 namespace nn {
 
-SpatialMobilenet::SpatialMobilenet(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline)
+SpatialMobilenet::SpatialMobilenet(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline)
     : BaseNode(daiNodeName, node, pipeline) {
-    RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
+    ROS_DEBUG("Creating node %s", daiNodeName.c_str());
     setNames();
     mobileNode = pipeline->create<dai::node::MobileNetSpatialDetectionNetwork>();
     imageManip = pipeline->create<dai::node::ImageManip>();
     ph = std::make_unique<param_handlers::NNParamHandler>(daiNodeName);
     ph->declareParams(node, mobileNode, imageManip);
-    RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
     imageManip->out.link(mobileNode->input);
     setXinXout(pipeline);
+    ROS_DEBUG("Node %s created", daiNodeName.c_str());
 }
 
 void SpatialMobilenet::setNames() {
@@ -36,11 +34,12 @@ void SpatialMobilenet::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
 
 void SpatialMobilenet::setupQueues(std::shared_ptr<dai::Device> device) {
     nnQ = device->getOutputQueue(nnQName, ph->getParam<int>(getROSNode(), "i_max_q_size"), false);
-    auto tfPrefix = std::string(getROSNode()->get_name());
+    auto tfPrefix = std::string(getROSNode().getNamespace());
+    tfPrefix.erase(0, 1);
     detConverter = std::make_unique<dai::ros::SpatialDetectionConverter>(
         tfPrefix + "_rgb_camera_optical_frame", imageManip->initialConfig.getResizeConfig().width, imageManip->initialConfig.getResizeConfig().height, false);
     nnQ->addCallback(std::bind(&SpatialMobilenet::mobilenetCB, this, std::placeholders::_1, std::placeholders::_2));
-    detPub = getROSNode()->create_publisher<vision_msgs::msg::Detection3DArray>("~/" + getName() + "/detections", 10);
+    detPub = getROSNode().advertise<vision_msgs::Detection3DArray>(getName() + "/detections", 10);
 }
 void SpatialMobilenet::closeQueues() {
     nnQ->close();
@@ -48,11 +47,11 @@ void SpatialMobilenet::closeQueues() {
 
 void SpatialMobilenet::mobilenetCB(const std::string& /*name*/, const std::shared_ptr<dai::ADatatype>& data) {
     auto inDet = std::dynamic_pointer_cast<dai::SpatialImgDetections>(data);
-    std::deque<vision_msgs::msg::Detection3DArray> deq;
+    std::deque<vision_msgs::Detection3DArray> deq;
     detConverter->toRosVisionMsg(inDet, deq);
     while(deq.size() > 0) {
         auto currMsg = deq.front();
-        detPub->publish(currMsg);
+        detPub.publish(currMsg);
         deq.pop_front();
     }
 }
@@ -69,8 +68,8 @@ dai::Node::Input SpatialMobilenet::getInput(int linkType) {
     }
 }
 
-void SpatialMobilenet::updateParams(const std::vector<rclcpp::Parameter>& params) {
-    ph->setRuntimeParams(getROSNode(), params);
+void SpatialMobilenet::updateParams(parametersConfig& config) {
+    ph->setRuntimeParams(getROSNode(), config);
 }
 
 }  // namespace nn

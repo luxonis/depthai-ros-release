@@ -13,12 +13,12 @@ class MonoParamHandler : public BaseParamHandler {
    public:
     explicit MonoParamHandler(const std::string& name);
     ~MonoParamHandler();
-    void declareParams(rclcpp::Node* node,
+    void declareParams(ros::NodeHandle node,
                        std::shared_ptr<dai::node::MonoCamera> monoCam,
                        dai::CameraBoardSocket socket,
                        dai_nodes::sensor_helpers::ImageSensor sensor,
                        bool publish);
-    dai::CameraControl setRuntimeParams(rclcpp::Node* node, const std::vector<rclcpp::Parameter>& params) override;
+    dai::CameraControl setRuntimeParams(ros::NodeHandle node, parametersConfig& config) override;
 
    private:
     std::unordered_map<std::string, dai::MonoCameraProperties::SensorResolution> monoResolutionMap;

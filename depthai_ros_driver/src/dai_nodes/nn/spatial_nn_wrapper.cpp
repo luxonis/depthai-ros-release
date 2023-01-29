@@ -3,14 +3,14 @@
 #include "cv_bridge/cv_bridge.h"
 #include "depthai_ros_driver/dai_nodes/nn/spatial_mobilenet.hpp"
 #include "depthai_ros_driver/dai_nodes/nn/spatial_yolo.hpp"
-#include "image_transport/camera_publisher.hpp"
-#include "image_transport/image_transport.hpp"
+#include "image_transport/camera_publisher.h"
+#include "image_transport/image_transport.h"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
-SpatialNNWrapper::SpatialNNWrapper(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline)
+SpatialNNWrapper::SpatialNNWrapper(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline)
     : BaseNode(daiNodeName, node, pipeline) {
-    RCLCPP_DEBUG(node->get_logger(), "Creating node %s base", daiNodeName.c_str());
+    ROS_DEBUG("Creating node %s base", daiNodeName.c_str());
     ph = std::make_unique<param_handlers::NNParamHandler>(daiNodeName);
     auto family = ph->getNNFamily(getROSNode());
     switch(family) {
@@ -27,7 +27,7 @@ SpatialNNWrapper::SpatialNNWrapper(const std::string& daiNodeName, rclcpp::Node*
         }
     }
 
-    RCLCPP_DEBUG(node->get_logger(), "Base node %s created", daiNodeName.c_str());
+    ROS_DEBUG("Base node %s created", daiNodeName.c_str());
 };
 void SpatialNNWrapper::setNames() {}
 
@@ -48,9 +48,9 @@ dai::Node::Input SpatialNNWrapper::getInput(int linkType) {
     return nnNode->getInput(linkType);
 }
 
-void SpatialNNWrapper::updateParams(const std::vector<rclcpp::Parameter>& params) {
-    ph->setRuntimeParams(getROSNode(), params);
-    nnNode->updateParams(params);
+void SpatialNNWrapper::updateParams(parametersConfig& config) {
+    ph->setRuntimeParams(getROSNode(), config);
+    nnNode->updateParams(config);
 }
 
 }  // namespace dai_nodes
