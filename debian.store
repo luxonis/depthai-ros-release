@@ -1,1 +1,1 @@
-{"base": "e06f367", "parent": "debian/noetic/depthai_ros_driver", "previous": "ffc25cf", "trim": "", "trimbase": ""}
+{"base": "dcd9afb", "parent": "debian/noetic/depthai_ros_driver", "previous": "33c70df", "trim": "", "trimbase": ""}
