@@ -2,36 +2,26 @@
 
 #include <depthai_bridge/ImageConverter.hpp>
 #include <depthai_bridge/depthaiUtility.hpp>
+#include <depthai_ros_msgs/msg/spatial_detection_array.hpp>
+
 #include "depthai/depthai.hpp"
-#ifdef IS_ROS2
-    #include <depthai_ros_msgs/msg/spatial_detection_array.hpp>
-
-    #include "rclcpp/rclcpp.hpp"
-#else
-    #include <depthai_ros_msgs/SpatialDetectionArray.h>
-    #include <ros/ros.h>
-
-    #include <boost/make_shared.hpp>
-    #include <boost/shared_ptr.hpp>
-#endif
+#include "rclcpp/rclcpp.hpp"
+#include "vision_msgs/msg/detection3_d_array.hpp"
 
 namespace dai {
 
 namespace ros {
 
-#ifdef IS_ROS2
 namespace SpatialMessages = depthai_ros_msgs::msg;
 using SpatialDetectionArrayPtr = SpatialMessages::SpatialDetectionArray::SharedPtr;
-#else
-namespace SpatialMessages = depthai_ros_msgs;
-using SpatialDetectionArrayPtr = SpatialMessages::SpatialDetectionArray::Ptr;
-#endif
+
 class SpatialDetectionConverter {
    public:
     // DetectionConverter() = default;
     SpatialDetectionConverter(std::string frameName, int width, int height, bool normalized = false);
 
     void toRosMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData, std::deque<SpatialMessages::SpatialDetectionArray>& opDetectionMsg);
+    void toRosVisionMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData, std::deque<vision_msgs::msg::Detection3DArray>& opDetectionMsg);
 
     SpatialDetectionArrayPtr toRosMsgPtr(std::shared_ptr<dai::SpatialImgDetections> inNetData);
 
@@ -40,11 +30,8 @@ class SpatialDetectionConverter {
     const std::string _frameName;
     bool _normalized;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-#ifdef IS_ROS2
+
     rclcpp::Time _rosBaseTime;
-#else
-    ::ros::Time _rosBaseTime;
-#endif
 };
 
 /** TODO(sachin): Do we need to have ros msg -> dai bounding box ?
