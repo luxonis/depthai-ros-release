@@ -1,5 +1,0 @@
-/oak:
-    camera:
-      i_nn_type: none
-    rgb:
-      i_resolution: '720'
