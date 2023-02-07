@@ -1,26 +1,26 @@
 #include "depthai_ros_driver/dai_nodes/nn/segmentation.hpp"
 
 #include "cv_bridge/cv_bridge.h"
-#include "image_transport/camera_publisher.h"
-#include "image_transport/image_transport.h"
-#include "sensor_msgs/CameraInfo.h"
-#include "sensor_msgs/Image.h"
+#include "image_transport/camera_publisher.hpp"
+#include "image_transport/image_transport.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
+#include "sensor_msgs/msg/image.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
 namespace nn {
 
-Segmentation::Segmentation(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline)
-    : BaseNode(daiNodeName, node, pipeline), it(node) {
-    ROS_DEBUG("Creating node %s", daiNodeName.c_str());
+Segmentation::Segmentation(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline)
+    : BaseNode(daiNodeName, node, pipeline) {
+    RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
     setNames();
     segNode = pipeline->create<dai::node::NeuralNetwork>();
     imageManip = pipeline->create<dai::node::ImageManip>();
     ph = std::make_unique<param_handlers::NNParamHandler>(daiNodeName);
     ph->declareParams(node, segNode, imageManip);
+    RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
     imageManip->out.link(segNode->input);
     setXinXout(pipeline);
-    ROS_DEBUG("Node %s created", daiNodeName.c_str());
 }
 
 void Segmentation::setNames() {
@@ -35,7 +35,7 @@ void Segmentation::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
 
 void Segmentation::setupQueues(std::shared_ptr<dai::Device> device) {
     nnQ = device->getOutputQueue(nnQName, ph->getParam<int>(getROSNode(), "i_max_q_size"), false);
-    nnPub = it.advertiseCamera(getName() + "/image_raw", 1);
+    nnPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/image_raw");
     nnQ->addCallback(std::bind(&Segmentation::segmentationCB, this, std::placeholders::_1, std::placeholders::_2));
 }
 
@@ -49,12 +49,12 @@ void Segmentation::segmentationCB(const std::string& /*name*/, const std::shared
     cv::Mat nn_mat = cv::Mat(nn_frame);
     nn_mat = nn_mat.reshape(0, 256);
     cv::Mat cv_frame = decodeDeeplab(nn_mat);
-    auto currTime = ros::Time::now();
+    auto currTime = getROSNode()->get_clock()->now();
     cv_bridge::CvImage imgBridge;
-    sensor_msgs::Image img_msg;
-    std_msgs::Header header;
-    header.stamp = currTime;
-    header.frame_id = std::string(getROSNode().getNamespace()) + "_rgb_camera_optical_frame";
+    sensor_msgs::msg::Image img_msg;
+    std_msgs::msg::Header header;
+    header.stamp = getROSNode()->get_clock()->now();
+    header.frame_id = std::string(getROSNode()->get_name()) + "_rgb_camera_optical_frame";
     nnInfo.header = header;
     imgBridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, cv_frame);
     imgBridge.toImageMsg(img_msg);
@@ -85,10 +85,9 @@ dai::Node::Input Segmentation::getInput(int linkType) {
     return imageManip->inputImage;
 }
 
-void Segmentation::updateParams(parametersConfig& config) {
-    ph->setRuntimeParams(getROSNode(), config);
+void Segmentation::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    ph->setRuntimeParams(getROSNode(), params);
 }
-
 }  // namespace nn
 }  // namespace dai_nodes
 }  // namespace depthai_ros_driver

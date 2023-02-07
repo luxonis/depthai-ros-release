@@ -12,7 +12,7 @@ DisparityConverter::DisparityConverter(const std::string frameName, float focalL
       _minDepth(minDepth / 100.0),
       _maxDepth(maxDepth / 100.0),
       _steadyBaseTime(std::chrono::steady_clock::now()) {
-    _rosBaseTime = ::ros::Time::now();
+    _rosBaseTime = rclcpp::Clock().now();
 }
 
 void DisparityConverter::toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<DisparityMsgs::DisparityImage>& outDispImageMsgs) {
@@ -23,8 +23,11 @@ void DisparityConverter::toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::de
     outDispImageMsg.min_disparity = _focalLength * _baseline / _maxDepth;
     outDispImageMsg.max_disparity = _focalLength * _baseline / _minDepth;
 
-    outDispImageMsg.T = _baseline / 100.0;  // converting cm to meters
+    outDispImageMsg.t = _baseline / 100.0;  // converting cm to meters
 
+    // copying the data to ros msg
+    // outDispImageMsg.header       = imgHeader;
+    // std::string temp_str(encodingEnumMap[inData->getType()]);
     ImageMsgs::Image& outImageMsg = outDispImageMsg.image;
     outDispImageMsg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
 
@@ -77,7 +80,9 @@ DisparityImagePtr DisparityConverter::toRosMsgPtr(std::shared_ptr<dai::ImgFrame>
     std::deque<DisparityMsgs::DisparityImage> msgQueue;
     toRosMsg(inData, msgQueue);
     auto msg = msgQueue.front();
-    DisparityImagePtr ptr = boost::make_shared<DisparityMsgs::DisparityImage>(msg);
+
+    DisparityImagePtr ptr = std::make_shared<DisparityMsgs::DisparityImage>(msg);
+
     return ptr;
 }
 

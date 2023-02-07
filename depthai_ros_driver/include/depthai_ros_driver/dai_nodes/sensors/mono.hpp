@@ -4,11 +4,10 @@
 #include "depthai_bridge/ImageConverter.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/param_handlers/mono_param_handler.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "image_transport/camera_publisher.h"
-#include "image_transport/image_transport.h"
-#include "ros/ros.h"
-#include "sensor_msgs/CameraInfo.h"
+#include "image_transport/camera_publisher.hpp"
+#include "image_transport/image_transport.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
@@ -16,13 +15,13 @@ namespace dai_nodes {
 class Mono : public BaseNode {
    public:
     explicit Mono(const std::string& daiNodeName,
-                  ros::NodeHandle node,
+                  rclcpp::Node* node,
                   std::shared_ptr<dai::Pipeline> pipeline,
                   dai::CameraBoardSocket socket,
                   sensor_helpers::ImageSensor sensor,
                   bool publish);
     virtual ~Mono() = default;
-    void updateParams(parametersConfig& config) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(const dai::Node::Input& in, int linkType = 0) override;
     void setNames() override;
@@ -32,9 +31,8 @@ class Mono : public BaseNode {
    private:
     void monoQCB(const std::string& name, const std::shared_ptr<dai::ADatatype>& data);
     std::unique_ptr<dai::ros::ImageConverter> imageConverter;
-    image_transport::ImageTransport it;
     image_transport::CameraPublisher monoPub;
-    sensor_msgs::CameraInfo monoInfo;
+    sensor_msgs::msg::CameraInfo monoInfo;
     std::shared_ptr<dai::node::MonoCamera> monoCamNode;
     std::shared_ptr<dai::node::VideoEncoder> videoEnc;
     std::unique_ptr<param_handlers::MonoParamHandler> ph;

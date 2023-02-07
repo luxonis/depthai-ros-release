@@ -3,19 +3,18 @@
 #include "depthai/depthai.hpp"
 #include "depthai/pipeline/Node.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "ros/ros.h"
+#include "rclcpp/rclcpp.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
 class BaseNode {
    public:
-    BaseNode(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> /*pipeline*/) {
+    BaseNode(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> /*pipeline*/) {
         setNodeName(daiNodeName);
         setROSNodePointer(node);
     };
     virtual ~BaseNode(){};
-    virtual void updateParams(parametersConfig& config) = 0;
+    virtual void updateParams(const std::vector<rclcpp::Parameter>& params) = 0;
     virtual void link(const dai::Node::Input& in, int linkType = 0) = 0;
     virtual dai::Node::Input getInput(int /*linkType = 0*/) {
         throw(std::runtime_error("getInput() not implemented"));
@@ -28,10 +27,10 @@ class BaseNode {
     void setNodeName(const std::string& daiNodeName) {
         baseDAINodeName = daiNodeName;
     };
-    void setROSNodePointer(ros::NodeHandle node) {
+    void setROSNodePointer(rclcpp::Node* node) {
         baseNode = node;
     };
-    ros::NodeHandle getROSNode() {
+    rclcpp::Node* getROSNode() {
         return baseNode;
     };
     std::string getName() {
@@ -39,7 +38,7 @@ class BaseNode {
     };
 
    private:
-    ros::NodeHandle baseNode;
+    rclcpp::Node* baseNode;
     std::string baseDAINodeName;
 };
 }  // namespace dai_nodes

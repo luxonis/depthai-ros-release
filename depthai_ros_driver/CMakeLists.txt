@@ -1,11 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(depthai_ros_driver)
-if(NOT CMAKE_C_STANDARD)
-  set(CMAKE_C_STANDARD 99)
-endif()
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 11)
-endif()
+project(depthai_ros_driver VERSION 2.6.2)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -13,42 +7,11 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # find dependencies
-find_package(catkin REQUIRED COMPONENTS
-  camera_info_manager
-  dynamic_reconfigure
-  depthai_ros_msgs
-  roscpp
-  sensor_msgs
-  std_msgs
-  cv_bridge
-  vision_msgs
-  depthai_bridge
-  message_filters
-  image_transport
-  nodelet
-)
-
-find_package(depthai CONFIG REQUIRED)
-generate_dynamic_reconfigure_options(
-  cfg/parameters.cfg
-)
-catkin_package(
-  LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs camera_info_manager depthai_bridge vision_msgs cv_bridge message_filters image_transport 
-  DEPENDS
-  OpenCV
-)
-
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
 include_directories(include)
 
-include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
-)
-
-
-add_library(
+ament_auto_add_library(
   ${PROJECT_NAME} SHARED
   src/camera.cpp
   src/pipeline_generator.cpp
@@ -72,27 +35,39 @@ add_library(
   src/param_handlers/stereo_param_handler.cpp
 )
 
-add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-)
-
-
-target_link_libraries(${PROJECT_NAME}
-  ${catkin_LIBRARIES}
+ament_target_dependencies(${PROJECT_NAME} ${DEPENDENCIES})
+target_link_libraries(
+  ${PROJECT_NAME}
+  depthai::opencv
   depthai::core
-  opencv_imgproc
-  opencv_highgui
+  ${OpenCV_LIBRARIES}
 )
-install(TARGETS
-${PROJECT_NAME}
-LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+rclcpp_components_register_nodes(${PROJECT_NAME} "${PROJECT_NAME}::Camera")
+ament_export_include_directories(include)
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  # the following line skips the linter which checks for copyrights
+  # comment the line when a copyright and license is added to all source files
+  set(ament_cmake_copyright_FOUND TRUE)
+  # the following line skips cpplint (only works in a git repo)
+  # comment the line when this package is in a git repo and when
+  # a copyright and license is added to all source files
+  set(ament_cmake_cpplint_FOUND TRUE)
+  ament_lint_auto_find_test_dependencies()
+endif()
 
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
-install(FILES nodelet_plugins.xml
-      DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+install(
+  TARGETS
+  ${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+ament_python_install_package(${PROJECT_NAME})
 # Install Python executables
 install(
   PROGRAMS
@@ -100,7 +75,12 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 
+ament_export_include_directories(
+  include
+)
 install(
     DIRECTORY include/
     DESTINATION include
 )
+
+ament_package()
