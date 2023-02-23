@@ -4,19 +4,20 @@
 
 namespace depthai_ros_driver {
 namespace pipeline_gen {
-enum class PipelineType { RGB, RGBD, RGBStereo, Stereo, Depth, CamArray };
+enum class PipelineType { RGB, RGBD, RGBStereo, Depth, Stereo, CamArray };
 enum class NNType { None, RGB, Spatial };
+
 class PipelineGenerator {
    public:
     PipelineGenerator(){};
     ~PipelineGenerator() = default;
-    PipelineType validatePipeline(rclcpp::Node* node, PipelineType type, int sensorNum);
-    std::unique_ptr<dai_nodes::BaseNode> createNN(rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline, dai_nodes::BaseNode& daiNode);
-    std::unique_ptr<dai_nodes::BaseNode> createSpatialNN(rclcpp::Node* node,
+    PipelineType validatePipeline(PipelineType type, int sensorNum);
+    std::unique_ptr<dai_nodes::BaseNode> createNN(ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline, dai_nodes::BaseNode& daiNode);
+    std::unique_ptr<dai_nodes::BaseNode> createSpatialNN(ros::NodeHandle node,
                                                          std::shared_ptr<dai::Pipeline> pipeline,
                                                          dai_nodes::BaseNode& daiNode,
                                                          dai_nodes::BaseNode& daiStereoNode);
-    std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(rclcpp::Node* node,
+    std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(ros::NodeHandle node,
                                                                      std::shared_ptr<dai::Device> device,
                                                                      std::shared_ptr<dai::Pipeline> pipeline,
                                                                      const std::string& pipelineType,

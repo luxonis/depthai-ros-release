@@ -12,8 +12,8 @@ class StereoParamHandler : public BaseParamHandler {
    public:
     explicit StereoParamHandler(const std::string& name);
     ~StereoParamHandler();
-    void declareParams(rclcpp::Node* node, std::shared_ptr<dai::node::StereoDepth> stereo);
-    dai::CameraControl setRuntimeParams(rclcpp::Node* node, const std::vector<rclcpp::Parameter>& params) override;
+    void declareParams(ros::NodeHandle node, std::shared_ptr<dai::node::StereoDepth> stereo);
+    dai::CameraControl setRuntimeParams(ros::NodeHandle node, parametersConfig& config) override;
 
    private:
     std::unordered_map<std::string, dai::node::StereoDepth::PresetMode> depthPresetMap;

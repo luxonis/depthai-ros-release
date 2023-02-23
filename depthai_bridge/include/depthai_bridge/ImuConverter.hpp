@@ -1,5 +1,8 @@
 #pragma once
 
+#include <ros/ros.h>
+
+#include <boost/make_shared.hpp>
 #include <depthai/depthai.hpp>
 #include <depthai_bridge/depthaiUtility.hpp>
 #include <iostream>
@@ -7,15 +10,14 @@
 #include <sstream>
 #include <unordered_map>
 
-#include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/msg/imu.hpp"
+#include "sensor_msgs/Imu.h"
 
 namespace dai {
 
 namespace ros {
 
-namespace ImuMsgs = sensor_msgs::msg;
-using ImuPtr = ImuMsgs::Imu::SharedPtr;
+namespace ImuMsgs = sensor_msgs;
+using ImuPtr = ImuMsgs::Imu::Ptr;
 
 enum class ImuSyncMethod { COPY, LINEAR_INTERPOLATE_GYRO, LINEAR_INTERPOLATE_ACCEL };
 
@@ -37,7 +39,7 @@ class ImuConverter {
     const std::string _frameName = "";
     ImuSyncMethod _syncMode;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-    rclcpp::Time _rosBaseTime;
+    ::ros::Time _rosBaseTime;
 };
 
 }  // namespace ros
