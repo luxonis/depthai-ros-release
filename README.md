@@ -11,7 +11,7 @@ You can develop your ROS applications in following ways:
   * Use classes provided in `depthai_bridge` to construct your own driver (see `stereo_inertial_node` example on how to do that)
   * Use `depthai_ros_driver` class (currently available on ROS2 Humble & Noetic) to get default experience (see details below on how) 
 
-![](docs/segmentation.gif)
+![](docs/multicam.gif)
 
 
 Supported ROS versions:
@@ -92,7 +92,7 @@ The following setup procedure assumes you have cmake version >= 3.10.2 and OpenC
 4. `cd ../..`
 5. `rosdep install --from-paths src --ignore-src -r -y`
 6. `source /opt/ros/<ros-distro>/setup.bash`
-7. `catkin_make` (For ROS1) `colcon build` (for ROS2)
+7. `catkin_make_isolated -l1 -j1` (For ROS1) `MAKEFLAGS="-j1 -l1" colcon build` (for ROS2)
 8. `source devel/setup.bash` (For ROS1) & `source install/setup.bash` (for ROS2) 
 
 **Note** If you are using a lower end PC or RPi, standard building may take a lot of RAM and clog your PC. To avoid that, you can use `build.sh` command from your workspace (it just wraps colcon commands):
@@ -130,7 +130,7 @@ As for the parameters themselves, there are a few crucial ones that decide on ho
 This tells the camera whether it should load stereo components. Default set to `RGBD`.
 
 * `camera_i_nn_type` can be either `none`, `rgb` or `spatial`. This is responsible for whether the NN that we load should also take depth information (and for example provide detections in 3D format). Default set to `spatial`
-* `camera_i_mx_id`/`camera_i_ip` are for connecting to a specific camera. If not set, it automatically connects to the next available device.
+* `camera_i_mx_id`/`camera_i_ip`/`camera_i_usb_port_id` are for connecting to a specific camera. If not set, it automatically connects to the next available device. You can get those parameters from logs by running the default launch file.
 * `nn_i_nn_config_path` represents path to JSON that contains information on what type of NN to load, and what parameters to use. Currently we provide options to load MobileNet, Yolo and Segmentation (not in spatial) models. To see their example configs, navigate to `depthai_ros_driver/config/nn`. Defaults to `mobilenet.json` from `depthai_ros_driver`
 
 To use provided example NN's, you can set the path to:
@@ -145,8 +145,6 @@ Currently, we provide few examples:
 * `camera.launch` launches camera in RGBD, and NN in spatial (Mobilenet) mode.
 * `rgbd_pcl.launch` launches camera in basic RGBD configuration, doesn't load any NNs. Also loads ROS depth processing nodes for RGBD pointcloud.
 * `example_multicam.launch` launches several cameras at once, each one in different container. Edit the `multicam_example.yaml` config file in `config` directory to change parameters
-
-![](docs/multicam.gif)
 * `example_segmentation.launch` launches camera in RGBD + semantic segmentation (pipeline type=RGBD, nn_type=rgb)
 * `pointcloud.launch` - similar to `rgbd_pcl.launch.py`, but doesn't use RGB component for pointcloud
 * `example_marker_publish.launch` launches `camera.launch.py` + small python node that publishes detected objects as markers/tfs
@@ -162,7 +160,17 @@ See `low_bandwidth.yaml` file for example parameters for all streams
 ##### **OAK D PRO W**
 To properly align with depth, you need to set `rgb_i_resolution` parameter to `720` (see `config/oak_d_w_pro.yaml`).
 
-
+#### Recalibration
+If you want to use other calibration values than the ones provided by the device, you can do it in following ways:
+* Use `set_camera_info` services available for each of the image streams
+* Use `i_calibration_file` parameter available to point to the calibration file. **Note** camera name must start with `/`, so for example `/rgb`. See `depthai_ros_driver/config/calibration` for example calibration files. `calibration.launch` file is provided to start up a ROS camera calibrator node in both monocular and stereo configurations.
+Calibration file syntax (from `camera_info_manager`):
+```
+    - file:///full/path/to/local/file.yaml
+    - file:///full/path/to/videre/file.ini
+    - package://camera_info_manager/tests/test_calibration.yaml
+    - package://ros_package_name/calibrations/camera3.yaml
+```
 ## Executing an example
 
 ### ROS1
