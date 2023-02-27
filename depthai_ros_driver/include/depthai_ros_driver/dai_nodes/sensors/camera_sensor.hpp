@@ -2,11 +2,10 @@
 
 #include "depthai/depthai.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "image_transport/camera_publisher.h"
-#include "image_transport/image_transport.h"
-#include "ros/ros.h"
-#include "sensor_msgs/CameraInfo.h"
+#include "image_transport/camera_publisher.hpp"
+#include "image_transport/image_transport.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
@@ -14,13 +13,13 @@ namespace dai_nodes {
 class CameraSensor : public BaseNode {
    public:
     explicit CameraSensor(const std::string& daiNodeName,
-                          ros::NodeHandle node,
+                          rclcpp::Node* node,
                           std::shared_ptr<dai::Pipeline> pipeline,
                           std::shared_ptr<dai::Device> device,
                           dai::CameraBoardSocket socket,
                           bool publish = true);
     virtual ~CameraSensor() = default;
-    void updateParams(parametersConfig& config) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(const dai::Node::Input& in, int linkType = 0) override;
     void setNames() override;

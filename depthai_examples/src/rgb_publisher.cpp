@@ -2,11 +2,10 @@
 #include <cstdio>
 #include <iostream>
 
-#include "ros/ros.h"
+#include "rclcpp/rclcpp.hpp"
 // #include "utility.hpp"
-#include <camera_info_manager/camera_info_manager.h>
-
-#include "sensor_msgs/Image.h"
+#include <camera_info_manager/camera_info_manager.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
 // Inludes common necessary includes for development using depthai library
 #include <depthai_bridge/BridgePublisher.hpp>
@@ -20,7 +19,6 @@ dai::Pipeline createPipeline() {
     auto xlinkOut = pipeline.create<dai::node::XLinkOut>();
     xlinkOut->setStreamName("video");
 
-    colorCam->setPreviewSize(300, 300);
     colorCam->setResolution(dai::ColorCameraProperties::SensorResolution::THE_1080_P);
     colorCam->setInterleaved(false);
 
@@ -30,41 +28,38 @@ dai::Pipeline createPipeline() {
 }
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "rgb_node");
-    ros::NodeHandle pnh("~");
+    rclcpp::init(argc, argv);
+    auto node = rclcpp::Node::make_shared("rgb_node");
 
     std::string tfPrefix;
-    std::string camera_param_uri;
-    int badParams = 0;
+    std::string cameraParamUri = "package://depthai_examples/params/camera";
 
-    badParams += !pnh.getParam("tf_prefix", tfPrefix);
-    badParams += !pnh.getParam("camera_param_uri", camera_param_uri);
+    node->declare_parameter("tf_prefix", "oak");
+    node->declare_parameter("camera_param_uri", cameraParamUri);
 
-    if(badParams > 0) {
-        throw std::runtime_error("Couldn't find one of the parameters");
-    }
+    node->get_parameter("tf_prefix", tfPrefix);
+    node->get_parameter("camera_param_uri", cameraParamUri);
 
     dai::Pipeline pipeline = createPipeline();
     dai::Device device(pipeline);
     std::shared_ptr<dai::DataOutputQueue> imgQueue = device.getOutputQueue("video", 30, false);
 
-    std::string color_uri = camera_param_uri + "/" + "color.yaml";
+    std::string color_uri = cameraParamUri + "/" + "color.yaml";
 
     dai::rosBridge::ImageConverter rgbConverter(tfPrefix + "_rgb_camera_optical_frame", false);
-    dai::rosBridge::BridgePublisher<sensor_msgs::Image, dai::ImgFrame> rgbPublish(imgQueue,
-                                                                                  pnh,
-                                                                                  std::string("color/image"),
-                                                                                  std::bind(&dai::rosBridge::ImageConverter::toRosMsg,
-                                                                                            &rgbConverter,  // since the converter has the same frame name
-                                                                                                            // and image type is also same we can reuse it
-                                                                                            std::placeholders::_1,
-                                                                                            std::placeholders::_2),
-                                                                                  30,
-                                                                                  color_uri,
-                                                                                  "color");
+    dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame> rgbPublish(imgQueue,
+                                                                                       node,
+                                                                                       std::string("color/image"),
+                                                                                       std::bind(&dai::rosBridge::ImageConverter::toRosMsg,
+                                                                                                 &rgbConverter,  // since the converter has the same frame name
+                                                                                                                 // and image type is also same we can reuse it
+                                                                                                 std::placeholders::_1,
+                                                                                                 std::placeholders::_2),
+                                                                                       30,
+                                                                                       color_uri,
+                                                                                       "color");
 
     rgbPublish.addPublisherCallback();
-    ros::spin();
-
+    rclcpp::spin(node);
     return 0;
 }

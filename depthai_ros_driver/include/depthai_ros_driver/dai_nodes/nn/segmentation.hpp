@@ -5,21 +5,19 @@
 #include "depthai/depthai.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/param_handlers/nn_param_handler.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "image_transport/camera_publisher.h"
-#include "image_transport/image_transport.h"
-#include "opencv2/opencv.hpp"
-#include "ros/ros.h"
-#include "sensor_msgs/CameraInfo.h"
+#include "image_transport/camera_publisher.hpp"
+#include "image_transport/image_transport.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
 namespace nn {
 class Segmentation : public BaseNode {
    public:
-    Segmentation(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline);
+    Segmentation(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline);
     virtual ~Segmentation() = default;
-    void updateParams(parametersConfig& config) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(const dai::Node::Input& in, int linkType = 0) override;
     dai::Node::Input getInput(int linkType = 0);
@@ -29,11 +27,10 @@ class Segmentation : public BaseNode {
 
    private:
     cv::Mat decodeDeeplab(cv::Mat mat);
-    image_transport::ImageTransport it;
     void segmentationCB(const std::string& name, const std::shared_ptr<dai::ADatatype>& data);
     std::vector<std::string> labelNames;
     image_transport::CameraPublisher nnPub;
-    sensor_msgs::CameraInfo nnInfo;
+    sensor_msgs::msg::CameraInfo nnInfo;
     std::shared_ptr<dai::node::NeuralNetwork> segNode;
     std::shared_ptr<dai::node::ImageManip> imageManip;
     std::unique_ptr<param_handlers::NNParamHandler> ph;

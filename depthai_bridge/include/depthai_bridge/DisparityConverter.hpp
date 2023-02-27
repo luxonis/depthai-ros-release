@@ -1,23 +1,22 @@
 #pragma once
 
-#include <ros/ros.h>
-
-#include <boost/make_shared.hpp>
 #include <depthai_bridge/depthaiUtility.hpp>
 #include <deque>
 
 #include "depthai/depthai.hpp"
-#include "sensor_msgs/image_encodings.h"
-#include "stereo_msgs/DisparityImage.h"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/image_encodings.hpp"
+#include "stereo_msgs/msg/disparity_image.hpp"
 
 namespace dai {
 
 namespace ros {
 
-namespace DisparityMsgs = stereo_msgs;
-namespace ImageMsgs = sensor_msgs;
-using ImagePtr = ImageMsgs::ImagePtr;
-using DisparityImagePtr = DisparityMsgs::DisparityImage::Ptr;
+namespace DisparityMsgs = stereo_msgs::msg;
+namespace ImageMsgs = sensor_msgs::msg;
+using ImagePtr = ImageMsgs::Image::SharedPtr;
+using DisparityImagePtr = DisparityMsgs::DisparityImage::SharedPtr;
+
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration>;
 
 class DisparityConverter {
@@ -27,12 +26,13 @@ class DisparityConverter {
     void toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<DisparityMsgs::DisparityImage>& outImageMsg);
     DisparityImagePtr toRosMsgPtr(std::shared_ptr<dai::ImgFrame> inData);
 
+    // void toDaiMsg(const DisparityMsgs::DisparityImage& inMsg, dai::ImgFrame& outData);
+
    private:
     const std::string _frameName = "";
     const float _focalLength = 882.2, _baseline = 7.5, _minDepth = 80, _maxDepth;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-
-    ::ros::Time _rosBaseTime;
+    rclcpp::Time _rosBaseTime;
 };
 
 }  // namespace ros

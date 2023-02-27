@@ -2,7 +2,6 @@
 
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 #include "depthai/depthai.hpp"
 #include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
@@ -16,22 +15,21 @@ class NNParamHandler : public BaseParamHandler {
    public:
     explicit NNParamHandler(const std::string& name);
     ~NNParamHandler();
-    nn::NNFamily getNNFamily(ros::NodeHandle node);
-    std::string getConfigPath(ros::NodeHandle node);
+    nn::NNFamily getNNFamily(rclcpp::Node* node);
     template <typename T>
-    void declareParams(ros::NodeHandle node, std::shared_ptr<T> nn, std::shared_ptr<dai::node::ImageManip> imageManip) {
-        auto nnPath = getConfigPath(node);
+    void declareParams(rclcpp::Node* node, std::shared_ptr<T> nn, std::shared_ptr<dai::node::ImageManip> imageManip) {
+        auto nn_path = getParam<std::string>(node, "i_nn_config_path");
         using json = nlohmann::json;
-        std::ifstream f(nnPath);
+        std::ifstream f(nn_path);
         json data = json::parse(f);
-        parseConfigFile(nnPath, nn, imageManip);
+        parseConfigFile(node, nn_path, nn, imageManip);
     }
 
-    void setNNParams(nlohmann::json data, std::shared_ptr<dai::node::NeuralNetwork> nn);
-    void setNNParams(nlohmann::json data, std::shared_ptr<dai::node::MobileNetDetectionNetwork> nn);
-    void setNNParams(nlohmann::json data, std::shared_ptr<dai::node::YoloDetectionNetwork> nn);
-    void setNNParams(nlohmann::json data, std::shared_ptr<dai::node::MobileNetSpatialDetectionNetwork> nn);
-    void setNNParams(nlohmann::json data, std::shared_ptr<dai::node::YoloSpatialDetectionNetwork> nn);
+    void setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::NeuralNetwork> nn);
+    void setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::MobileNetDetectionNetwork> nn);
+    void setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::YoloDetectionNetwork> nn);
+    void setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::MobileNetSpatialDetectionNetwork> nn);
+    void setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::YoloSpatialDetectionNetwork> nn);
 
     template <typename T>
     void setSpatialParams(std::shared_ptr<T> nn) {
@@ -73,30 +71,32 @@ class NNParamHandler : public BaseParamHandler {
         }
     }
 
+    void setMobilenetParams() {}
+
     template <typename T>
-    void parseConfigFile(const std::string& path, std::shared_ptr<T> nn, std::shared_ptr<dai::node::ImageManip> imageManip) {
+    void parseConfigFile(rclcpp::Node* node, const std::string& path, std::shared_ptr<T> nn, std::shared_ptr<dai::node::ImageManip> imageManip) {
         using json = nlohmann::json;
         std::ifstream f(path);
         json data = json::parse(f);
         if(data.contains("model") && data.contains("nn_config")) {
             auto modelPath = getModelPath(data);
+            declareAndLogParam(node, "i_model_path", modelPath);
             setImageManip(modelPath, imageManip);
             nn->setBlobPath(modelPath);
-            nn->setNumPoolFrames(4);
-            nn->setNumInferenceThreads(2);
+            nn->setNumPoolFrames(declareAndLogParam<int>(node, "i_num_pool_frames", 4));
+            nn->setNumInferenceThreads(declareAndLogParam<int>(node, "i_num_inference_threads", 2));
             nn->input.setBlocking(false);
-            setNNParams(data, nn);
+            declareAndLogParam<int>(node, "i_max_q_size", 30);
+            setNNParams(node, data, nn);
         }
     }
 
-    dai::CameraControl setRuntimeParams(ros::NodeHandle node, parametersConfig& config) override;
-    std::vector<std::string> getLabels();
+    dai::CameraControl setRuntimeParams(rclcpp::Node* node, const std::vector<rclcpp::Parameter>& params) override;
 
    private:
     void setImageManip(const std::string& model_path, std::shared_ptr<dai::node::ImageManip> imageManip);
     std::string getModelPath(const nlohmann::json& data);
     std::unordered_map<std::string, nn::NNFamily> nnFamilyMap;
-    std::vector<std::string> labels;
 };
 }  // namespace param_handlers
 }  // namespace depthai_ros_driver
