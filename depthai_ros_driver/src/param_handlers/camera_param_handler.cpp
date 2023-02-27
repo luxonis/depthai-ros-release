@@ -2,6 +2,7 @@
 
 #include "depthai/depthai.hpp"
 #include "depthai/pipeline/nodes.hpp"
+#include "depthai_ros_driver/parametersConfig.h"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -16,22 +17,21 @@ CameraParamHandler::CameraParamHandler(const std::string& name) : BaseParamHandl
 }
 CameraParamHandler::~CameraParamHandler() = default;
 
-dai::UsbSpeed CameraParamHandler::getUSBSpeed(rclcpp::Node* node) {
+dai::UsbSpeed CameraParamHandler::getUSBSpeed(ros::NodeHandle node) {
     return usbSpeedMap.at(getParam<std::string>(node, "i_usb_speed"));
 }
-void CameraParamHandler::declareParams(rclcpp::Node* node) {
-    declareAndLogParam<std::string>(node, "i_pipeline_type", "RGBD");
-    declareAndLogParam<std::string>(node, "i_nn_type", "spatial");
-    declareAndLogParam<bool>(node, "i_enable_imu", true);
-    declareAndLogParam<bool>(node, "i_enable_ir", true);
-    declareAndLogParam<std::string>(node, "i_usb_speed", "SUPER_PLUS");
-    declareAndLogParam<std::string>(node, "i_mx_id", "");
-    declareAndLogParam<std::string>(node, "i_ip", "");
-    declareAndLogParam<std::string>(node, "i_usb_port_id", "");
-    declareAndLogParam<int>(node, "i_laser_dot_brightness", 800, getRangedIntDescriptor(0, 1200));
-    declareAndLogParam<int>(node, "i_floodlight_brightness", 0, getRangedIntDescriptor(0, 1500));
+void CameraParamHandler::declareParams(ros::NodeHandle node) {
+    getParam<std::string>(node, "i_pipeline_type");
+    getParam<std::string>(node, "i_nn_type");
+    getParam<bool>(node, "i_enable_imu");
+    getParam<bool>(node, "i_enable_ir");
+    getParam<std::string>(node, "i_usb_speed");
+    getParam<std::string>(node, "i_mx_id");
+    getParam<std::string>(node, "i_ip");
+    getParam<int>(node, "i_laser_dot_brightness");
+    getParam<int>(node, "i_floodlight_brightness");
 }
-dai::CameraControl CameraParamHandler::setRuntimeParams(rclcpp::Node* /*node*/, const std::vector<rclcpp::Parameter>& /*params*/) {
+dai::CameraControl CameraParamHandler::setRuntimeParams(ros::NodeHandle /*node*/, parametersConfig& /*config*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }

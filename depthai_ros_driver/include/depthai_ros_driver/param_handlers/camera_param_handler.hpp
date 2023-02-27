@@ -8,14 +8,13 @@
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-
 class CameraParamHandler : public BaseParamHandler {
    public:
     explicit CameraParamHandler(const std::string& name);
     ~CameraParamHandler();
-    void declareParams(rclcpp::Node* node);
-    dai::CameraControl setRuntimeParams(rclcpp::Node* node, const std::vector<rclcpp::Parameter>& params) override;
-    dai::UsbSpeed getUSBSpeed(rclcpp::Node* node);
+    void declareParams(ros::NodeHandle node);
+    dai::CameraControl setRuntimeParams(ros::NodeHandle node, parametersConfig& config) override;
+    dai::UsbSpeed getUSBSpeed(ros::NodeHandle node);
 
    private:
     std::unordered_map<std::string, dai::UsbSpeed> usbSpeedMap;

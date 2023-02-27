@@ -1,17 +1,62 @@
 cmake_minimum_required(VERSION 3.8)
-project(depthai_ros_driver VERSION 2.6.4)
+project(depthai_ros_driver)
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 11)
+endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(opencv_version 4)
+find_package(OpenCV ${opencv_version} QUIET COMPONENTS imgproc highgui)
+if(NOT OpenCV_FOUND)
+  message(STATUS "----------------Did not find OpenCV 4, trying OpenCV 3--------------")
+  set(opencv_version 3)
+  find_package(OpenCV ${opencv_version} REQUIRED COMPONENTS imgproc highgui)
+endif()
+
 # find dependencies
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+find_package(catkin REQUIRED COMPONENTS
+  camera_info_manager
+  dynamic_reconfigure
+  depthai_ros_msgs
+  roscpp
+  sensor_msgs
+  std_msgs
+  cv_bridge
+  vision_msgs
+  depthai_bridge
+  message_filters
+  image_transport
+  nodelet
+)
+
+find_package(depthai CONFIG REQUIRED)
+generate_dynamic_reconfigure_options(
+  cfg/parameters.cfg
+)
+catkin_package(
+  LIBRARIES ${PROJECT_NAME}
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs camera_info_manager depthai_bridge vision_msgs cv_bridge message_filters image_transport 
+  DEPENDS
+  OpenCV
+)
+
 include_directories(include)
 
-ament_auto_add_library(
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+)
+
+
+add_library(
   ${PROJECT_NAME} SHARED
   src/camera.cpp
   src/pipeline_generator.cpp
@@ -36,27 +81,27 @@ ament_auto_add_library(
   src/param_handlers/stereo_param_handler.cpp
 )
 
-ament_target_dependencies(${PROJECT_NAME} ${DEPENDENCIES})
-target_link_libraries(
-  ${PROJECT_NAME}
-  depthai::opencv
-  depthai::core
-  ${OpenCV_LIBRARIES}
+add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
 )
-rclcpp_components_register_nodes(${PROJECT_NAME} "${PROJECT_NAME}::Camera")
-ament_export_include_directories(include)
+
+
+target_link_libraries(${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  depthai::core
+  opencv_imgproc
+  opencv_highgui
+)
+install(TARGETS
+${PROJECT_NAME}
+LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
 install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
 
-install(
-  TARGETS
-  ${PROJECT_NAME}
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-)
-
-ament_python_install_package(${PROJECT_NAME})
+install(FILES nodelet_plugins.xml
+      DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 # Install Python executables
 install(
   PROGRAMS
@@ -64,12 +109,7 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 
-ament_export_include_directories(
-  include
-)
 install(
     DIRECTORY include/
     DESTINATION include
 )
-
-ament_package()

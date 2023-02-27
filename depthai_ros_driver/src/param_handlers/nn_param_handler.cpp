@@ -3,9 +3,9 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "depthai/depthai.hpp"
 #include "depthai/pipeline/nodes.hpp"
+#include "ros/package.h"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -18,70 +18,67 @@ NNParamHandler::NNParamHandler(const std::string& name) : BaseParamHandler(name)
     };
 }
 NNParamHandler::~NNParamHandler() = default;
-nn::NNFamily NNParamHandler::getNNFamily(rclcpp::Node* node) {
-    std::string config_path = ament_index_cpp::get_package_share_directory("depthai_ros_driver") + "/config/nn/";
-    std::string default_nn_conf_name = "mobilenet.json";
-    std::string default_path = config_path + default_nn_conf_name;
-    auto nn_path = declareAndLogParam<std::string>(node, "i_nn_config_path", default_path);
-    if(nn_path == "depthai_ros_driver/yolo") {
-        nn_path = config_path + "yolo.json";
-    } else if(nn_path == "depthai_ros_driver/segmentation") {
-        nn_path = config_path + "segmentation.json";
-    } else if(nn_path == "depthai_ros_driver/mobilenet") {
-        nn_path = config_path + "mobilenet.json";
+std::string NNParamHandler::getConfigPath(ros::NodeHandle node) {
+    std::string configPath = ros::package::getPath("depthai_ros_driver") + "/config/nn/";
+    auto nnPath = getParam<std::string>(node, "i_nn_config_path");
+    if(nnPath == "depthai_ros_driver/yolo") {
+        nnPath = configPath + "yolo.json";
+    } else if(nnPath == "depthai_ros_driver/segmentation") {
+        nnPath = configPath + "segmentation.json";
+    } else if(nnPath == "depthai_ros_driver/mobilenet") {
+        nnPath = configPath + "mobilenet.json";
     }
-    auto final_path = declareAndLogParam<std::string>(node, "i_nn_config_path", nn_path, true);
+    return nnPath;
+}
+nn::NNFamily NNParamHandler::getNNFamily(ros::NodeHandle node) {
+    auto nnPath = getConfigPath(node);
     using json = nlohmann::json;
-    std::ifstream f(final_path);
+    std::ifstream f(nnPath);
     json data = json::parse(f);
     std::string nnFamily;
     if(data.contains("model") && data.contains("nn_config")) {
         nnFamily = data["nn_config"]["NN_family"].get<std::string>();
-        RCLCPP_INFO(node->get_logger(), "NN Family: %s", nnFamily.c_str());
+        ROS_INFO("NN Family: %s", nnFamily.c_str());
     } else {
         throw std::runtime_error("No required fields");
     }
     return nnFamilyMap.at(nnFamily);
 }
 
-void NNParamHandler::setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::NeuralNetwork> /*nn*/) {
-    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-    if(!labels.empty()) {
-        declareAndLogParam<std::vector<std::string>>(node, "i_label_map", labels);
+void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node::NeuralNetwork> /*nn*/) {
+    if(data["mappings"].contains("labels")) {
+        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
     }
 }
 
-void NNParamHandler::setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::MobileNetDetectionNetwork> nn) {
+void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node::MobileNetDetectionNetwork> nn) {
     if(data["nn_config"].contains("confidence_threshold")) {
         auto conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-    if(!labels.empty()) {
-        declareAndLogParam<std::vector<std::string>>(node, "i_label_map", labels);
+    if(data["mappings"].contains("labels")) {
+        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
     }
 }
 
-void NNParamHandler::setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::MobileNetSpatialDetectionNetwork> nn) {
+void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node::MobileNetSpatialDetectionNetwork> nn) {
     if(data["nn_config"].contains("confidence_threshold")) {
         auto conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-    if(!labels.empty()) {
-        declareAndLogParam<std::vector<std::string>>(node, "i_label_map", labels);
+    if(data["mappings"].contains("labels")) {
+        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
     }
     setSpatialParams(nn);
 }
-void NNParamHandler::setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::YoloSpatialDetectionNetwork> nn) {
+void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node::YoloSpatialDetectionNetwork> nn) {
     float conf_threshold = 0.5;
     if(data["nn_config"].contains("confidence_threshold")) {
         conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-    if(!labels.empty()) {
-        declareAndLogParam<std::vector<std::string>>(node, "i_label_map", labels);
+    if(data["mappings"].contains("labels")) {
+        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
     }
     setSpatialParams(nn);
     if(data["nn_config"].contains("NN_specific_metadata")) {
@@ -89,15 +86,14 @@ void NNParamHandler::setNNParams(rclcpp::Node* node, nlohmann::json data, std::s
     }
 }
 
-void NNParamHandler::setNNParams(rclcpp::Node* node, nlohmann::json data, std::shared_ptr<dai::node::YoloDetectionNetwork> nn) {
+void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node::YoloDetectionNetwork> nn) {
     float conf_threshold = 0.5;
     if(data["nn_config"].contains("confidence_threshold")) {
         conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-    if(!labels.empty()) {
-        declareAndLogParam<std::vector<std::string>>(node, "i_label_map", labels);
+    if(data["mappings"].contains("labels")) {
+        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
     }
     if(data["nn_config"].contains("NN_specific_metadata")) {
         setYoloParams(data, nn);
@@ -118,7 +114,7 @@ std::string NNParamHandler::getModelPath(const nlohmann::json& data) {
     std::string modelPath;
     auto source = data["model"]["zoo"].get<std::string>();
     if(source == "depthai_examples") {
-        modelPath = ament_index_cpp::get_package_share_directory("depthai_examples") + "/resources/" + data["model"]["model_name"].get<std::string>() + ".blob";
+        modelPath = ros::package::getPath("depthai_examples") + "/resources/" + data["model"]["model_name"].get<std::string>() + ".blob";
     } else if(source == "path") {
         modelPath = data["model"]["model_name"].get<std::string>();
     } else {
@@ -127,7 +123,7 @@ std::string NNParamHandler::getModelPath(const nlohmann::json& data) {
     return modelPath;
 }
 
-dai::CameraControl NNParamHandler::setRuntimeParams(rclcpp::Node* /*node*/, const std::vector<rclcpp::Parameter>& /*params*/) {
+dai::CameraControl NNParamHandler::setRuntimeParams(ros::NodeHandle /*node*/, parametersConfig& /*config*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }
