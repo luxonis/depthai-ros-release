@@ -9,14 +9,13 @@ Main features:
 You can develop your ROS applications in following ways:
 
   * Use classes provided in `depthai_bridge` to construct your own driver (see `stereo_inertial_node` example on how to do that)
-  * Use `depthai_ros_driver` class (currently available on ROS2 Humble & Noetic) to get default experience (see details below on how) 
+  * Use `depthai_ros_driver` package (currently available on ROS2 Humble and ROS Noetic) to get default experience (see details below on how) 
 
 ![](docs/multicam.gif)
 
 
 Supported ROS versions:
 - Noetic
-- Galactic
 - Humble
 
 For usage check out respective git branches.
@@ -88,11 +87,11 @@ The following setup procedure assumes you have cmake version >= 3.10.2 and OpenC
 
 1. `mkdir -p dai_ws/src`
 2. `cd dai_ws/src`
-3. `git clone https://github.com/luxonis/depthai-ros.git`
-4. `cd ../..`
+3. `git clone --branch <ros-distro> https://github.com/luxonis/depthai-ros.git`
+4. `cd ..`
 5. `rosdep install --from-paths src --ignore-src -r -y`
 6. `source /opt/ros/<ros-distro>/setup.bash`
-7. `catkin_make_isolated -l1 -j1` (For ROS1) `MAKEFLAGS="-j1 -l1" colcon build` (for ROS2)
+7. `catkin_make_isolated` (For ROS1) `MAKEFLAGS="-j1 -l1" colcon build` (for ROS2)
 8. `source devel/setup.bash` (For ROS1) & `source install/setup.bash` (for ROS2) 
 
 **Note** If you are using a lower end PC or RPi, standard building may take a lot of RAM and clog your PC. To avoid that, you can use `build.sh` command from your workspace (it just wraps colcon commands):
@@ -105,10 +104,6 @@ Currently, recommended way to launch cameras is to use executables from depthai_
 This runs your camera as a ROS2 Component and gives you the ability to customize your camera using ROS parameters. 
 Paramerers that begin with `r_` can be freely modified during runtime, for example with rqt. 
 Parameters that begin with `i_` are set when camera is initializing, to change them you have to call `stop` and `start` services. This can be used to hot swap NNs during runtime, changing resolutions, etc. Below you can see some examples:
-
-### **Note** There is a difference in parameter naming with ROS1 & ROS2, an example:
-In ROS1 - `rgb_i_fps`, ROS2, `rgb.i_fps`
-This is due to change in parameter design in ROS versions (dynamic reconfigure doesn't support parameter namespacing)
 
 #### Setting RGB parameters
 ![](docs/param_rgb.gif)
@@ -125,13 +120,13 @@ As for the parameters themselves, there are a few crucial ones that decide on ho
   * `RGBD` - Publishes RGB + Depth streams (set `i_publish_topic` for left and right cameras to enable them), NN & Spatial NN available
   * `Stereo` - Publishes streams from left and right sensors, NN not available
   * `RGBStereo` - Publishes RGB + Left + Right streams, only RGB NN available
-  * `Depth` - Publishes only depth stream, NN not available
-  * `CamArray` - Publishes streams for all detected sensors, NN not available
+  * `Depth` - Publishes only depth stream, no NN available
+  * `CamArray` - Publishes streams for all detected sensors, no NN available
 This tells the camera whether it should load stereo components. Default set to `RGBD`.
 
-* `camera_i_nn_type` can be either `none`, `rgb` or `spatial`. This is responsible for whether the NN that we load should also take depth information (and for example provide detections in 3D format). Default set to `spatial`
-* `camera_i_mx_id`/`camera_i_ip`/`camera_i_usb_port_id` are for connecting to a specific camera. If not set, it automatically connects to the next available device. You can get those parameters from logs by running the default launch file.
-* `nn_i_nn_config_path` represents path to JSON that contains information on what type of NN to load, and what parameters to use. Currently we provide options to load MobileNet, Yolo and Segmentation (not in spatial) models. To see their example configs, navigate to `depthai_ros_driver/config/nn`. Defaults to `mobilenet.json` from `depthai_ros_driver`
+* `camera.i_nn_type` can be either `none`, `rgb` or `spatial`. This is responsible for whether the NN that we load should also take depth information (and for example provide detections in 3D format). Default set to `spatial`
+* `camera.i_mx_id`/`camera.i_ip`/`camera.i_usb_port_id` are for connecting to a specific camera. If not set, it automatically connects to the next available device. You can get those parameters from logs by running the default launch file.
+* `nn.i_nn_config_path` represents path to JSON that contains information on what type of NN to load, and what parameters to use. Currently we provide options to load MobileNet, Yolo and Segmentation (not in spatial) models. To see their example configs, navigate to `depthai_ros_driver/config/nn`. Defaults to `mobilenet.json` from `depthai_ros_driver`
 
 To use provided example NN's, you can set the path to:
 * `depthai_ros_driver/segmentation`
@@ -142,23 +137,23 @@ All available camera-specific parameters and their default values can be seen in
 
 Currently, we provide few examples:
 
-* `camera.launch` launches camera in RGBD, and NN in spatial (Mobilenet) mode.
-* `rgbd_pcl.launch` launches camera in basic RGBD configuration, doesn't load any NNs. Also loads ROS depth processing nodes for RGBD pointcloud.
-* `example_multicam.launch` launches several cameras at once, each one in different container. Edit the `multicam_example.yaml` config file in `config` directory to change parameters
-* `example_segmentation.launch` launches camera in RGBD + semantic segmentation (pipeline type=RGBD, nn_type=rgb)
-* `pointcloud.launch` - similar to `rgbd_pcl.launch.py`, but doesn't use RGB component for pointcloud
-* `example_marker_publish.launch` launches `camera.launch.py` + small python node that publishes detected objects as markers/tfs
-* `rtabmap.launch` launches camera and RTAB-MAP RGBD SLAM (you need to install it first - `sudo apt install ros-$ROS_DISTRO-rtabmap-ros`). You might need to set manual focus via parameters here.
+* `camera.launch.py` launches camera in RGBD, and NN in spatial (Mobilenet) mode.
+* `rgbd_pcl.launch.py` launches camera in basic RGBD configuration, doesn't load any NNs. Also loads ROS depth processing nodes for RGBD pointcloud.
+* `example_multicam.launch.py` launches several cameras at once, each one in different container. Edit the `multicam_example.yaml` config file in `config` directory to change parameters
+* `example_segmentation.launch.py` launches camera in RGBD + semantic segmentation (pipeline type=RGBD, nn_type=rgb)
+* `pointcloud.launch.py` - similar to `rgbd_pcl.launch.py`, but doesn't use RGB component for pointcloud
+* `example_marker_publish.launch.py` launches `camera.launch.py` + small python node that publishes detected objects as markers/tfs
+* `rtabmap.launch.py` launches camera and RTAB-MAP RGBD SLAM (you need to install it first - `sudo apt install ros-$ROS_DISTRO-rtabmap-ros`). You might need to set manual focus via parameters here.
 ![](docs/rtabmap.gif)
 
 #### Specific camera configurations:
 ##### **PoE Cameras**
 Since PoE cameras use protocol that has lower throughput than USB, running default camera launch can result in lags depending on chosen resolution/fps. To combat this issue, you can use encoded frames, which let you keep desired resolution/fps at the cost of image quality reduction due to compression. One additional difference is that `subpixel` depth filtering is disabled in this mode. To enable low_bandwidth, for example for rgb camera, change parameters:
-* `rgb_i_low_bandwidth` - `true` to enable
-* `rgb_i_low_bandwidth_quality` - desired quality % (default-50)
+* `rgb.i_low_bandwidth` - `true` to enable
+* `rgb.i_low_bandwidth_quality` - desired quality % (default-50)
 See `low_bandwidth.yaml` file for example parameters for all streams
 ##### **OAK D PRO W**
-To properly align with depth, you need to set `rgb_i_resolution` parameter to `720` (see `config/oak_d_w_pro.yaml`).
+To properly align with depth, you need to set `rgb.i_resolution` parameter to `720` (see `config/oak_d_w_pro.yaml`).
 
 #### Recalibration
 If you want to use other calibration values than the ones provided by the device, you can do it in following ways:
@@ -171,6 +166,36 @@ Calibration file syntax (from `camera_info_manager`):
     - package://camera_info_manager/tests/test_calibration.yaml
     - package://ros_package_name/calibrations/camera3.yaml
 ```
+
+### Depthai filters
+
+`depthai_filters` contains small composable node examples that show how to work with data from multiple topics.
+Available filters:
+- Detection2DOverlay - subscribes to `/nn/detections` and `rgb/preview/image_raw` topics. To see it in action, run
+`ros2 launch depthai_filters example_det2d_overla.launch.py`. Note here - If you see that detections misalign in the overlay, adjust `rgb.i_preview_size` parameter.
+- SegmentationOverlay, overlays semantic segmentation from `/nn/image_raw` on top of image from `rgb/preview/image_raw`, to see it in action, run
+`ros2 launch depthai_filters example_seg_overlay.launch.py`
+- WLS filter - stereo depth filter that smooths out overall depth image based on disparity data. It subscribes to `stereo/image_raw` and `left/image raw` topics. Parameters needed to enable it - `left.i_publish_topic`, `stereo.i_output_disparity`
+an example can be seen by running  `ros2 launch depthai_filters example_wls_filter.launch.py`
+
+
+### Using external sources for NN inference
+
+There is a possibility of using external image topics as input for NNs or Depth calculation.
+
+Example scenarios:
+
+1. We want to get segmentation or 2D detection output based on images published by usb camera node.
+This can be achieved by setting `rgb.i_simulate_from_topic` parameter to `true`. This creates `sensor_msgs/Image` subscriber listening by default on `/<node_name>/rgb/input` topic that passes data into the pipeline on each callback. Topic names can be changed either by classic ROS topic remapping or setting `rgb.i_simulated_topic_name` to a desired name.
+By default, original sensor node still runs and publishes data. Setting `rgb.i_disable_node` to true will prevent it from spawning. Check `det2d_usb_cam_overlay.launch.py` in `depthai_filters to see it in action.
+
+2. Calculating depth - both `left` and `right` sensor nodes can be setup as in the example above to calculate calculate depth/disparity from external topics. Note that for this to work properly you need specify:
+- `left.i_board_socket_id: 1`
+- `right.i_board_socket_id: 2` 
+- Default stereo input size is set to 1280x720, in case of different image size, adjust `stereo.i_input_width` and `stereo.i_input_height` accordingly.
+- external calibration file path using `camera.i_external_calibration_path` parameter. To get calibration from the device you can either set `camera.i_calibration_dump` to true or call `save_calibration` service. Calibration will be saved to `/tmp/<mx_id>_calibration.json`.
+An example can be seen in `stereo_from_rosbag.launch.py` in `depthai_ros_driver`
+
 ## Executing an example
 
 ### ROS1
@@ -189,20 +214,6 @@ For more examples please check the launch files.
 
 ## Running Examples
 
-### Depthai Ros Driver:
-#### Default camera:
-```roslaunch depthai_ros_driver camera.launch`
-#### RGBD camera:
-```roslaunch depthai_ros_driver rgbd_pcl.launch`
-#### Segmentation:
-```roslaunch depthai_ros_driver example_segmentation.launch`
-#### Multi-camera example:
-First, add mx_ids,IPs to the config file (see config/multicam.yaml for reference)
-```roslaunch depthai_ros_driver example_multicam.launch`
-#### Basic Pointcloud (no RGB)
-```roslaunch depthai_ros_driver pointcloud.launch```
-
-
 ### Mobilenet Publisher:
 #### ROS1:
 ##### OAK-D
@@ -220,20 +231,6 @@ roslaunch depthai_examples mobile_publisher.launch | rqt_image_view -t /mobilene
 
 #### ROS2:
 
-### Depthai Ros Driver:
-#### Default camera:
-```ros2 launch depthai_ros_driver camera.launch.py`
-#### RGBD camera:
-```ros2 launch depthai_ros_driver rgbd_pcl.launch.py`
-#### Segmentation:
-```ros2 launch depthai_ros_driver example_segmentation.launch.py`
-#### Multi-camera example:
-First, add mx_ids,IPs to the config file (see config/multicam.yaml for reference)
-```ros2 launch depthai_ros_driver example_multicam.launch.py`
-#### Basic Pointcloud (no RGB)
-```ros2 launch depthai_ros_driver pointcloud.launch.py```
-
-
 ##### OAK-D
 ```
 ros2 launch depthai_examples mobile_publisher.launch.py camera_model:=OAK-D
@@ -243,6 +240,12 @@ ros2 launch depthai_examples mobile_publisher.launch.py camera_model:=OAK-D
 ```
 ros2 launch depthai_examples mobile_publisher.launch.py camera_model:=OAK-D-LITE
 ```
+
+
+### Testing results
+- ImageConverter - Tested using `roslaunch depthai_examples stereo_inertial_node.launch` && `roslaunch depthai_examples rgb_publisher.launch`'
+- ImgDetectionCnverter - tested using `roslaunch depthai_examples mobile_publisher.launch`
+- SpatialImgDetectionConverter - Ntested using `roslaunch depthai_examples stereo_inertial_node.launch`
 
 
 ### Users can write Custom converters and plug them in for bridge Publisher. 

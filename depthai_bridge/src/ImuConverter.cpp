@@ -1,5 +1,6 @@
 
 #include <depthai_bridge/ImuConverter.hpp>
+#include <depthai_bridge/depthaiUtility.hpp>
 
 namespace dai {
 
@@ -12,8 +13,10 @@ ImuConverter::ImuConverter(const std::string& frameName, ImuSyncMethod syncMode,
       _angular_velocity_cov(angular_velocity_cov),
       _sequenceNum(0),
       _steadyBaseTime(std::chrono::steady_clock::now()) {
-    _rosBaseTime = ::ros::Time::now();
+    _rosBaseTime = rclcpp::Clock().now();
 }
+
+ImuConverter::~ImuConverter() = default;
 
 void ImuConverter::FillImuData_LinearInterpolation(std::vector<IMUPacket>& imuPackets, std::deque<ImuMsgs::Imu>& imuMsgs) {
     static std::deque<dai::IMUReportAccelerometer> accelHist;
@@ -184,8 +187,6 @@ ImuMsgs::Imu ImuConverter::CreateUnitMessage(dai::IMUReportAccelerometer accel, 
     interpMsg.angular_velocity_covariance = {_angular_velocity_cov, 0.0, 0.0, 0.0, _angular_velocity_cov, 0.0, 0.0, 0.0, _angular_velocity_cov};
 
     interpMsg.header.frame_id = _frameName;
-    interpMsg.header.seq = _sequenceNum;
-    _sequenceNum++;
 
     if(_syncMode == ImuSyncMethod::LINEAR_INTERPOLATE_ACCEL) {
         interpMsg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, gyro.timestamp.get());
