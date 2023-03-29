@@ -1,5 +1,11 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 
+#include "camera_info_manager/camera_info_manager.hpp"
+#include "depthai/pipeline/Pipeline.hpp"
+#include "depthai/pipeline/node/VideoEncoder.hpp"
+#include "depthai_bridge/ImageConverter.hpp"
+#include "rclcpp/logger.hpp"
+
 namespace depthai_ros_driver {
 namespace dai_nodes {
 namespace sensor_helpers {
@@ -71,12 +77,14 @@ std::vector<ImageSensor> availableSensors{
     {"OV9782", {"800P", "720p", "400p"}, true},
     {"OV9281", {"800P", "720p", "400p"}, true},
     {"IMX214", {"13mp", "12mp", "4k", "1080p"}, true},
+    {"IMX412", {"13mp", "12mp", "4k", "1080p"}, true},
     {"OV7750", {"480P", "400p"}, false},
     {"OV7251", {"480P", "400p"}, false},
     {"IMX477", {"12mp", "4k", "1080p"}, true},
     {"IMX577", {"12mp", "4k", "1080p"}, true},
     {"AR0234", {"1200P"}, true},
     {"IMX582", {"48mp", "12mp", "4k"}, true},
+    {"LCM48", {"48mp", "12mp", "4k"}, true},
 };
 void compressedImgCB(const std::string& /*name*/,
                      const std::shared_ptr<dai::ADatatype>& data,
@@ -119,7 +127,6 @@ sensor_msgs::msg::CameraInfo getCalibInfo(const rclcpp::Logger& logger,
                                           int height) {
     sensor_msgs::msg::CameraInfo info;
     auto calibHandler = device->readCalibration();
-
     try {
         info = converter.calibrationToCameraInfo(calibHandler, socket, width, height);
     } catch(std::runtime_error& e) {
