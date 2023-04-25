@@ -1,9 +1,8 @@
 #pragma once
 
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "ros/publisher.h"
-#include "sensor_msgs/Imu.h"
+#include "rclcpp/publisher.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 
 namespace dai {
 class Pipeline;
@@ -19,9 +18,10 @@ class ImuConverter;
 }
 }  // namespace dai
 
-namespace ros {
-class NodeHandle;
-}  // namespace ros
+namespace rclcpp {
+class Node;
+class Parameter;
+}  // namespace rclcpp
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -31,9 +31,9 @@ namespace dai_nodes {
 
 class Imu : public BaseNode {
    public:
-    explicit Imu(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline);
+    explicit Imu(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline);
     ~Imu();
-    void updateParams(parametersConfig& config) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     void setNames() override;
@@ -43,7 +43,7 @@ class Imu : public BaseNode {
    private:
     std::unique_ptr<dai::ros::ImuConverter> imuConverter;
     void imuQCB(const std::string& name, const std::shared_ptr<dai::ADatatype>& data);
-    ros::Publisher imuPub;
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imuPub;
     std::shared_ptr<dai::node::IMU> imuNode;
     std::unique_ptr<param_handlers::ImuParamHandler> ph;
     std::shared_ptr<dai::DataOutputQueue> imuQ;
