@@ -2,8 +2,8 @@
 
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
-#include "image_transport/camera_publisher.hpp"
-#include "image_transport/image_transport.hpp"
+#include "image_transport/camera_publisher.h"
+#include "image_transport/image_transport.h"
 
 namespace dai {
 class Pipeline;
@@ -22,10 +22,9 @@ class ImageConverter;
 }
 }  // namespace dai
 
-namespace rclcpp {
-class Node;
-class Parameter;
-}  // namespace rclcpp
+namespace ros {
+class NodeHandle;
+}  // namespace ros
 
 namespace camera_info_manager {
 class CameraInfoManager;
@@ -40,13 +39,13 @@ namespace dai_nodes {
 class Mono : public BaseNode {
    public:
     explicit Mono(const std::string& daiNodeName,
-                  rclcpp::Node* node,
+                  ros::NodeHandle node,
                   std::shared_ptr<dai::Pipeline> pipeline,
                   dai::CameraBoardSocket socket,
                   sensor_helpers::ImageSensor sensor,
                   bool publish);
     ~Mono();
-    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
+    void updateParams(parametersConfig& config) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     void setNames() override;
@@ -55,6 +54,7 @@ class Mono : public BaseNode {
 
    private:
     std::unique_ptr<dai::ros::ImageConverter> imageConverter;
+    image_transport::ImageTransport it;
     image_transport::CameraPublisher monoPub;
     std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager;
     std::shared_ptr<dai::node::MonoCamera> monoCamNode;

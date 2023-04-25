@@ -1,6 +1,3 @@
 /oak:
-  ros__parameters:
-    camera:
-      i_nn_type: none
-    stereo:
-      i_subpixel: true
+    camera_i_nn_type: none
+    stereo_i_subpixel: true
