@@ -1,3 +1,33 @@
+## depthai-ros (foxy) - 2.7.1-1
+
+The packages in the `depthai-ros` repository were released into the `foxy` distro by running `/usr/bin/bloom-release depthai-ros --rosdistro foxy` on `Tue, 25 Apr 2023 10:44:17 -0000`
+
+These packages were released:
+- `depthai-ros`
+- `depthai_bridge`
+- `depthai_descriptions`
+- `depthai_examples`
+- `depthai_filters`
+- `depthai_ros_driver`
+- `depthai_ros_msgs`
+
+Version of package(s) in repository `depthai-ros`:
+
+- upstream repository: https://github.com/luxonis/depthai-ros.git
+- release repository: https://github.com/luxonis/depthai-ros-release.git
+- rosdistro version: `2.5.3-1`
+- old version: `2.5.3-1`
+- new version: `2.7.1-1`
+
+Versions of tools used:
+
+- bloom version: `0.11.2`
+- catkin_pkg version: `0.5.2`
+- rosdep version: `0.22.1`
+- rosdistro version: `0.9.0`
+- vcstools version: `0.1.42`
+
+
 ## depthai-ros (noetic) - 2.7.1-1
 
 The packages in the `depthai-ros` repository were released into the `noetic` distro by running `/usr/bin/bloom-release depthai-ros --rosdistro noetic` on `Tue, 25 Apr 2023 08:30:06 -0000`
