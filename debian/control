@@ -1,0 +1,12 @@
+Source: ros-foxy-depthai-ros-driver
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), ros-foxy-ament-cmake, ros-foxy-ament-cmake-auto, ros-foxy-composition, ros-foxy-cv-bridge, ros-foxy-depthai, ros-foxy-depthai-bridge, ros-foxy-depthai-descriptions, ros-foxy-diagnostic-msgs, ros-foxy-image-pipeline, ros-foxy-image-transport, ros-foxy-image-transport-plugins, ros-foxy-rclcpp, ros-foxy-rclcpp-components, ros-foxy-sensor-msgs, ros-foxy-std-msgs, ros-foxy-std-srvs, ros-foxy-vision-msgs, ros-foxy-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-foxy-depthai-ros-driver
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-foxy-ament-cmake-auto, ros-foxy-composition, ros-foxy-cv-bridge, ros-foxy-depthai, ros-foxy-depthai-bridge, ros-foxy-depthai-descriptions, ros-foxy-diagnostic-msgs, ros-foxy-image-pipeline, ros-foxy-image-transport, ros-foxy-image-transport-plugins, ros-foxy-rclcpp, ros-foxy-rclcpp-components, ros-foxy-sensor-msgs, ros-foxy-std-msgs, ros-foxy-std-srvs, ros-foxy-vision-msgs, ros-foxy-ros-workspace
+Description: Depthai ROS Monolithic node.
