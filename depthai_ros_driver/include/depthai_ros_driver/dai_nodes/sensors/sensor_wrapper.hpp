@@ -7,8 +7,8 @@
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai/pipeline/Node.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
-#include "rclcpp/subscription.hpp"
-#include "sensor_msgs/msg/image.hpp"
+#include "ros/subscriber.h"
+#include "sensor_msgs/Image.h"
 
 namespace dai {
 class Pipeline;
@@ -22,10 +22,9 @@ class ImageConverter;
 }
 }  // namespace dai
 
-namespace rclcpp {
-class Node;
-class Parameter;
-}  // namespace rclcpp
+namespace ros {
+class NodeHandle;
+}  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -36,13 +35,13 @@ namespace dai_nodes {
 class SensorWrapper : public BaseNode {
    public:
     explicit SensorWrapper(const std::string& daiNodeName,
-                           rclcpp::Node* node,
+                           ros::NodeHandle node,
                            std::shared_ptr<dai::Pipeline> pipeline,
                            std::shared_ptr<dai::Device> device,
                            dai::CameraBoardSocket socket,
                            bool publish = true);
     ~SensorWrapper();
-    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
+    void updateParams(parametersConfig& config) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     void setNames() override;
@@ -50,15 +49,16 @@ class SensorWrapper : public BaseNode {
     void closeQueues() override;
 
    private:
-    void subCB(const sensor_msgs::msg::Image& img);
+    void subCB(const sensor_msgs::Image::ConstPtr& img);
     std::unique_ptr<BaseNode> sensorNode;
     std::unique_ptr<param_handlers::SensorParamHandler> ph;
     std::unique_ptr<dai::ros::ImageConverter> converter;
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub;
+    ros::Subscriber sub;
     std::shared_ptr<dai::node::XLinkIn> xIn;
     std::shared_ptr<dai::DataInputQueue> inQ;
     std::string inQName;
     int socketID;
+    bool ready;
 };
 
 }  // namespace dai_nodes

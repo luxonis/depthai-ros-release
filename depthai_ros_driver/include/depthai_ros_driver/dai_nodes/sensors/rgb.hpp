@@ -1,9 +1,10 @@
 #pragma once
 
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
-#include "image_transport/camera_publisher.hpp"
-#include "image_transport/image_transport.hpp"
-#include "sensor_msgs/msg/camera_info.hpp"
+#include "depthai_ros_driver/parametersConfig.h"
+#include "image_transport/camera_publisher.h"
+#include "image_transport/image_transport.h"
+#include "sensor_msgs/CameraInfo.h"
 
 namespace dai {
 class Pipeline;
@@ -23,10 +24,9 @@ class ImageConverter;
 }
 }  // namespace dai
 
-namespace rclcpp {
-class Node;
-class Parameter;
-}  // namespace rclcpp
+namespace ros {
+class NodeHandle;
+}  // namespace ros
 
 namespace camera_info_manager {
 class CameraInfoManager;
@@ -45,13 +45,13 @@ struct ImageSensor;
 class RGB : public BaseNode {
    public:
     explicit RGB(const std::string& daiNodeName,
-                 rclcpp::Node* node,
+                 ros::NodeHandle node,
                  std::shared_ptr<dai::Pipeline> pipeline,
                  dai::CameraBoardSocket socket,
                  sensor_helpers::ImageSensor sensor,
                  bool publish);
     ~RGB();
-    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
+    void updateParams(parametersConfig& config) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     void setNames() override;
@@ -60,6 +60,7 @@ class RGB : public BaseNode {
 
    private:
     std::unique_ptr<dai::ros::ImageConverter> imageConverter;
+    image_transport::ImageTransport it;
     image_transport::CameraPublisher rgbPub, previewPub;
     std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager, previewInfoManager;
     std::shared_ptr<dai::node::ColorCamera> colorCamNode;

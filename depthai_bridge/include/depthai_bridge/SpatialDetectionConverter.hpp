@@ -5,23 +5,23 @@
 #include <string>
 
 #include "depthai/pipeline/datatype/SpatialImgDetections.hpp"
-#include "depthai_ros_msgs/msg/spatial_detection_array.hpp"
-#include "rclcpp/time.hpp"
-#include "vision_msgs/msg/detection3_d_array.hpp"
+#include "depthai_ros_msgs/SpatialDetectionArray.h"
+#include "ros/ros.h"
+#include "vision_msgs/Detection3DArray.h"
 
 namespace dai {
 
 namespace ros {
-
-namespace SpatialMessages = depthai_ros_msgs::msg;
-using SpatialDetectionArrayPtr = SpatialMessages::SpatialDetectionArray::SharedPtr;
-
+namespace SpatialMessages = depthai_ros_msgs;
+using SpatialDetectionArrayPtr = SpatialMessages::SpatialDetectionArray::Ptr;
 class SpatialDetectionConverter {
    public:
+    // DetectionConverter() = default;
     SpatialDetectionConverter(std::string frameName, int width, int height, bool normalized = false, bool getBaseDeviceTimestamp = false);
-    ~SpatialDetectionConverter();
+
     void toRosMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData, std::deque<SpatialMessages::SpatialDetectionArray>& opDetectionMsg);
-    void toRosVisionMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData, std::deque<vision_msgs::msg::Detection3DArray>& opDetectionMsg);
+
+    void toRosVisionMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData, std::deque<vision_msgs::Detection3DArray>& opDetectionMsg);
 
     SpatialDetectionArrayPtr toRosMsgPtr(std::shared_ptr<dai::SpatialImgDetections> inNetData);
 
@@ -30,8 +30,7 @@ class SpatialDetectionConverter {
     const std::string _frameName;
     bool _normalized;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-
-    rclcpp::Time _rosBaseTime;
+    ::ros::Time _rosBaseTime;
     bool _getBaseDeviceTimestamp;
 };
 
