@@ -1,6 +1,5 @@
 #include "depthai_filters/detection2d_overlay.hpp"
 
-#include <iomanip>
 #include "cv_bridge/cv_bridge.h"
 #include "depthai_filters/utils.hpp"
 
@@ -26,12 +25,12 @@ void Detection2DOverlay::overlayCB(const sensor_msgs::msg::Image::ConstSharedPtr
     auto blue = cv::Scalar(255, 0, 0);
 
     for(auto& detection : detections->detections) {
-        auto x1 = detection.bbox.center.x - detections->detections[0].bbox.size_x / 2.0;
-        auto x2 = detection.bbox.center.x + detections->detections[0].bbox.size_x / 2.0;
-        auto y1 = detection.bbox.center.y - detections->detections[0].bbox.size_y / 2.0;
-        auto y2 = detection.bbox.center.y + detections->detections[0].bbox.size_y / 2.0;
-        auto labelStr =  labelMap[stoi(detection.results[0].id)];
-        auto confidence = detection.results[0].score;
+        auto x1 = detection.bbox.center.position.x - detections->detections[0].bbox.size_x / 2.0;
+        auto x2 = detection.bbox.center.position.x + detections->detections[0].bbox.size_x / 2.0;
+        auto y1 = detection.bbox.center.position.y - detections->detections[0].bbox.size_y / 2.0;
+        auto y2 = detection.bbox.center.position.y + detections->detections[0].bbox.size_y / 2.0;
+        auto labelStr = labelMap[stoi(detection.results[0].hypothesis.class_id)];
+        auto confidence = detection.results[0].hypothesis.score;
         cv::putText(previewMat, labelStr, cv::Point(x1 + 10, y1 + 20), cv::FONT_HERSHEY_TRIPLEX, 0.5, white, 3);
         cv::putText(previewMat, labelStr, cv::Point(x1 + 10, y1 + 20), cv::FONT_HERSHEY_TRIPLEX, 0.5, black);
         std::stringstream confStr;
@@ -48,4 +47,4 @@ void Detection2DOverlay::overlayCB(const sensor_msgs::msg::Image::ConstSharedPtr
 
 }  // namespace depthai_filters
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(depthai_filters::Detection2DOverlay)
+RCLCPP_COMPONENTS_REGISTER_NODE(depthai_filters::Detection2DOverlay);

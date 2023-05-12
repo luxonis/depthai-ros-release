@@ -15,9 +15,7 @@ from launch_ros.actions import Node
 def launch_setup(context, *args, **kwargs):
 
     depthai_prefix = get_package_share_directory("depthai_ros_driver")
-    rviz_config = os.path.join(depthai_prefix, "config", "rviz", "multicam.rviz")
-    param_dir = os.path.join(depthai_prefix, "config", "multicam")
-    oak_d_pro_params_file = param_dir+ "/oak_d_pro.yaml"
+    params_file = os.path.join(depthai_prefix, "config", "multicam_example.yaml")
     # put mx_ids here
     cams = ["oak_d_w", "oak_d_lite"]
     nodes = []
@@ -28,7 +26,7 @@ def launch_setup(context, *args, **kwargs):
                 os.path.join(depthai_prefix, 'launch', 'camera.launch.py')),
             launch_arguments={"name": cam_name,
                               "parent_frame": "map",
-                              "params_file": param_dir+"/{}.yaml".format(cam_name),
+                              "params_file": params_file,
                               "cam_pos_y": str(i)}.items())
         nodes.append(node)
         i=i+0.1
@@ -39,7 +37,7 @@ def launch_setup(context, *args, **kwargs):
         ),
         launch_arguments={"name": "oak_d_pro",
                           "parent_frame": "map",
-                          "params_file": oak_d_pro_params_file,
+                          "params_file": params_file,
                           "cam_pos_y": str(-0.1)}.items())
 
     obj_det = Node(

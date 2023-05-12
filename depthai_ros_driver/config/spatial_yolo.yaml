@@ -1,2 +1,5 @@
-nn:
-  i_nn_config_path: depthai_ros_driver/yolo
+/oak:
+  ros__parameters:
+    nn:
+      i_nn_config_path: depthai_ros_driver/yolo
+

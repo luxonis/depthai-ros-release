@@ -1,7 +1,5 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_wrapper.hpp"
 
-#include <memory>
-
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/node/XLinkIn.hpp"
@@ -64,10 +62,9 @@ SensorWrapper::SensorWrapper(const std::string& daiNodeName,
 }
 SensorWrapper::~SensorWrapper() = default;
 
-void SensorWrapper::subCB(const sensor_msgs::msg::Image::SharedPtr img) const {
+void SensorWrapper::subCB(const sensor_msgs::msg::Image& img) {
     dai::ImgFrame data;
-    // auto ptr = std::const_pointer_cast<sensor_msgs::msg::Image>(img);
-    converter->toDaiMsg(*img, data);
+    converter->toDaiMsg(img, data);
     data.setInstanceNum(socketID);
     inQ->send(data);
 }
