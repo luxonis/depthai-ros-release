@@ -1,24 +1,26 @@
 #pragma once
 
 #include <deque>
+#include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 
 #include "depthai-shared/datatype/RawIMUData.hpp"
 #include "depthai/pipeline/datatype/IMUData.hpp"
-#include "depthaiUtility.hpp"
-#include "depthai_ros_msgs/ImuWithMagneticField.h"
-#include "ros/time.h"
-#include "sensor_msgs/Imu.h"
-#include "sensor_msgs/MagneticField.h"
+#include "depthai_bridge/depthaiUtility.hpp"
+#include "depthai_ros_msgs/msg/imu_with_magnetic_field.hpp"
+#include "rclcpp/time.hpp"
+#include "sensor_msgs/msg/imu.hpp"
+#include "sensor_msgs/msg/magnetic_field.hpp"
 
 namespace dai {
 
 namespace ros {
 
-namespace ImuMsgs = sensor_msgs;
-using ImuPtr = ImuMsgs::Imu::Ptr;
+namespace ImuMsgs = sensor_msgs::msg;
+using ImuPtr = ImuMsgs::Imu::SharedPtr;
 
 enum class ImuSyncMethod { COPY, LINEAR_INTERPOLATE_GYRO, LINEAR_INTERPOLATE_ACCEL };
 
@@ -30,10 +32,11 @@ class ImuConverter {
                  double angular_velocity_cov = 0.0,
                  double rotation_cov = 0.0,
                  double magnetic_field_cov = 0.0,
-                 bool enable_rotation = false);
+                 bool enable_rotation = false,
+                 bool getBaseDeviceTimestamp = false);
     ~ImuConverter();
     void toRosMsg(std::shared_ptr<dai::IMUData> inData, std::deque<ImuMsgs::Imu>& outImuMsgs);
-    void toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::ImuWithMagneticField>& outImuMsgs);
+    void toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::msg::ImuWithMagneticField>& outImuMsgs);
 
     template <typename T>
     T lerp(const T& a, const T& b, const double t) {
@@ -109,20 +112,21 @@ class ImuConverter {
     const std::string _frameName = "";
     ImuSyncMethod _syncMode;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-    ::ros::Time _rosBaseTime;
+    rclcpp::Time _rosBaseTime;
+    bool _getBaseDeviceTimestamp;
 
     void fillImuMsg(dai::IMUReportAccelerometer report, ImuMsgs::Imu& msg);
     void fillImuMsg(dai::IMUReportGyroscope report, ImuMsgs::Imu& msg);
     void fillImuMsg(dai::IMUReportRotationVectorWAcc report, ImuMsgs::Imu& msg);
     void fillImuMsg(dai::IMUReportMagneticField report, ImuMsgs::Imu& msg);
 
-    void fillImuMsg(dai::IMUReportAccelerometer report, depthai_ros_msgs::ImuWithMagneticField& msg);
-    void fillImuMsg(dai::IMUReportGyroscope report, depthai_ros_msgs::ImuWithMagneticField& msg);
-    void fillImuMsg(dai::IMUReportRotationVectorWAcc report, depthai_ros_msgs::ImuWithMagneticField& msg);
-    void fillImuMsg(dai::IMUReportMagneticField report, depthai_ros_msgs::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportAccelerometer report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportGyroscope report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportRotationVectorWAcc report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportMagneticField report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
 
     template <typename I, typename S, typename T, typename F, typename M>
-    void CreateUnitMessage(I first, S second, T third, F fourth, M& msg, dai::Timestamp timestamp) {
+    void CreateUnitMessage(I first, S second, T third, F fourth, M& msg, std::chrono::_V2::steady_clock::time_point timestamp) {
         fillImuMsg(first, msg);
         fillImuMsg(second, msg);
         fillImuMsg(third, msg);
@@ -130,7 +134,7 @@ class ImuConverter {
 
         msg.header.frame_id = _frameName;
 
-        msg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, timestamp.get());
+        msg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, timestamp);
     }
 
     template <typename I, typename S, typename T, typename F, typename M>
@@ -160,7 +164,12 @@ class ImuConverter {
                         const double alpha = diff.count() / dt;
                         I interp = lerpImu(interp0, interp1, alpha);
                         M msg;
-                        CreateUnitMessage(interp, currSecond, currThird, currFourth, msg, currSecond.timestamp);
+                        std::chrono::_V2::steady_clock::time_point tstamp;
+                        if(_getBaseDeviceTimestamp)
+                            tstamp = currSecond.getTimestampDevice();
+                        else
+                            tstamp = currSecond.getTimestamp();
+                        CreateUnitMessage(interp, currSecond, currThird, currFourth, msg, tstamp);
                         imuMsgs.push_back(msg);
                         second.pop_front();
                         third.pop_front();

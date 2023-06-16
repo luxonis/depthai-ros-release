@@ -3,22 +3,23 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <vision_msgs/msg/detection2_d_array.hpp>
 
 #include "depthai/pipeline/datatype/ImgDetections.hpp"
-#include "ros/time.h"
-#include "vision_msgs/Detection2DArray.h"
+#include "rclcpp/time.hpp"
 
 namespace dai {
 
 namespace ros {
 
-namespace VisionMsgs = vision_msgs;
-using Detection2DArrayPtr = VisionMsgs::Detection2DArray::Ptr;
+namespace VisionMsgs = vision_msgs::msg;
+using Detection2DArrayPtr = VisionMsgs::Detection2DArray::SharedPtr;
+
 class ImgDetectionConverter {
    public:
     // DetectionConverter() = default;
     ImgDetectionConverter(std::string frameName, int width, int height, bool normalized = false, bool getBaseDeviceTimestamp = false);
-
+    ~ImgDetectionConverter();
     void toRosMsg(std::shared_ptr<dai::ImgDetections> inNetData, std::deque<VisionMsgs::Detection2DArray>& opDetectionMsgs);
 
     Detection2DArrayPtr toRosMsgPtr(std::shared_ptr<dai::ImgDetections> inNetData);
@@ -28,7 +29,7 @@ class ImgDetectionConverter {
     const std::string _frameName;
     bool _normalized;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-    ::ros::Time _rosBaseTime;
+    rclcpp::Time _rosBaseTime;
     bool _getBaseDeviceTimestamp;
 };
 
