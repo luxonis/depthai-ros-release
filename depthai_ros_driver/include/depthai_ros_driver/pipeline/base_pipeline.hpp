@@ -27,12 +27,12 @@ enum class NNType { None, RGB, Spatial };
 class BasePipeline {
    public:
     ~BasePipeline() = default;
-    std::unique_ptr<dai_nodes::BaseNode> createNN(rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline, dai_nodes::BaseNode& daiNode) {
+    std::unique_ptr<dai_nodes::BaseNode> createNN(ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline, dai_nodes::BaseNode& daiNode) {
         auto nn = std::make_unique<dai_nodes::NNWrapper>("nn", node, pipeline);
         daiNode.link(nn->getInput(), static_cast<int>(dai_nodes::link_types::RGBLinkType::preview));
         return nn;
     }
-    std::unique_ptr<dai_nodes::BaseNode> createSpatialNN(rclcpp::Node* node,
+    std::unique_ptr<dai_nodes::BaseNode> createSpatialNN(ros::NodeHandle node,
                                                          std::shared_ptr<dai::Pipeline> pipeline,
                                                          dai_nodes::BaseNode& daiNode,
                                                          dai_nodes::BaseNode& daiStereoNode) {
@@ -43,7 +43,7 @@ class BasePipeline {
         return nn;
     }
 
-    virtual std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(rclcpp::Node* node,
+    virtual std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(ros::NodeHandle node,
                                                                              std::shared_ptr<dai::Device> device,
                                                                              std::shared_ptr<dai::Pipeline> pipeline,
                                                                              const std::string& nnType) = 0;

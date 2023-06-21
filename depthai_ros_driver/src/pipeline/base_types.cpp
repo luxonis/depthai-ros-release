@@ -12,12 +12,12 @@
 #include "depthai_ros_driver/dai_nodes/stereo.hpp"
 #include "depthai_ros_driver/pipeline/base_pipeline.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "rclcpp/node.hpp"
+#include "ros/node_handle.h"
 
 namespace depthai_ros_driver {
 namespace pipeline_gen {
 
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(rclcpp::Node* node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(ros::NodeHandle node,
                                                                       std::shared_ptr<dai::Device> device,
                                                                       std::shared_ptr<dai::Pipeline> pipeline,
                                                                       const std::string& nnType) {
@@ -35,7 +35,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(rclcpp::No
             break;
         }
         case NNType::Spatial: {
-            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGB.");
+            ROS_WARN("Spatial NN selected, but configuration is RGB.");
         }
         default:
             break;
@@ -43,7 +43,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(rclcpp::No
     daiNodes.push_back(std::move(rgb));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBD::createPipeline(rclcpp::Node* node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBD::createPipeline(ros::NodeHandle node,
                                                                        std::shared_ptr<dai::Device> device,
                                                                        std::shared_ptr<dai::Pipeline> pipeline,
                                                                        const std::string& nnType) {
@@ -73,7 +73,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBD::createPipeline(rclcpp::N
     daiNodes.push_back(std::move(stereo));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(rclcpp::Node* node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(ros::NodeHandle node,
                                                                             std::shared_ptr<dai::Device> device,
                                                                             std::shared_ptr<dai::Pipeline> pipeline,
                                                                             const std::string& nnType) {
@@ -93,7 +93,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(rclc
             break;
         }
         case NNType::Spatial: {
-            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGBStereo.");
+            ROS_WARN("Spatial NN selected, but configuration is RGBStereo.");
         }
         default:
             break;
@@ -103,7 +103,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(rclc
     daiNodes.push_back(std::move(right));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> Stereo::createPipeline(rclcpp::Node* node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> Stereo::createPipeline(ros::NodeHandle node,
                                                                          std::shared_ptr<dai::Device> device,
                                                                          std::shared_ptr<dai::Pipeline> pipeline,
                                                                          const std::string& /*nnType*/) {
@@ -114,7 +114,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> Stereo::createPipeline(rclcpp:
     daiNodes.push_back(std::move(right));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> Depth::createPipeline(rclcpp::Node* node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> Depth::createPipeline(ros::NodeHandle node,
                                                                         std::shared_ptr<dai::Device> device,
                                                                         std::shared_ptr<dai::Pipeline> pipeline,
                                                                         const std::string& /*nnType*/) {
@@ -123,7 +123,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> Depth::createPipeline(rclcpp::
     daiNodes.push_back(std::move(stereo));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> CamArray::createPipeline(rclcpp::Node* node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> CamArray::createPipeline(ros::NodeHandle node,
                                                                            std::shared_ptr<dai::Device> device,
                                                                            std::shared_ptr<dai::Pipeline> pipeline,
                                                                            const std::string& /*nnType*/) {

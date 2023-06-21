@@ -1,26 +1,24 @@
 #pragma once
 
 #include <deque>
-#include <iostream>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 
 #include "depthai-shared/datatype/RawIMUData.hpp"
 #include "depthai/pipeline/datatype/IMUData.hpp"
-#include "depthai_bridge/depthaiUtility.hpp"
-#include "depthai_ros_msgs/msg/imu_with_magnetic_field.hpp"
-#include "rclcpp/time.hpp"
-#include "sensor_msgs/msg/imu.hpp"
-#include "sensor_msgs/msg/magnetic_field.hpp"
+#include "depthaiUtility.hpp"
+#include "depthai_ros_msgs/ImuWithMagneticField.h"
+#include "ros/time.h"
+#include "sensor_msgs/Imu.h"
+#include "sensor_msgs/MagneticField.h"
 
 namespace dai {
 
 namespace ros {
 
-namespace ImuMsgs = sensor_msgs::msg;
-using ImuPtr = ImuMsgs::Imu::SharedPtr;
+namespace ImuMsgs = sensor_msgs;
+using ImuPtr = ImuMsgs::Imu::Ptr;
 
 enum class ImuSyncMethod { COPY, LINEAR_INTERPOLATE_GYRO, LINEAR_INTERPOLATE_ACCEL };
 
@@ -35,8 +33,26 @@ class ImuConverter {
                  bool enable_rotation = false,
                  bool getBaseDeviceTimestamp = false);
     ~ImuConverter();
+
+    /**
+     * @brief Handles cases in which the ROS time shifts forward or backward
+     *  Should be called at regular intervals or on-change of ROS time, depending
+     *  on monitoring.
+     *
+     */
+    void updateRosBaseTime();
+
+    /**
+     * @brief Commands the converter to automatically update the ROS base time on message conversion based on variable
+     *
+     * @param update: bool whether to automatically update the ROS base time on message conversion
+     */
+    void setUpdateRosBaseTimeOnToRosMsg(bool update = true) {
+        _updateRosBaseTimeOnToRosMsg = update;
+    }
+
     void toRosMsg(std::shared_ptr<dai::IMUData> inData, std::deque<ImuMsgs::Imu>& outImuMsgs);
-    void toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::msg::ImuWithMagneticField>& outImuMsgs);
+    void toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::ImuWithMagneticField>& outImuMsgs);
 
     template <typename T>
     T lerp(const T& a, const T& b, const double t) {
@@ -112,7 +128,11 @@ class ImuConverter {
     const std::string _frameName = "";
     ImuSyncMethod _syncMode;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-    rclcpp::Time _rosBaseTime;
+    ::ros::Time _rosBaseTime;
+    // For handling ROS time shifts and debugging
+    int64_t _totalNsChange{0};
+    // Whether to update the ROS base time on each message conversion
+    bool _updateRosBaseTimeOnToRosMsg{false};
     bool _getBaseDeviceTimestamp;
 
     void fillImuMsg(dai::IMUReportAccelerometer report, ImuMsgs::Imu& msg);
@@ -120,10 +140,10 @@ class ImuConverter {
     void fillImuMsg(dai::IMUReportRotationVectorWAcc report, ImuMsgs::Imu& msg);
     void fillImuMsg(dai::IMUReportMagneticField report, ImuMsgs::Imu& msg);
 
-    void fillImuMsg(dai::IMUReportAccelerometer report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
-    void fillImuMsg(dai::IMUReportGyroscope report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
-    void fillImuMsg(dai::IMUReportRotationVectorWAcc report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
-    void fillImuMsg(dai::IMUReportMagneticField report, depthai_ros_msgs::msg::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportAccelerometer report, depthai_ros_msgs::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportGyroscope report, depthai_ros_msgs::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportRotationVectorWAcc report, depthai_ros_msgs::ImuWithMagneticField& msg);
+    void fillImuMsg(dai::IMUReportMagneticField report, depthai_ros_msgs::ImuWithMagneticField& msg);
 
     template <typename I, typename S, typename T, typename F, typename M>
     void CreateUnitMessage(I first, S second, T third, F fourth, M& msg, std::chrono::_V2::steady_clock::time_point timestamp) {

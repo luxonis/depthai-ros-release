@@ -1,6 +1,6 @@
 #include "depthai_ros_driver/dai_nodes/sensors/mono.hpp"
 
-#include "camera_info_manager/camera_info_manager.hpp"
+#include "camera_info_manager/camera_info_manager.h"
 #include "depthai/device/DataQueue.hpp"
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
@@ -10,26 +10,26 @@
 #include "depthai/pipeline/node/XLinkOut.hpp"
 #include "depthai_bridge/ImageConverter.hpp"
 #include "depthai_ros_driver/param_handlers/sensor_param_handler.hpp"
-#include "image_transport/camera_publisher.hpp"
-#include "image_transport/image_transport.hpp"
-#include "rclcpp/node.hpp"
+#include "image_transport/camera_publisher.h"
+#include "image_transport/image_transport.h"
+#include "ros/node_handle.h"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
 Mono::Mono(const std::string& daiNodeName,
-           rclcpp::Node* node,
+           ros::NodeHandle node,
            std::shared_ptr<dai::Pipeline> pipeline,
            dai::CameraBoardSocket socket,
            dai_nodes::sensor_helpers::ImageSensor sensor,
            bool publish = true)
-    : BaseNode(daiNodeName, node, pipeline) {
-    RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
+    : BaseNode(daiNodeName, node, pipeline), it(node) {
+    ROS_DEBUG("Creating node %s", daiNodeName.c_str());
     setNames();
     monoCamNode = pipeline->create<dai::node::MonoCamera>();
     ph = std::make_unique<param_handlers::SensorParamHandler>(node, daiNodeName);
     ph->declareParams(monoCamNode, socket, sensor, publish);
     setXinXout(pipeline);
-    RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
+    ROS_DEBUG("Node %s created", daiNodeName.c_str());
 }
 Mono::~Mono() = default;
 void Mono::setNames() {
@@ -58,14 +58,11 @@ void Mono::setupQueues(std::shared_ptr<dai::Device> device) {
     if(ph->getParam<bool>("i_publish_topic")) {
         monoQ = device->getOutputQueue(monoQName, ph->getParam<int>("i_max_q_size"), false);
         auto tfPrefix = getTFPrefix(getName());
-        imageConverter =
-            std::make_unique<dai::ros::ImageConverter>(tfPrefix + "_camera_optical_frame", false, ph->getParam<bool>("i_get_base_device_timestamp"));
-        monoPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/image_raw");
-        infoManager = std::make_shared<camera_info_manager::CameraInfoManager>(
-            getROSNode()->create_sub_node(std::string(getROSNode()->get_name()) + "/" + getName()).get(), "/" + getName());
+        imageConverter = std::make_unique<dai::ros::ImageConverter>(tfPrefix + "_camera_optical_frame", false);
+        monoPub = it.advertiseCamera(getName() + "/image_raw", 1);
+        infoManager = std::make_shared<camera_info_manager::CameraInfoManager>(ros::NodeHandle(getROSNode(), getName()), "/" + getName());
         if(ph->getParam<std::string>("i_calibration_file").empty()) {
-            infoManager->setCameraInfo(sensor_helpers::getCalibInfo(getROSNode()->get_logger(),
-                                                                    *imageConverter,
+            infoManager->setCameraInfo(sensor_helpers::getCalibInfo(*imageConverter,
                                                                     device,
                                                                     static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id")),
                                                                     ph->getParam<int>("i_width"),
@@ -98,8 +95,8 @@ void Mono::link(dai::Node::Input in, int /*linkType*/) {
     monoCamNode->out.link(in);
 }
 
-void Mono::updateParams(const std::vector<rclcpp::Parameter>& params) {
-    auto ctrl = ph->setRuntimeParams(params);
+void Mono::updateParams(parametersConfig& config) {
+    auto ctrl = ph->setRuntimeParams(config);
     controlQ->send(ctrl);
 }
 
