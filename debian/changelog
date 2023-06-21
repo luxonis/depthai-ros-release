@@ -1,0 +1,95 @@
+ros-noetic-depthai-ros (2.7.3-1focal) focal; urgency=high
+
+  * Pipeline generation as a plugin
+  * Fixed bounding box generation issue
+  * Stereo rectified streams publishing
+  * Camera trigger mechanisms
+  * Brightness filter
+
+ -- sachin <sachin@luxonis.com>  Thu, 15 Jun 2023 22:00:00 -0000
+
+ros-noetic-depthai-ros (2.7.2-1focal) focal; urgency=high
+
+  * IMU improvements
+
+ -- sachin <sachin@luxonis.com>  Sun, 07 May 2023 22:00:00 -0000
+
+ros-noetic-depthai-ros (2.7.1-1focal) focal; urgency=high
+
+  * Add custom output size option for streams
+
+ -- sachin <sachin@luxonis.com>  Tue, 28 Mar 2023 22:00:00 -0000
+
+ros-noetic-depthai-ros (2.7.0-1focal) focal; urgency=high
+
+  * Added depthai_descriptions package
+  * Added depthai_filters package
+  * XLinkIn option for image subscription
+  * Additional debugging options
+  * Bugfixes
+
+ -- sachin <sachin@luxonis.com>  Mon, 27 Mar 2023 22:00:00 -0000
+
+ros-noetic-depthai-ros (2.6.4-1focal) focal; urgency=high
+
+  * Fix sensor name detection
+  * Enable subpixel mode
+  * Update camera start/stop services
+
+ -- sachin <sachin@luxonis.com>  Wed, 22 Feb 2023 23:00:00 -0000
+
+ros-noetic-depthai-ros (2.6.3-1focal) focal; urgency=high
+
+  * Camera calibration updates
+  * Option to connect to the device via USB port id
+
+ -- sachin <sachin@luxonis.com>  Thu, 09 Feb 2023 23:00:00 -0000
+
+ros-noetic-depthai-ros (2.6.2-1focal) focal; urgency=high
+
+  * Fixed timestamp in SpatialDetector
+  * Updated topic names in stereo_inertial_node
+
+ -- sachin <sachin@luxonis.com>  Tue, 31 Jan 2023 23:00:00 -0000
+
+ros-noetic-depthai-ros (2.6.1-1focal) focal; urgency=high
+
+  * Update docker image building
+
+ -- sachin <sachin@luxonis.com>  Tue, 10 Jan 2023 23:00:00 -0000
+
+ros-noetic-depthai-ros (2.6.0-1focal) focal; urgency=high
+
+  * Added depthai_ros_driver package
+
+ -- sachin <sachin@luxonis.com>  Tue, 10 Jan 2023 23:00:00 -0000
+
+ros-noetic-depthai-ros (2.5.3-1focal) focal; urgency=high
+
+  * Updated release version
+  * Contributors: Sachin
+
+ -- sachin <sachin@luxonis.com>  Sat, 20 Aug 2022 22:00:00 -0000
+
+ros-noetic-depthai-ros (2.5.2-1focal) focal; urgency=high
+
+  * Upgraded examples
+  * Fixed bugs for Noetic
+
+ -- sachin <sachin@luxonis.com>  Tue, 31 May 2022 22:00:00 -0000
+
+ros-noetic-depthai-ros (2.5.1-1focal) focal; urgency=high
+
+  * Fix Build farm issues
+
+ -- sachin <sachin@luxonis.com>  Thu, 19 May 2022 22:00:00 -0000
+
+ros-noetic-depthai-ros (2.5.0-1focal) focal; urgency=high
+
+  * Release 2.5.0
+  * add ament package:
+  * created Bridge and Coverters to handle images, IMU and camera Info
+
+ -- sachin <sachin@luxonis.com>  Thu, 19 May 2022 22:00:00 -0000
+
+
