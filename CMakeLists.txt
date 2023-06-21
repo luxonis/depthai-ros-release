@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.10.2)
-project(depthai_filters VERSION 2.7.2 LANGUAGES CXX C)
+project(depthai_filters VERSION 2.7.3 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 add_compile_options(-g)
-add_definitions(-std=c++11)
+add_definitions(-std=c++14)
 
 ## is used, also find other catkin packages
 if(POLICY CMP0057)
