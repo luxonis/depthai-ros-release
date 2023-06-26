@@ -5,13 +5,13 @@
 #include "depthai/pipeline/node/SpatialDetectionNetwork.hpp"
 #include "depthai_ros_driver/dai_nodes/nn/spatial_detection.hpp"
 #include "depthai_ros_driver/param_handlers/nn_param_handler.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
-SpatialNNWrapper::SpatialNNWrapper(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline)
+SpatialNNWrapper::SpatialNNWrapper(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline)
     : BaseNode(daiNodeName, node, pipeline) {
-    ROS_DEBUG("Creating node %s base", daiNodeName.c_str());
+    RCLCPP_DEBUG(node->get_logger(), "Creating node %s base", daiNodeName.c_str());
     ph = std::make_unique<param_handlers::NNParamHandler>(node, daiNodeName);
     auto family = ph->getNNFamily();
     switch(family) {
@@ -28,9 +28,8 @@ SpatialNNWrapper::SpatialNNWrapper(const std::string& daiNodeName, ros::NodeHand
         }
     }
 
-    ROS_DEBUG("Base node %s created", daiNodeName.c_str());
+    RCLCPP_DEBUG(node->get_logger(), "Base node %s created", daiNodeName.c_str());
 }
-
 SpatialNNWrapper::~SpatialNNWrapper() = default;
 void SpatialNNWrapper::setNames() {}
 
@@ -51,9 +50,9 @@ dai::Node::Input SpatialNNWrapper::getInput(int linkType) {
     return nnNode->getInput(linkType);
 }
 
-void SpatialNNWrapper::updateParams(parametersConfig& config) {
-    ph->setRuntimeParams(config);
-    nnNode->updateParams(config);
+void SpatialNNWrapper::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    ph->setRuntimeParams(params);
+    nnNode->updateParams(params);
 }
 
 }  // namespace dai_nodes

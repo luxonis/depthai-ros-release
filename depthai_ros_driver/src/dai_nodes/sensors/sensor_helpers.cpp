@@ -1,9 +1,10 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 
-#include "camera_info_manager/camera_info_manager.h"
+#include "camera_info_manager/camera_info_manager.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/node/VideoEncoder.hpp"
 #include "depthai_bridge/ImageConverter.hpp"
+#include "rclcpp/logger.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
@@ -31,38 +32,43 @@ void ImageSensor::getSizeFromResolution(const dai::ColorCameraProperties::Sensor
             break;
         }
         case dai::ColorCameraProperties::SensorResolution::THE_12_MP: {
-            height = 4056;
-            width = 3040;
+            width = 4056;
+            height = 3040;
             break;
         }
         case dai::ColorCameraProperties::SensorResolution::THE_1200_P: {
-            height = 1920;
-            width = 1200;
+            width = 1920;
+            height = 1200;
             break;
         }
         case dai::ColorCameraProperties::SensorResolution::THE_5_MP: {
-            height = 2592;
-            width = 1944;
+            width = 2592;
+            height = 1944;
             break;
         }
         case dai::ColorCameraProperties::SensorResolution::THE_13_MP: {
-            height = 4208;
-            width = 3120;
+            width = 4208;
+            height = 3120;
             break;
         }
         case dai::ColorCameraProperties::SensorResolution::THE_4000X3000: {
-            height = 4000;
-            width = 3000;
+            width = 4000;
+            height = 3000;
             break;
         }
         case dai::ColorCameraProperties::SensorResolution::THE_5312X6000: {
-            height = 5312;
-            width = 6000;
+            width = 5312;
+            height = 6000;
             break;
         }
         case dai::ColorCameraProperties::SensorResolution::THE_48_MP: {
-            height = 8000;
-            width = 6000;
+            width = 8000;
+            height = 6000;
+            break;
+        }
+        case dai::ColorCameraProperties::SensorResolution::THE_1440X1080: {
+            width = 1440;
+            height = 1080;
             break;
         }
         default: {
@@ -70,7 +76,7 @@ void ImageSensor::getSizeFromResolution(const dai::ColorCameraProperties::Sensor
         }
     }
 }
-std::vector<ImageSensor> availableSensors = {
+std::vector<ImageSensor> availableSensors{
     {"IMX378", {"12mp", "4k"}, true},
     {"OV9282", {"800P", "720p", "400p"}, false},
     {"OV9782", {"800P", "720p", "400p"}, true},
@@ -92,7 +98,7 @@ void compressedImgCB(const std::string& /*name*/,
                      std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager,
                      dai::RawImgFrame::Type dataType) {
     auto img = std::dynamic_pointer_cast<dai::ImgFrame>(data);
-    std::deque<sensor_msgs::Image> deq;
+    std::deque<sensor_msgs::msg::Image> deq;
     auto info = infoManager->getCameraInfo();
     converter.toRosMsgFromBitStream(img, deq, dataType, info);
     while(deq.size() > 0) {
@@ -108,7 +114,7 @@ void imgCB(const std::string& /*name*/,
            image_transport::CameraPublisher& pub,
            std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager) {
     auto img = std::dynamic_pointer_cast<dai::ImgFrame>(data);
-    std::deque<sensor_msgs::Image> deq;
+    std::deque<sensor_msgs::msg::Image> deq;
     auto info = infoManager->getCameraInfo();
     converter.toRosMsg(img, deq);
     while(deq.size() > 0) {
@@ -118,15 +124,18 @@ void imgCB(const std::string& /*name*/,
         deq.pop_front();
     }
 }
-sensor_msgs::CameraInfo getCalibInfo(
-    dai::ros::ImageConverter& converter, std::shared_ptr<dai::Device> device, dai::CameraBoardSocket socket, int width, int height) {
-    sensor_msgs::CameraInfo info;
+sensor_msgs::msg::CameraInfo getCalibInfo(const rclcpp::Logger& logger,
+                                          dai::ros::ImageConverter& converter,
+                                          std::shared_ptr<dai::Device> device,
+                                          dai::CameraBoardSocket socket,
+                                          int width,
+                                          int height) {
+    sensor_msgs::msg::CameraInfo info;
     auto calibHandler = device->readCalibration();
-
     try {
         info = converter.calibrationToCameraInfo(calibHandler, socket, width, height);
     } catch(std::runtime_error& e) {
-        ROS_ERROR("No calibration! Publishing empty camera_info.");
+        RCLCPP_ERROR(logger, "No calibration! Publishing empty camera_info.");
     }
     return info;
 }

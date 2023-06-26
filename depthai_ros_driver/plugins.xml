@@ -1,4 +1,4 @@
-<library path="lib/libdepthai_ros_driver">
+<library path="depthai_ros_driver">
     <class type="depthai_ros_driver::pipeline_gen::RGB" base_class_type="depthai_ros_driver::pipeline_gen::BasePipeline">
         <description>RGB Pipeline.</description>
     </class>
