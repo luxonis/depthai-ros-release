@@ -1,18 +1,16 @@
-cmake_minimum_required(VERSION 3.8)
-project(depthai_descriptions VERSION 2.7.4)
+cmake_minimum_required(VERSION 3.10.2)
+project(depthai_descriptions VERSION 2.7.4 LANGUAGES CXX C)
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
 
-# find dependencies
-find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(catkin REQUIRED
+)
 
-install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch
-        FILES_MATCHING PATTERN "*.py")
-install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
+catkin_package()
 
-ament_package()
+install(DIRECTORY launch/ DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+FILES_MATCHING PATTERN "*.launch")
+
+install(DIRECTORY
+  urdf
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)

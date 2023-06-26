@@ -25,7 +25,7 @@ ImuConverter::ImuConverter(const std::string& frameName,
       _sequenceNum(0),
       _steadyBaseTime(std::chrono::steady_clock::now()),
       _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
-    _rosBaseTime = rclcpp::Clock().now();
+    _rosBaseTime = ::ros::Time::now();
 }
 
 ImuConverter::~ImuConverter() = default;
@@ -68,19 +68,19 @@ void ImuConverter::fillImuMsg(dai::IMUReportMagneticField report, ImuMsgs::Imu& 
     return;
 }
 
-void ImuConverter::fillImuMsg(dai::IMUReportAccelerometer report, depthai_ros_msgs::msg::ImuWithMagneticField& msg) {
+void ImuConverter::fillImuMsg(dai::IMUReportAccelerometer report, depthai_ros_msgs::ImuWithMagneticField& msg) {
     fillImuMsg(report, msg.imu);
 }
 
-void ImuConverter::fillImuMsg(dai::IMUReportGyroscope report, depthai_ros_msgs::msg::ImuWithMagneticField& msg) {
+void ImuConverter::fillImuMsg(dai::IMUReportGyroscope report, depthai_ros_msgs::ImuWithMagneticField& msg) {
     fillImuMsg(report, msg.imu);
 }
 
-void ImuConverter::fillImuMsg(dai::IMUReportRotationVectorWAcc report, depthai_ros_msgs::msg::ImuWithMagneticField& msg) {
+void ImuConverter::fillImuMsg(dai::IMUReportRotationVectorWAcc report, depthai_ros_msgs::ImuWithMagneticField& msg) {
     fillImuMsg(report, msg.imu);
 }
 
-void ImuConverter::fillImuMsg(dai::IMUReportMagneticField report, depthai_ros_msgs::msg::ImuWithMagneticField& msg) {
+void ImuConverter::fillImuMsg(dai::IMUReportMagneticField report, depthai_ros_msgs::ImuWithMagneticField& msg) {
     msg.field.magnetic_field.x = report.x;
     msg.field.magnetic_field.y = report.y;
     msg.field.magnetic_field.z = report.z;
@@ -112,7 +112,7 @@ void ImuConverter::toRosMsg(std::shared_ptr<dai::IMUData> inData, std::deque<Imu
     }
 }
 
-void ImuConverter::toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::msg::ImuWithMagneticField>& outImuMsgs) {
+void ImuConverter::toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::ImuWithMagneticField>& outImuMsgs) {
     if(_updateRosBaseTimeOnToRosMsg) {
         updateRosBaseTime();
     }
@@ -124,7 +124,7 @@ void ImuConverter::toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<
             auto gyro = inData->packets[i].gyroscope;
             auto rot = inData->packets[i].rotationVector;
             auto magn = inData->packets[i].magneticField;
-            depthai_ros_msgs::msg::ImuWithMagneticField msg;
+            depthai_ros_msgs::ImuWithMagneticField msg;
             std::chrono::_V2::steady_clock::time_point tstamp;
             if(_getBaseDeviceTimestamp)
                 tstamp = accel.getTimestampDevice();

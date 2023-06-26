@@ -15,7 +15,7 @@ Changelog for package depthai-ros
 * Camera trigger mechanisms
 * Brightness filter
 
-2.7.2 (2023-05-08)
+2.7.2 (2023-5-08)
 -------------------
 * IMU improvements
 
