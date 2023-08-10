@@ -4,11 +4,10 @@
 #include <string>
 #include <vector>
 
-#include "depthai_ros_driver/dai_nodes/base_node.hpp"
+#include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_wrapper.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "image_transport/camera_publisher.h"
-#include "image_transport/image_transport.h"
+#include "image_transport/camera_publisher.hpp"
+#include "image_transport/image_transport.hpp"
 namespace dai {
 class Pipeline;
 class Device;
@@ -41,7 +40,7 @@ class StereoParamHandler;
 namespace dai_nodes {
 namespace link_types {
 enum class StereoLinkType { left, right };
-}
+};
 
 struct StereoSensorInfo {
     std::string name;
@@ -51,16 +50,16 @@ struct StereoSensorInfo {
 class Stereo : public BaseNode {
    public:
     explicit Stereo(const std::string& daiNodeName,
-                    ros::NodeHandle node,
+                    rclcpp::Node* node,
                     std::shared_ptr<dai::Pipeline> pipeline,
                     std::shared_ptr<dai::Device> device,
                     StereoSensorInfo leftInfo = StereoSensorInfo{"left", dai::CameraBoardSocket::CAM_B},
                     StereoSensorInfo rightInfo = StereoSensorInfo{"right", dai::CameraBoardSocket::CAM_C});
     ~Stereo();
-    void updateParams(parametersConfig& config) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
-    dai::Node::Input getInput(int linkType = 0);
+    dai::Node::Input getInput(int linkType = 0) override;
     void setNames() override;
     void setXinXout(std::shared_ptr<dai::Pipeline> pipeline) override;
     void closeQueues() override;
@@ -69,7 +68,6 @@ class Stereo : public BaseNode {
     void setupStereoQueue(std::shared_ptr<dai::Device> device);
     void setupLeftRectQueue(std::shared_ptr<dai::Device> device);
     void setupRightRectQueue(std::shared_ptr<dai::Device> device);
-    image_transport::ImageTransport it;
     std::unique_ptr<dai::ros::ImageConverter> stereoConv, leftRectConv, rightRectConv;
     image_transport::CameraPublisher stereoPub, leftRectPub, rightRectPub;
     std::shared_ptr<camera_info_manager::CameraInfoManager> stereoIM, leftRectIM, rightRectIM;

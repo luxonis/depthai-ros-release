@@ -1,12 +1,13 @@
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/param_handlers/camera_param_handler.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "dynamic_reconfigure/server.h"
-#include "nodelet/nodelet.h"
-#include "ros/node_handle.h"
-#include "std_srvs/Trigger.h"
+#include "rclcpp/node.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 namespace dai {
 class Pipeline;
@@ -14,10 +15,10 @@ class Device;
 }  // namespace dai
 
 namespace depthai_ros_driver {
-using Trigger = std_srvs::Trigger;
-class Camera : public nodelet::Nodelet {
+using Trigger = std_srvs::srv::Trigger;
+class Camera : public rclcpp::Node {
    public:
-    void onInit() override;
+    explicit Camera(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
     void onConfigure();
 
    private:
@@ -31,23 +32,19 @@ class Camera : public nodelet::Nodelet {
     void savePipeline();
     void saveCalib();
     void loadCalib(const std::string& path);
-    void parameterCB(parametersConfig& config, uint32_t level);
-    std::shared_ptr<dynamic_reconfigure::Server<parametersConfig>> paramServer;
+    rcl_interfaces::msg::SetParametersResult parameterCB(const std::vector<rclcpp::Parameter>& params);
+    OnSetParametersCallbackHandle::SharedPtr paramCBHandle;
     std::unique_ptr<param_handlers::CameraParamHandler> ph;
-    ros::ServiceServer startSrv, stopSrv, savePipelineSrv, saveCalibSrv;
-    bool startCB(Trigger::Request& /*req*/, Trigger::Response& res);
-    bool stopCB(Trigger::Request& /*req*/, Trigger::Response& res);
-    bool saveCalibCB(Trigger::Request& /*req*/, Trigger::Response& res);
-    bool savePipelineCB(Trigger::Request& /*req*/, Trigger::Response& res);
+    rclcpp::Service<Trigger>::SharedPtr startSrv, stopSrv, savePipelineSrv, saveCalibSrv;
+    void startCB(const Trigger::Request::SharedPtr /*req*/, Trigger::Response::SharedPtr res);
+    void stopCB(const Trigger::Request::SharedPtr /*req*/, Trigger::Response::SharedPtr res);
+    void saveCalibCB(const Trigger::Request::SharedPtr /*req*/, Trigger::Response::SharedPtr res);
+    void savePipelineCB(const Trigger::Request::SharedPtr /*req*/, Trigger::Response::SharedPtr res);
 
     std::vector<std::string> usbStrings = {"UNKNOWN", "LOW", "FULL", "HIGH", "SUPER", "SUPER_PLUS"};
     std::shared_ptr<dai::Pipeline> pipeline;
     std::shared_ptr<dai::Device> device;
-    ros::NodeHandle pNH;
     std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
     bool camRunning = false;
-    bool enableIR = false;
-    double floodlightBrighness;
-    double laserDotBrightness;
 };
 }  // namespace depthai_ros_driver

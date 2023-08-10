@@ -26,13 +26,15 @@ std::unordered_map<dai::RawImgFrame::Type, std::string> ImageConverter::planarEn
 
 ImageConverter::ImageConverter(bool interleaved, bool getBaseDeviceTimestamp)
     : _daiInterleaved(interleaved), _steadyBaseTime(std::chrono::steady_clock::now()), _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
-    _rosBaseTime = ::ros::Time::now();
+    _rosBaseTime = rclcpp::Clock().now();
 }
 
 ImageConverter::ImageConverter(const std::string frameName, bool interleaved, bool getBaseDeviceTimestamp)
     : _frameName(frameName), _daiInterleaved(interleaved), _steadyBaseTime(std::chrono::steady_clock::now()), _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
-    _rosBaseTime = ::ros::Time::now();
+    _rosBaseTime = rclcpp::Clock().now();
 }
+
+ImageConverter::~ImageConverter() = default;
 
 void ImageConverter::updateRosBaseTime() {
     updateBaseTime(_steadyBaseTime, _rosBaseTime, _totalNsChange);
@@ -41,7 +43,7 @@ void ImageConverter::updateRosBaseTime() {
 void ImageConverter::toRosMsgFromBitStream(std::shared_ptr<dai::ImgFrame> inData,
                                            std::deque<ImageMsgs::Image>& outImageMsgs,
                                            dai::RawImgFrame::Type type,
-                                           const sensor_msgs::CameraInfo& info) {
+                                           const sensor_msgs::msg::CameraInfo& info) {
     if(_updateRosBaseTimeOnToRosMsg) {
         updateRosBaseTime();
     }
@@ -50,6 +52,7 @@ void ImageConverter::toRosMsgFromBitStream(std::shared_ptr<dai::ImgFrame> inData
         tstamp = inData->getTimestampDevice();
     else
         tstamp = inData->getTimestamp();
+
     ImageMsgs::Image outImageMsg;
     StdMsgs::Header header;
     header.frame_id = _frameName;
@@ -78,11 +81,11 @@ void ImageConverter::toRosMsgFromBitStream(std::shared_ptr<dai::ImgFrame> inData
         }
     }
 
-    output = cv::imdecode(cv::Mat(inData->getData()), decodeFlags);
+    output = cv::imdecode(cv::Mat(1, inData->getData().size(), CV_8UC1, inData->getData().data()), decodeFlags);
 
     // converting disparity
     if(type == dai::RawImgFrame::Type::RAW8) {
-        auto factor = (info.K[0] * info.P[3]);
+        auto factor = (info.k[0] * info.p[3]);
         cv::Mat depthOut = cv::Mat(cv::Size(output.cols, output.rows), CV_16UC1);
         depthOut.forEach<short>([&output, &factor](short& pixel, const int* position) -> void {
             auto disp = output.at<int8_t>(position);
@@ -114,6 +117,7 @@ void ImageConverter::toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<
     header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
 
     if(planarEncodingEnumMap.find(inData->getType()) != planarEncodingEnumMap.end()) {
+        // cv::Mat inImg = inData->getCvFrame();
         cv::Mat mat, output;
         cv::Size size = {0, 0};
         int type = 0;
@@ -231,13 +235,13 @@ void ImageConverter::toDaiMsg(const ImageMsgs::Image& inMsg, dai::ImgFrame& outD
      *ImageMsgs::Image& opMsg) to cross verify..
      **/
     /* #ifdef IS_ROS2
-        TimePoint ts(std::chrono::seconds((int)inMsg.header.stamp.seconds ()) + std::chrono::nanoseconds(inMsg.header.stamp.nanoseconds()));
-    #else
-        TimePoint ts(std::chrono::seconds((int)inMsg.header.stamp.toSec()) + std::chrono::nanoseconds(inMsg.header.stamp.toNSec()));
-    #endif
+          TimePoint ts(std::chrono::seconds((int)inMsg.header.stamp.seconds ()) + std::chrono::nanoseconds(inMsg.header.stamp.nanoseconds()));
+      #else
+          TimePoint ts(std::chrono::seconds((int)inMsg.header.stamp.toSec()) + std::chrono::nanoseconds(inMsg.header.stamp.toNSec()));
+      #endif
 
-    outData.setTimestamp(ts);
-    outData.setSequenceNum(inMsg.header.seq); */
+      outData.setTimestamp(ts);
+      outData.setSequenceNum(inMsg.header.seq); */
     outData.setWidth(inMsg.width);
     outData.setHeight(inMsg.height);
     outData.setType(revEncodingIter->first);
@@ -247,7 +251,8 @@ ImagePtr ImageConverter::toRosMsgPtr(std::shared_ptr<dai::ImgFrame> inData) {
     std::deque<ImageMsgs::Image> msgQueue;
     toRosMsg(inData, msgQueue);
     auto msg = msgQueue.front();
-    ImagePtr ptr = boost::make_shared<ImageMsgs::Image>(msg);
+
+    ImagePtr ptr = std::make_shared<ImageMsgs::Image>(msg);
     return ptr;
 }
 
@@ -286,6 +291,14 @@ void ImageConverter::interleavedToPlanar(const std::vector<uint8_t>& srcData, st
             destData[i + w * h * 1] = g;
             destData[i + w * h * 2] = r;
         }
+        // for(int i = 0; i < w*h; i++) {
+        //     uint8_t g = srcData.data()[i + w*h * 1];
+        //     destData[i*3+1] = g;
+        // }
+        // for(int i = 0; i < w*h; i++) {
+        //     uint8_t r = srcData.data()[i + w*h * 2];
+        //     destData[i*3+2] = r;
+        // }
     } else {
         std::runtime_error(
             "If you encounter the scenario where you need this "
@@ -305,7 +318,6 @@ cv::Mat ImageConverter::rosMsgtoCvMat(ImageMsgs::Image& inMsg) {
         return rgb;
     }
 }
-
 ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
     dai::CalibrationHandler calibHandler, dai::CameraBoardSocket cameraId, int width, int height, Point2f topLeftPixelId, Point2f bottomRightPixelId) {
     std::vector<std::vector<float>> camIntrinsics, rectifiedRotation;
@@ -334,10 +346,10 @@ ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
         std::copy(camIntrinsics[i].begin(), camIntrinsics[i].end(), flatIntrinsics.begin() + 3 * i);
     }
 
-    auto& intrinsics = cameraData.K;
-    auto& distortions = cameraData.D;
-    auto& projection = cameraData.P;
-    auto& rotation = cameraData.R;
+    auto& intrinsics = cameraData.k;
+    auto& distortions = cameraData.d;
+    auto& projection = cameraData.p;
+    auto& rotation = cameraData.r;
     // Set rotation to reasonable default even for non-stereo pairs
     rotation[0] = rotation[4] = rotation[8] = 1;
     for(size_t i = 0; i < 3; i++) {
@@ -385,6 +397,5 @@ ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
 
     return cameraData;
 }
-
 }  // namespace ros
 }  // namespace dai
