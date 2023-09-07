@@ -1,12 +1,8 @@
 #include <ctype.h>
 #include <stdio.h>
 
-#include <chrono>
-
-#include "depthai_ros_msgs/srv/normalized_image_crop.hpp"
-#include "rclcpp/rclcpp.hpp"
-
-using namespace std::chrono_literals;
+#include "depthai_ros_msgs/NormalizedImageCrop.h"
+#include "ros/ros.h"
 
 static constexpr float stepSize = 0.02;
 
@@ -24,27 +20,27 @@ void boundAdjuster(double& value) {
 }
 
 int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
-    auto node = rclcpp::Node::make_shared("crop_control_service");
-    std::string serviceName;
-    node->declare_parameter("service_name", "crop_control_srv");
-    node->get_parameter("service_name", serviceName);
+    ros::init(argc, argv, "crop_control_service");
+    ros::NodeHandle pnh("~");
+    std::string serviceName = "test_srv";
 
-    rclcpp::Client<depthai_ros_msgs::srv::NormalizedImageCrop>::SharedPtr client = node->create_client<depthai_ros_msgs::srv::NormalizedImageCrop>(serviceName);
+    /*
+    int badParams = 0;
+    badParams += !pnh.getParam("service_name", serviceName);
 
-    auto request = std::make_shared<depthai_ros_msgs::srv::NormalizedImageCrop::Request>();
-    request->top_left.x = 0.2;
-    request->top_left.y = 0.2;
-    request->bottom_right.x = 0.2;
-    request->bottom_right.y = 0.2;
-
-    while(!client->wait_for_service(1s)) {
-        if(!rclcpp::ok()) {
-            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
-            return 0;
-        }
-        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+    if (badParams > 0){
+        std::cout << " Bad parameters -> " << badParams << std::endl;
+        throw std::runtime_error("Couldn't find %d of the parameters");
     }
+    */
+
+    ros::ServiceClient client = pnh.serviceClient<depthai_ros_msgs::NormalizedImageCrop>(serviceName);
+    depthai_ros_msgs::NormalizedImageCrop srvMsg;
+    srvMsg.request.top_left.x = 0.2;
+    srvMsg.request.top_left.y = 0.2;
+    srvMsg.request.bottom_right.x = 0.2;
+    srvMsg.request.bottom_right.y = 0.2;
+
     std::cout << "Use the following keys to control the cropping region" << std::endl;
     std::cout << "  Q/W -> Increment/Decrement the topleft X position" << std::endl;
     std::cout << "  A/S -> Increment/Decrement the topleft Y position" << std::endl;
@@ -54,51 +50,50 @@ int main(int argc, char** argv) {
     char c;
     bool sendSignal = false;
 
-    while(rclcpp::ok()) {
+    while(ros::ok()) {
         c = std::tolower(getchar());
         switch(c) {
             case 'w':
-                request->top_left.x -= stepSize;
-                boundAdjuster(request->top_left.x);
+                srvMsg.request.top_left.x -= stepSize;
+                boundAdjuster(srvMsg.request.top_left.x);
                 sendSignal = true;
                 break;
             case 'q':
-                request->top_left.x += stepSize;
-                boundAdjuster(request->top_left.x);
+                srvMsg.request.top_left.x += stepSize;
+                boundAdjuster(srvMsg.request.top_left.x);
                 sendSignal = true;
                 break;
             case 'a':
-                request->top_left.y += stepSize;
-                boundAdjuster(request->top_left.y);
+                srvMsg.request.top_left.y += stepSize;
+                boundAdjuster(srvMsg.request.top_left.y);
                 sendSignal = true;
                 break;
             case 's':
-                request->top_left.y -= stepSize;
-                boundAdjuster(request->top_left.y);
+                srvMsg.request.top_left.y -= stepSize;
+                boundAdjuster(srvMsg.request.top_left.y);
                 sendSignal = true;
                 break;
             case 'e':
-                request->bottom_right.x += stepSize;
-                boundAdjuster(request->bottom_right.x);
+                srvMsg.request.bottom_right.x += stepSize;
+                boundAdjuster(srvMsg.request.bottom_right.x);
                 sendSignal = true;
                 break;
             case 'r':
-                request->bottom_right.x -= stepSize;
-                boundAdjuster(request->bottom_right.x);
+                srvMsg.request.bottom_right.x -= stepSize;
+                boundAdjuster(srvMsg.request.bottom_right.x);
                 sendSignal = true;
                 break;
             case 'd':
-                request->bottom_right.y += stepSize;
-                boundAdjuster(request->bottom_right.y);
+                srvMsg.request.bottom_right.y += stepSize;
+                boundAdjuster(srvMsg.request.bottom_right.y);
                 sendSignal = true;
                 break;
             case 'f':
-                request->bottom_right.y -= stepSize;
-                boundAdjuster(request->bottom_right.y);
+                srvMsg.request.bottom_right.y -= stepSize;
+                boundAdjuster(srvMsg.request.bottom_right.y);
                 sendSignal = true;
                 break;
             default:
-                // TODO(sachin): Use RCLCPP_INFO instead of cout.
                 std::cout << " Entered Invalid Key..!!!" << std::endl;
                 std::cout << " Use the following keys to control the cropping region" << std::endl;
                 std::cout << "  Q/W -> Increment/Decrement the topleft X position" << std::endl;
@@ -109,14 +104,9 @@ int main(int argc, char** argv) {
         }
 
         if(sendSignal) {
-            std::cout << "Top left Position -> (" << request->top_left.x << ", " << request->top_left.y << ")" << std::endl;
-            std::cout << "Bottion right Position -> (" << request->bottom_right.x << ", " << request->bottom_right.y << ")" << std::endl;
-            auto result = client->async_send_request(request);
-            if(rclcpp::spin_until_future_complete(node, result) == rclcpp::FutureReturnCode::SUCCESS) {
-                RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Status: %ld", result.get()->status);
-            } else {
-                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed to call service crop_control_srv");
-            }
+            std::cout << "Top left Position -> (" << srvMsg.request.top_left.x << ", " << srvMsg.request.top_left.y << ")" << std::endl;
+            std::cout << "Bottion right Position -> (" << srvMsg.request.bottom_right.x << ", " << srvMsg.request.bottom_right.y << ")" << std::endl;
+            client.call(srvMsg);
             sendSignal = false;
         }
     }

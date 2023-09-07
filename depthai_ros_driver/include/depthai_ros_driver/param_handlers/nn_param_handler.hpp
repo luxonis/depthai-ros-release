@@ -21,10 +21,9 @@ class ImageManip;
 }  // namespace node
 }  // namespace dai
 
-namespace rclcpp {
-class Node;
-class Parameter;
-}  // namespace rclcpp
+namespace ros {
+class NodeHandle;
+}  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -33,21 +32,17 @@ enum class NNFamily { Segmentation, Mobilenet, Yolo };
 }
 class NNParamHandler : public BaseParamHandler {
    public:
-    explicit NNParamHandler(rclcpp::Node* node, const std::string& name);
+    explicit NNParamHandler(ros::NodeHandle node, const std::string& name);
     ~NNParamHandler();
     nn::NNFamily getNNFamily();
+    std::string getConfigPath();
     template <typename T>
     void declareParams(std::shared_ptr<T> nn, std::shared_ptr<dai::node::ImageManip> imageManip) {
-        declareAndLogParam<bool>("i_disable_resize", false);
-        declareAndLogParam<bool>("i_enable_passthrough", false);
-        declareAndLogParam<bool>("i_enable_passthrough_depth", false);
-        declareAndLogParam<bool>("i_get_base_device_timestamp", false);
-        declareAndLogParam<bool>("i_update_ros_base_time_on_ros_msg", false);
-        auto nn_path = getParam<std::string>("i_nn_config_path");
+        auto nnPath = getConfigPath();
         using json = nlohmann::json;
-        std::ifstream f(nn_path);
+        std::ifstream f(nnPath);
         json data = json::parse(f);
-        parseConfigFile(nn_path, nn, imageManip);
+        parseConfigFile(nnPath, nn, imageManip);
     }
 
     void setNNParams(nlohmann::json data, std::shared_ptr<dai::node::NeuralNetwork> nn);
@@ -103,25 +98,22 @@ class NNParamHandler : public BaseParamHandler {
         json data = json::parse(f);
         if(data.contains("model") && data.contains("nn_config")) {
             auto modelPath = getModelPath(data);
-            declareAndLogParam("i_model_path", modelPath);
-            if(!getParam<bool>("i_disable_resize")) {
-                setImageManip(modelPath, imageManip);
-            }
+            setImageManip(modelPath, imageManip);
             nn->setBlobPath(modelPath);
-            nn->setNumPoolFrames(declareAndLogParam<int>("i_num_pool_frames", 4));
-            nn->setNumInferenceThreads(declareAndLogParam<int>("i_num_inference_threads", 2));
+            nn->setNumPoolFrames(4);
+            nn->setNumInferenceThreads(2);
             nn->input.setBlocking(false);
-            declareAndLogParam<int>("i_max_q_size", 30);
             setNNParams(data, nn);
         }
     }
 
-    dai::CameraControl setRuntimeParams(const std::vector<rclcpp::Parameter>& params) override;
+    dai::CameraControl setRuntimeParams(parametersConfig& config) override;
 
    private:
     void setImageManip(const std::string& model_path, std::shared_ptr<dai::node::ImageManip> imageManip);
     std::string getModelPath(const nlohmann::json& data);
     std::unordered_map<std::string, nn::NNFamily> nnFamilyMap;
+    std::vector<std::string> labels;
 };
 }  // namespace param_handlers
 }  // namespace depthai_ros_driver

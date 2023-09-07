@@ -17,7 +17,6 @@ You can develop your ROS applications in following ways:
 Supported ROS versions:
 - Noetic
 - Humble
-- Iron
 
 For usage check out respective git branches.
 
@@ -141,31 +140,6 @@ This runs your camera as a ROS2 Component and gives you the ability to customize
 Paramerers that begin with `r_` can be freely modified during runtime, for example with rqt. 
 Parameters that begin with `i_` are set when camera is initializing, to change them you have to call `stop` and `start` services. This can be used to hot swap NNs during runtime, changing resolutions, etc. Below you can see some examples:
 
-
-#### Publishing TFs from extrinsics
-
-By default, camera transforms are published from default URDF descriptions based on CAD models. This can be overriden by using TFPublisher class from `depthai_bridge`, which based on Device's camera calibration data republishes the description with updated information. To enable this behavior in `depthai_ros_driver`, you can use following parameters:
-- `camera.i_publish_tf_from_calibration` - setting this to true launches TFPublisher
-
-Then you can set following arguments:
-- `camera.i_tf_camera_name` - if not set, defaults to the node name
-- `camera.i_tf_camera_model` - if not set, it will be automatically detected. If the node is unable to detect STL file for the camera it is set to `OAK-D`. To explicitly set it in `camera.launch.py`, set `override_cam_model:=true`
-- `camera.i_tf_base_frame`
-- `camera.i_tf_parent_frame`
-- `camera.i_tf_cam_pos_x`
-- `camera.i_tf_cam_pos_y`
-- `camera.i_tf_cam_pos_z`
-- `camera.i_tf_cam_roll`
-- `camera.i_tf_cam_pitch`
-- `camera.i_tf_cam_yaw`
-
-When using `camera.launch.py`, you can set `pass_tf_args_as_params:=true` so that TF arguments are used to fill those parameters. For example `ros2 launch depthai_ros_driver camera.launch.py pass_tf_args_as_params:=true parent_frame:=map cam_pos_x:=1.0 imu_from_descr:=true`
-
-It is also possible to set custom URDF path (for now only absolute path works) and custom xacro arguments using `camera.i_tf_custom_urdf_path` and `camera.i_tf_custom_xacro_args`. Please note that robot_state_publisher must be running.
-
-**NOTE ON IMU EXTRINSICS**
-If your camera has uncalibrated IMU, a warning will be shown, and IMU will be published with zero rotation and translation. You can override this behavior by setting `camera.i_tf_imu_from_descr`: true. This will publish default IMU extrinsics from URDF based on camera model.
-
 #### Setting RGB parameters
 
 By default RGB camera outputs `ISP` frame. To set custom width and height of output image, you can set `i_isp_num` and `i_isp_den` which scale image dimensions (2 and 3 by default, so from 1920x1080 to 1280x720), note for RGBD alignment to work resulting width and height must be divisible by 16. 
@@ -174,19 +148,6 @@ Additionally you can set `i.output_isp: false` to use `video` output and set cus
 ![](docs/param_rgb.gif)
 #### Setting Stereo parameters
 ![](docs/param_stereo.gif)
-##### Depth alignment
-When setting `stereo.i_align_depth: true`, stereo output is aligned to board socket specified by `stereo.i_board_socket_id` parameter (by default 0/CAM_A)
-
-You can enable rectified Stereo streams by setting, for example in the case of right stream `i_publish_right_rect: true`. You can also set `i_publish_synced_rect_pair: true` to get both images with the same timestamps.
-
-##### Custom Sensor sockets
-
-Configuration of which sensors are used for computing stereo pair can be done either programatically, by specifying them in a constructor of a Stereo node (for example when building a custom pipeline), or via parameters - `stereo.i_left_socket_id`/`stereo.i_right_socket_id`. Please note that currently if you want to use rgb/center socket instead of one of the given pairs you will need to build a custom pipeline for that.
-
-#### Feature Tracker
-
-Each sensor node (and rectified streams from Stereo node) has the option to add FeatureTracker node, which publishes `depthai_ros_msgs/msg/TrackedFeatures` messages.
-To enable features on, for example rgb node, set `rgb: i_enable_feature_tracker: true`. To enable publishing on rectified streams, set for example `stereo: i_left_rect_enable_feature_tracker`
 
 #### Setting IMU parameters
 Parameters:
@@ -204,7 +165,7 @@ Parameters:
   * `IMU_WITH_MAG` - depthai_ros_msgs/ImuWithMagneticField
   * `IMU_WITH_MAG_SPLIT` - two publishers - sensor_msgs/Imu & sensor_msgs/MagneticField
 * `i_rot_cov: -1.0` - Rotation covariance
-* `i_rot_freq: 400` - Rotation frequency
+* `i_rot_freq: 100` - Rotation frequency
 * `i_sync_method: LINEAR_INTERPOLATE_ACCEL` - sync method. Available options:
   * `COPY`
   * `LINEAR_INTERPOLATE_GYRO`
@@ -224,26 +185,6 @@ As for the parameters themselves, there are a few crucial ones that decide on ho
   * `Depth` - Publishes only depth stream, no NN available
   * `CamArray` - Publishes streams for all detected sensors, no NN available
 This tells the camera whether it should load stereo components. Default set to `RGBD`.
-It is also possible to create a custom pipeline since all types are defined as plugins. 
-
-To do that, you can create a custom package (let's say `test_plugins`), create an executable in that package (`test_plugins.cpp`). Inside that file, define a cusom plugin that inherits from `depthai_ros_driver::pipeline_gen::BasePipeline` and overrides `createPipeline` method.
-
-After that export plugin, for example:
-
-```c++
-#include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(test_plugins::Test, depthai_ros_driver::pipeline_gen::BasePipeline)
-```
-Add plugin definition:
-```xml
-<library path="test_plugins">
-    <class type="test_plugins::Test" base_class_type="depthai_ros_driver::pipeline_gen::BasePipeline">
-        <description>Test Pipeline.</description>
-    </class>
-</library>
-```
-
-Now you can use created plugin as pipeline, just set `camera.i_pipeline_type` to `test_plugins::Test`.
 
 * `camera.i_nn_type` can be either `none`, `rgb` or `spatial`. This is responsible for whether the NN that we load should also take depth information (and for example provide detections in 3D format). Default set to `spatial`
 * `camera.i_mx_id`/`camera.i_ip`/`camera.i_usb_port_id` are for connecting to a specific camera. If not set, it automatically connects to the next available device. You can get those parameters from logs by running the default launch file.
@@ -298,9 +239,6 @@ Available filters:
 `ros2 launch depthai_filters example_seg_overlay.launch.py`
 - WLS filter - stereo depth filter that smooths out overall depth image based on disparity data. It subscribes to `stereo/image_raw` and `left/image raw` topics. Parameters needed to enable it - `left.i_publish_topic`, `stereo.i_output_disparity`
 an example can be seen by running  `ros2 launch depthai_filters example_wls_filter.launch.py`
-- SpatialBB - publishes bounding boxes as 3D line Markers based on spatial detections coming from driver node
-- FeatureTrackerOverlay - publishes Tracked Features overlay based on features and images coming from the driver
-- Features3D - uses depth image to republish features as 3D pointcloud
 
 
 ### Using external sources for NN inference or Stereo Depth
