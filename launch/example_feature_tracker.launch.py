@@ -17,25 +17,21 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, 'launch', 'rgbd_pcl.launch.py')),
+                os.path.join(depthai_prefix, 'launch', 'camera.launch.py')),
             launch_arguments={"name": name,
-                              "params_file": params_file,
-                              "rectify_rgb": "true"}.items()),
+                              "params_file": params_file}.items()),
 
         LoadComposableNodes(
             target_container=name+"_container",
             composable_node_descriptions=[
                     ComposableNode(
                         package="depthai_filters",
-                        plugin="depthai_filters::SpatialBB",
-                        name="spatial_bb_node",
-                        remappings=[
-                                    ('stereo/camera_info', name+'/stereo/camera_info'),
-                                    ('nn/spatial_detections', name+'/nn/spatial_detections'),
-                                    ('rgb/preview/image_raw', name+'/rgb/preview/image_raw'),
-                                    ],
-                        parameters=[params_file],
-                    ),
+                        name="feature_overlay_rgb",
+                        plugin="depthai_filters::FeatureTrackerOverlay",
+                        remappings=[('rgb/preview/image_raw', name+'/rgb/image_raw'),
+                                    ('feature_tracker/tracked_features', name+'/rgb_feature_tracker/tracked_features'),
+                                    ('overlay', 'overlay_rgb')]
+                    )
             ],
         ),
 
@@ -47,7 +43,7 @@ def generate_launch_description():
 
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),
-        DeclareLaunchArgument("params_file", default_value=os.path.join(depthai_filters_prefix, 'config', 'spatial_bb.yaml')),
+        DeclareLaunchArgument("params_file", default_value=os.path.join(depthai_filters_prefix, 'config', 'feature_tracker.yaml')),
     ]
 
     return LaunchDescription(
