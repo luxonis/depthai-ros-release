@@ -12,17 +12,16 @@ class Pipeline;
 class Device;
 }  // namespace dai
 
-namespace ros {
-class NodeHandle;
+namespace rclcpp {
+class Node;
 }
 
 namespace depthai_ros_driver {
 namespace pipeline_gen {
-enum class PipelineType { RGB, RGBD, RGBStereo, Depth, Stereo, CamArray };
+enum class PipelineType { RGB, RGBD, RGBStereo, Stereo, Depth, CamArray };
 
 class PipelineGenerator {
    public:
-    PipelineGenerator(){};
     ~PipelineGenerator() = default;
     /*
      * @brief      Validates the pipeline type. If the pipeline type is not valid for the number of sensors, it will be changed to the default type.
@@ -33,8 +32,7 @@ class PipelineGenerator {
      *
      * @return     The validated pipeline type.
      */
-    PipelineType validatePipeline(PipelineType type, int sensorNum);
-
+    PipelineType validatePipeline(rclcpp::Node* node, PipelineType type, int sensorNum);
     /*
      * @brief      Creates the pipeline by using a plugin. Plugin types need to be of type depthai_ros_driver::pipeline_gen::BasePipeline.
      *
@@ -47,14 +45,13 @@ class PipelineGenerator {
      *
      * @return     Vector BaseNodes created.
      */
-    std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(ros::NodeHandle node,
+    std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(rclcpp::Node* node,
                                                                      std::shared_ptr<dai::Device> device,
                                                                      std::shared_ptr<dai::Pipeline> pipeline,
                                                                      const std::string& pipelineType,
                                                                      const std::string& nnType,
                                                                      bool enableImu);
 
-   private:
    protected:
     std::unordered_map<std::string, std::string> pluginTypeMap{{"RGB", "depthai_ros_driver::pipeline_gen::RGB"},
                                                                {"RGBD", "depthai_ros_driver::pipeline_gen::RGBD"},
@@ -68,7 +65,6 @@ class PipelineGenerator {
                                                                   {"STEREO", PipelineType::Stereo},
                                                                   {"DEPTH", PipelineType::Depth},
                                                                   {"CAMARRAY", PipelineType::CamArray}};
-    const std::string alphabet = "abcdefghijklmnopqrstuvwxyz";
 };
 }  // namespace pipeline_gen
 }  // namespace depthai_ros_driver

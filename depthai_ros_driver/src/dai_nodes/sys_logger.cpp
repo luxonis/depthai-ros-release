@@ -6,16 +6,16 @@
 #include "depthai/pipeline/datatype/SystemInformation.hpp"
 #include "depthai/pipeline/node/SystemLogger.hpp"
 #include "depthai/pipeline/node/XLinkOut.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
-SysLogger::SysLogger(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline) : BaseNode(daiNodeName, node, pipeline) {
-    ROS_DEBUG("Creating node %s", daiNodeName.c_str());
+SysLogger::SysLogger(const std::string& daiNodeName, rclcpp::Node* node, std::shared_ptr<dai::Pipeline> pipeline) : BaseNode(daiNodeName, node, pipeline) {
+    RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
     setNames();
     sysNode = pipeline->create<dai::node::SystemLogger>();
     setXinXout(pipeline);
-    ROS_DEBUG("Node %s created", daiNodeName.c_str());
+    RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
 }
 SysLogger::~SysLogger() = default;
 
@@ -31,13 +31,9 @@ void SysLogger::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
 
 void SysLogger::setupQueues(std::shared_ptr<dai::Device> device) {
     loggerQ = device->getOutputQueue(loggerQName, 8, false);
-    updater.reset(new diagnostic_updater::Updater());
-    updater->setHardwareID(getROSNode().getNamespace() + std::string("_") + device->getMxId() + std::string("_") + device->getDeviceName());
+    updater = std::make_shared<diagnostic_updater::Updater>(getROSNode());
+    updater->setHardwareID(getROSNode()->get_name() + std::string("_") + device->getMxId() + std::string("_") + device->getDeviceName());
     updater->add("sys_logger", std::bind(&SysLogger::produceDiagnostics, this, std::placeholders::_1));
-    timer = getROSNode().createTimer(ros::Duration(1.0), std::bind(&SysLogger::timerCB, this));
-}
-void SysLogger::timerCB() {
-    updater->update();
 }
 
 void SysLogger::closeQueues() {
@@ -70,14 +66,14 @@ void SysLogger::produceDiagnostics(diagnostic_updater::DiagnosticStatusWrapper& 
     try {
         auto logData = loggerQ->tryGet<dai::SystemInformation>();
         if(logData) {
-            stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "System Information");
+            stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "System Information");
             stat.add("System Information", sysInfoToString(*logData));
         } else {
-            stat.summary(diagnostic_msgs::DiagnosticStatus::ERROR, "No Data");
+            stat.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR, "No Data");
         }
     } catch(const std::exception& e) {
-        ROS_ERROR("No data on logger queue!");
-        stat.summary(diagnostic_msgs::DiagnosticStatus::ERROR, e.what());
+        RCLCPP_ERROR(getROSNode()->get_logger(), "No data on logger queue!");
+        stat.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR, e.what());
     }
 }
 

@@ -1,13 +1,12 @@
 #pragma once
 
-#include <depthai_ros_msgs/TrackedFeatures.h>
-
+#include <depthai_ros_msgs/msg/tracked_features.hpp>
 #include <deque>
 #include <memory>
 #include <string>
 
 #include "depthai/pipeline/datatype/TrackedFeatures.hpp"
-#include "ros/time.h"
+#include "rclcpp/time.hpp"
 
 namespace dai {
 
@@ -36,12 +35,12 @@ class TrackedFeaturesConverter {
         _updateRosBaseTimeOnToRosMsg = update;
     }
 
-    void toRosMsg(std::shared_ptr<dai::TrackedFeatures> inFeatures, std::deque<depthai_ros_msgs::TrackedFeatures>& featureMsgs);
+    void toRosMsg(std::shared_ptr<dai::TrackedFeatures> inFeatures, std::deque<depthai_ros_msgs::msg::TrackedFeatures>& featureMsgs);
 
    private:
     const std::string _frameName;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-    ::ros::Time _rosBaseTime;
+    rclcpp::Time _rosBaseTime;
     bool _getBaseDeviceTimestamp;
     // For handling ROS time shifts and debugging
     int64_t _totalNsChange{0};

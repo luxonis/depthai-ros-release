@@ -6,13 +6,14 @@
 #include "depthai/pipeline/node/MonoCamera.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-SensorParamHandler::SensorParamHandler(ros::NodeHandle node, const std::string& name) : BaseParamHandler(node, name) {
+SensorParamHandler::SensorParamHandler(rclcpp::Node* node, const std::string& name) : BaseParamHandler(node, name) {
     declareCommonParams();
-}
+};
 SensorParamHandler::~SensorParamHandler() = default;
 
 void SensorParamHandler::declareCommonParams() {
@@ -79,7 +80,6 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::MonoCamera> mo
     }
     monoCam->setImageOrientation(utils::getValFromMap(declareAndLogParam<std::string>("i_sensor_img_orientation", "NORMAL"), cameraImageOrientationMap));
 }
-
 void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> colorCam,
                                        dai::CameraBoardSocket socket,
                                        dai_nodes::sensor_helpers::ImageSensor sensor,
@@ -97,7 +97,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
                         {"48mp", dai::ColorCameraProperties::SensorResolution::THE_48_MP},
                         {"1440X1080", dai::ColorCameraProperties::SensorResolution::THE_1440X1080}};
     declareAndLogParam<bool>("i_publish_topic", publish);
-    declareAndLogParam<int>("i_board_socket_id", static_cast<int>(socket), true);
+    declareAndLogParam<int>("i_board_socket_id", static_cast<int>(socket));
     declareAndLogParam<bool>("i_output_isp", true);
     declareAndLogParam<bool>("i_enable_preview", false);
     colorCam->setBoardSocket(socket);
@@ -110,14 +110,17 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
 
     // if resolution not in allowed resolutions, use default
     if(std::find(sensor.allowedResolutions.begin(), sensor.allowedResolutions.end(), resString) == sensor.allowedResolutions.end()) {
-        ROS_WARN(
-            "Resolution %s not supported by sensor %s. Using default resolution %s", resString.c_str(), sensor.name.c_str(), sensor.defaultResolution.c_str());
+        RCLCPP_WARN(getROSNode()->get_logger(),
+                    "Resolution %s not supported by sensor %s. Using default resolution %s",
+                    resString.c_str(),
+                    sensor.name.c_str(),
+                    sensor.defaultResolution.c_str());
         resString = sensor.defaultResolution;
     }
 
-    colorCam->setResolution(utils::getValFromMap(resString, rgbResolutionMap));
     int width = colorCam->getResolutionWidth();
     int height = colorCam->getResolutionHeight();
+    colorCam->setResolution(utils::getValFromMap(resString, rgbResolutionMap));
 
     colorCam->setInterleaved(declareAndLogParam<bool>("i_interleaved", false));
     if(declareAndLogParam<bool>("i_set_isp_scale", true)) {
@@ -132,7 +135,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
             err_stream << " which are not divisible by 16.\n";
             err_stream << "This will result in errors when aligning stereo to RGB. To fix that, either adjust i_num and i_den values";
             err_stream << " or set i_output_isp parameter to false and set i_width and i_height parameters accordingly.";
-            ROS_ERROR(err_stream.str().c_str());
+            RCLCPP_ERROR(getROSNode()->get_logger(), err_stream.str().c_str());
         }
     }
     colorCam->setVideoSize(declareAndLogParam<int>("i_width", width), declareAndLogParam<int>("i_height", height));
@@ -161,64 +164,46 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     }
     colorCam->setImageOrientation(utils::getValFromMap(declareAndLogParam<std::string>("i_sensor_img_orientation", "NORMAL"), cameraImageOrientationMap));
 }
-dai::CameraControl SensorParamHandler::setRuntimeParams(parametersConfig& config) {
+dai::CameraControl SensorParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& params) {
     dai::CameraControl ctrl;
-
-    if(getName() == "rgb") {
-        if(config.rgb_r_set_man_exposure) {
-            ctrl.setManualExposure(config.rgb_r_exposure, config.rgb_r_iso);
-        } else {
-            ctrl.setAutoExposureEnable();
-        }
-
-        if(config.rgb_r_set_man_focus) {
-            ctrl.setManualFocus(config.rgb_r_focus);
-        } else {
-            ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
-        }
-        if(config.rgb_r_set_man_whitebalance) {
-            ctrl.setManualWhiteBalance(config.rgb_r_whitebalance);
-        } else {
-            ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
-        }
-    } else if(getName() == "left") {
-        if(config.left_r_set_man_exposure) {
-            ctrl.setManualExposure(config.left_r_exposure, config.left_r_iso);
-        } else {
-            ctrl.setAutoExposureEnable();
-        }
-
-        if(config.left_r_set_man_focus) {
-            ctrl.setManualFocus(config.left_r_focus);
-        } else {
-            ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
-        }
-        if(config.left_r_set_man_whitebalance) {
-            ctrl.setManualWhiteBalance(config.left_r_whitebalance);
-        } else {
-            ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
-        }
-    } else if(getName() == "right") {
-        if(config.right_r_set_man_exposure) {
-            ctrl.setManualExposure(config.right_r_exposure, config.right_r_iso);
-        } else {
-            ctrl.setAutoExposureEnable();
-        }
-
-        if(config.right_r_set_man_focus) {
-            ctrl.setManualFocus(config.right_r_focus);
-        } else {
-            ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
-        }
-        if(config.right_r_set_man_whitebalance) {
-            ctrl.setManualWhiteBalance(config.right_r_whitebalance);
-        } else {
-            ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
+    for(const auto& p : params) {
+        if(p.get_name() == getFullParamName("r_set_man_exposure")) {
+            if(p.get_value<bool>()) {
+                ctrl.setManualExposure(getParam<int>("r_exposure"), getParam<int>("r_iso"));
+            } else {
+                ctrl.setAutoExposureEnable();
+            }
+        } else if(p.get_name() == getFullParamName("r_exposure")) {
+            if(getParam<bool>("r_set_man_exposure")) {
+                ctrl.setManualExposure(p.get_value<int>(), getParam<int>("r_iso"));
+            }
+        } else if(p.get_name() == getFullParamName("r_iso")) {
+            if(getParam<bool>("r_set_man_exposure")) {
+                ctrl.setManualExposure(getParam<int>("r_exposure"), p.get_value<int>());
+            }
+        } else if(p.get_name() == getFullParamName("r_set_man_focus")) {
+            if(p.get_value<bool>()) {
+                ctrl.setManualFocus(getParam<int>("r_focus"));
+            } else {
+                ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
+            }
+        } else if(p.get_name() == getFullParamName("r_focus")) {
+            if(getParam<bool>("r_set_man_focus")) {
+                ctrl.setManualFocus(p.get_value<int>());
+            }
+        } else if(p.get_name() == getFullParamName("r_set_man_whitebalance")) {
+            if(p.get_value<bool>()) {
+                ctrl.setManualWhiteBalance(getParam<int>("r_whitebalance"));
+            } else {
+                ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
+            }
+        } else if(p.get_name() == getFullParamName("r_whitebalance")) {
+            if(getParam<bool>("r_set_man_whitebalance")) {
+                ctrl.setManualWhiteBalance(p.get_value<int>());
+            }
         }
     }
-
     return ctrl;
 }
-
 }  // namespace param_handlers
 }  // namespace depthai_ros_driver
