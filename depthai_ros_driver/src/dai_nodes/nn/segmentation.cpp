@@ -1,7 +1,7 @@
 #include "depthai_ros_driver/dai_nodes/nn/segmentation.hpp"
 
 #include "camera_info_manager/camera_info_manager.hpp"
-#include "cv_bridge/cv_bridge.hpp"
+#include "cv_bridge/cv_bridge.h"
 #include "depthai/device/DataQueue.hpp"
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
@@ -71,7 +71,7 @@ void Segmentation::setupQueues(std::shared_ptr<dai::Device> device) {
                                                                 imageManip->initialConfig.getResizeWidth()));
 
         ptPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/passthrough/image_raw");
-        ptQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *imageConverter, ptPub, infoManager));
+        ptQ->addCallback(std::bind(sensor_helpers::basicCameraPub, std::placeholders::_1, std::placeholders::_2, *imageConverter, ptPub, infoManager));
     }
 }
 
