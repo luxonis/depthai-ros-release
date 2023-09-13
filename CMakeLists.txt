@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 3.10.2)  # CMake version in Ubuntu 18.04 LTS
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-project(depthai_bridge VERSION 2.8.0 LANGUAGES CXX C)
+project(depthai_bridge VERSION 2.8.1 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,6 +41,8 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_ros
   urdf
   robot_state_publisher
+  tf2
+  tf2_geometry_msgs
 )
 find_package(Boost REQUIRED)
 find_package(depthai CONFIG REQUIRED)
@@ -58,7 +60,7 @@ FILE(GLOB LIB_SRC
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS depthai_ros_msgs camera_info_manager roscpp sensor_msgs std_msgs vision_msgs image_transport cv_bridge stereo_msgs tf2_ros urdf robot_state_publisher
+  CATKIN_DEPENDS depthai_ros_msgs camera_info_manager roscpp sensor_msgs std_msgs vision_msgs image_transport cv_bridge stereo_msgs tf2_ros urdf robot_state_publisher tf2 tf2_geometry_msgs
 )
 
 list(APPEND DEPENDENCY_PUBLIC_LIBRARIES ${catkin_LIBRARIES})
