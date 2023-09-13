@@ -1,25 +1,21 @@
 #include "depthai_ros_driver/param_handlers/stereo_param_handler.hpp"
 
 #include "depthai-shared/common/CameraFeatures.hpp"
-#include "depthai/pipeline/datatype/StereoDepthConfig.hpp"
-#include "depthai/pipeline/node/StereoDepth.hpp"
+#include "depthai/depthai.hpp"
+#include "depthai/pipeline/nodes.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "rclcpp/logger.hpp"
-#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-StereoParamHandler::StereoParamHandler(rclcpp::Node* node, const std::string& name) : BaseParamHandler(node, name) {
+StereoParamHandler::StereoParamHandler(ros::NodeHandle node, const std::string& name) : BaseParamHandler(node, name) {
     depthPresetMap = {
         {"HIGH_ACCURACY", dai::node::StereoDepth::PresetMode::HIGH_ACCURACY},
         {"HIGH_DENSITY", dai::node::StereoDepth::PresetMode::HIGH_DENSITY},
     };
-
     disparityWidthMap = {
         {"DISPARITY_64", dai::StereoDepthConfig::CostMatching::DisparityWidth::DISPARITY_64},
         {"DISPARITY_96", dai::StereoDepthConfig::CostMatching::DisparityWidth::DISPARITY_96},
     };
-
     decimationModeMap = {{"PIXEL_SKIPPING", dai::StereoDepthConfig::PostProcessing::DecimationFilter::DecimationMode::PIXEL_SKIPPING},
                          {"NON_ZERO_MEDIAN", dai::StereoDepthConfig::PostProcessing::DecimationFilter::DecimationMode::NON_ZERO_MEDIAN},
                          {"NON_ZERO_MEAN", dai::StereoDepthConfig::PostProcessing::DecimationFilter::DecimationMode::NON_ZERO_MEAN}};
@@ -34,23 +30,23 @@ StereoParamHandler::StereoParamHandler(rclcpp::Node* node, const std::string& na
         {"VALID_1_IN_LAST_5", dai::StereoDepthConfig::PostProcessing::TemporalFilter::PersistencyMode::VALID_1_IN_LAST_5},
         {"VALID_1_IN_LAST_8", dai::StereoDepthConfig::PostProcessing::TemporalFilter::PersistencyMode::VALID_1_IN_LAST_8},
         {"PERSISTENCY_INDEFINITELY", dai::StereoDepthConfig::PostProcessing::TemporalFilter::PersistencyMode::PERSISTENCY_INDEFINITELY},
+
     };
 }
 
-StereoParamHandler::~StereoParamHandler() = default;
-
 void StereoParamHandler::updateSocketsFromParams(dai::CameraBoardSocket& left, dai::CameraBoardSocket& right) {
-    int newLeftS = declareAndLogParam<int>("i_left_socket_id", static_cast<int>(left));
-    int newRightS = declareAndLogParam<int>("i_right_socket_id", static_cast<int>(right));
+    int newLeftS = getParam<int>("i_left_socket_id", static_cast<int>(left));
+    int newRightS = getParam<int>("i_right_socket_id", static_cast<int>(right));
     if(newLeftS != static_cast<int>(left) || newRightS != static_cast<int>(right)) {
-        RCLCPP_WARN(getROSNode()->get_logger(), "Left or right socket changed, updating stereo node");
-        RCLCPP_WARN(getROSNode()->get_logger(), "Old left socket: %d, new left socket: %d", static_cast<int>(left), newLeftS);
-        RCLCPP_WARN(getROSNode()->get_logger(), "Old right socket: %d, new right socket: %d", static_cast<int>(right), newRightS);
+        ROS_WARN("Left or right socket changed, updating stereo node");
+        ROS_WARN("Old left socket: %d, new left socket: %d", static_cast<int>(left), newLeftS);
+        ROS_WARN("Old right socket: %d, new right socket: %d", static_cast<int>(right), newRightS);
     }
     left = static_cast<dai::CameraBoardSocket>(newLeftS);
     right = static_cast<dai::CameraBoardSocket>(newRightS);
 }
 
+StereoParamHandler::~StereoParamHandler() = default;
 void StereoParamHandler::declareParams(std::shared_ptr<dai::node::StereoDepth> stereo) {
     declareAndLogParam<int>("i_max_q_size", 30);
     declareAndLogParam<bool>("i_low_bandwidth", false);
@@ -86,12 +82,8 @@ void StereoParamHandler::declareParams(std::shared_ptr<dai::node::StereoDepth> s
     std::string socketName;
     if(declareAndLogParam<bool>("i_align_depth", true)) {
         socketName = utils::getSocketName(socket);
-        try {
-            width = getROSNode()->get_parameter(socketName + ".i_width").as_int();
-            height = getROSNode()->get_parameter(socketName + ".i_height").as_int();
-        } catch(rclcpp::exceptions::ParameterNotDeclaredException& e) {
-            RCLCPP_ERROR(getROSNode()->get_logger(), "%s parameters not set, defaulting to 1280x720 unless specified otherwise.", socketName.c_str());
-        }
+        width = getOtherNodeParam<int>(socketName, "i_width");
+        height = getOtherNodeParam<int>(socketName, "i_height");
         declareAndLogParam<std::string>("i_socket_name", socketName);
         stereo->setDepthAlign(socket);
     }
@@ -161,20 +153,19 @@ void StereoParamHandler::declareParams(std::shared_ptr<dai::node::StereoDepth> s
         config.postProcessing.decimationFilter.decimationFactor = declareAndLogParam<int>("i_decimation_filter_decimation_factor", 1);
         int decimatedWidth = width / config.postProcessing.decimationFilter.decimationFactor;
         int decimatedHeight = height / config.postProcessing.decimationFilter.decimationFactor;
-        RCLCPP_INFO(getROSNode()->get_logger(),
-                    "Decimation filter enabled with decimation factor %d. Previous width and height: %d x %d, after decimation: %d x %d",
-                    config.postProcessing.decimationFilter.decimationFactor,
-                    width,
-                    height,
-                    decimatedWidth,
-                    decimatedHeight);
+        ROS_INFO("Decimation filter enabled with decimation factor %d. Previous width and height: %d x %d, after decimation: %d x %d",
+                 config.postProcessing.decimationFilter.decimationFactor,
+                 width,
+                 height,
+                 decimatedWidth,
+                 decimatedHeight);
         stereo->setOutputSize(decimatedWidth, decimatedHeight);
         declareAndLogParam("i_width", decimatedWidth, true);
         declareAndLogParam("i_height", decimatedHeight, true);
     }
     stereo->initialConfig.set(config);
 }
-dai::CameraControl StereoParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& /*params*/) {
+dai::CameraControl StereoParamHandler::setRuntimeParams(parametersConfig& /*config*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }

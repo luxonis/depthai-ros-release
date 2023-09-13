@@ -11,6 +11,7 @@ Changelog for package depthai-ros
 * Fixed issues when running robot_state_publisher as component
 * Added missing tf2 dependencies
 
+
 2.8.0 (2023-09-01)
 -------------------
 * Add camera image orientation param 
@@ -42,7 +43,7 @@ Changelog for package depthai-ros
 * Camera trigger mechanisms
 * Brightness filter
 
-2.7.2 (2023-05-08)
+2.7.2 (2023-5-08)
 -------------------
 * IMU improvements
 

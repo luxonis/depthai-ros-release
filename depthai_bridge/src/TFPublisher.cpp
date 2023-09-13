@@ -9,18 +9,21 @@
 #include <string>
 #include <vector>
 
-#include "ament_index_cpp/get_package_share_directory.hpp"
-#include "geometry_msgs/msg/quaternion.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/Quaternion.h"
+#include "geometry_msgs/TransformStamped.h"
+#include "kdl/tree.hpp"
+#include "kdl_parser/kdl_parser.hpp"
 #include "nlohmann/json.hpp"
-#include "rclcpp/rclcpp.hpp"
+#include "ros/node_handle.h"
+#include "ros/package.h"
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2/LinearMath/Quaternion.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#include "urdf/model.h"
 
 namespace dai {
 namespace ros {
-TFPublisher::TFPublisher(rclcpp::Node* node,
+TFPublisher::TFPublisher(::ros::NodeHandle node,
                          const dai::CalibrationHandler& calHandler,
                          const std::vector<dai::CameraFeatures>& camFeatures,
                          const std::string& camName,
@@ -49,33 +52,38 @@ TFPublisher::TFPublisher(rclcpp::Node* node,
       _camFeatures(camFeatures),
       _imuFromDescr(imuFromDescr),
       _customURDFLocation(customURDFLocation),
-      _customXacroArgs(customXacroArgs),
-      _logger(node->get_logger()) {
-    _tfPub = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node);
-
-    _paramClient = std::make_unique<rclcpp::AsyncParametersClient>(node, _camName + std::string("_state_publisher"));
+      _customXacroArgs(customXacroArgs) {
+    _tfPub = std::make_shared<tf2_ros::StaticTransformBroadcaster>();
 
     auto json = calHandler.eepromToJson();
     auto camData = json["cameraData"];
-    publishDescription();
+    publishDescription(node);
     publishCamTransforms(camData, node);
     if(_imuFromDescr != "true") {
         publishImuTransform(json, node);
     }
 }
 
-void TFPublisher::publishDescription() {
+void TFPublisher::publishDescription(::ros::NodeHandle node) {
     auto urdf = getURDF();
-    auto robotDescr = rclcpp::Parameter("robot_description", urdf);
-    auto result = _paramClient->set_parameters({robotDescr});
-    RCLCPP_INFO(_logger, "Published URDF");
+    urdf::Model model;
+    model.initString(urdf);
+    KDL::Tree tree;
+    if(!kdl_parser::treeFromUrdfModel(model, tree)) {
+        ROS_ERROR("Failed to extract kdl tree from xml robot description");
+        throw std::runtime_error("Failed to extract kdl tree from xml robot description");
+    }
+    _rsp = std::make_shared<robot_state_publisher::RobotStatePublisher>(tree, model);
+    _rsp->publishFixedTransforms(true);
+    node.setParam("robot_description", urdf);
+    ROS_INFO("Published URDF");
 }
 
-void TFPublisher::publishCamTransforms(nlohmann::json camData, rclcpp::Node* node) {
+void TFPublisher::publishCamTransforms(nlohmann::json camData, ::ros::NodeHandle node) {
     for(auto& cam : camData) {
-        geometry_msgs::msg::TransformStamped ts;
-        geometry_msgs::msg::TransformStamped opticalTS;
-        ts.header.stamp = node->get_clock()->now();
+        geometry_msgs::TransformStamped ts;
+        geometry_msgs::TransformStamped opticalTS;
+        ts.header.stamp = ::ros::Time::now();
         opticalTS.header.stamp = ts.header.stamp;
         auto extrinsics = cam[1]["extrinsics"];
 
@@ -105,9 +113,9 @@ void TFPublisher::publishCamTransforms(nlohmann::json camData, rclcpp::Node* nod
         _tfPub->sendTransform(opticalTS);
     }
 }
-void TFPublisher::publishImuTransform(nlohmann::json json, rclcpp::Node* node) {
-    geometry_msgs::msg::TransformStamped ts;
-    ts.header.stamp = node->get_clock()->now();
+void TFPublisher::publishImuTransform(nlohmann::json json, ::ros::NodeHandle node) {
+    geometry_msgs::TransformStamped ts;
+    ts.header.stamp = ::ros::Time::now();
     auto imuExtr = json["imuExtrinsics"];
     if(imuExtr["toCameraSocket"] != -1) {
         ts.header.frame_id = _baseFrame + std::string("_") + getCamSocketName(imuExtr["toCameraSocket"].get<int>()) + std::string("_camera_frame");
@@ -121,7 +129,9 @@ void TFPublisher::publishImuTransform(nlohmann::json json, rclcpp::Node* node) {
     bool zeroTrans = ts.transform.translation.x == 0 && ts.transform.translation.y == 0 && ts.transform.translation.z == 0;
     bool zeroRot = ts.transform.rotation.w == 1 && ts.transform.rotation.x == 0 && ts.transform.rotation.y == 0 && ts.transform.rotation.z == 0;
     if(zeroTrans || zeroRot) {
-        RCLCPP_WARN(_logger, "IMU extrinsics appear to be default. Check if the IMU is calibrated.");
+        ROS_WARN("IMU extrinsics appear to be default. Check if the IMU is calibrated.");
+        ts.transform.rotation.w = 1.0;
+        ts.transform.rotation.x = 0.0;
     }
     _tfPub->sendTransform(ts);
 }
@@ -130,15 +140,15 @@ std::string TFPublisher::getCamSocketName(int socketNum) {
     return _socketNameMap.at(static_cast<dai::CameraBoardSocket>(socketNum));
 }
 
-geometry_msgs::msg::Vector3 TFPublisher::transFromExtr(nlohmann::json translation) {
-    geometry_msgs::msg::Vector3 trans;
+geometry_msgs::Vector3 TFPublisher::transFromExtr(nlohmann::json translation) {
+    geometry_msgs::Vector3 trans;
     // optical coordinates to ROS
     trans.x = translation["y"].get<double>() / -100.0;
     trans.y = translation["x"].get<double>() / -100.0;
     trans.z = translation["z"].get<double>() / 100.0;
     return trans;
 }
-geometry_msgs::msg::Quaternion TFPublisher::quatFromRotM(nlohmann::json rotMatrix) {
+geometry_msgs::Quaternion TFPublisher::quatFromRotM(nlohmann::json rotMatrix) {
     tf2::Matrix3x3 m(rotMatrix[0][0],
                      rotMatrix[0][1],
                      rotMatrix[0][2],
@@ -153,19 +163,19 @@ geometry_msgs::msg::Quaternion TFPublisher::quatFromRotM(nlohmann::json rotMatri
 
     tf2::Quaternion q;
     m.getRotation(q);
-    geometry_msgs::msg::Quaternion msg_quat = tf2::toMsg(q);
+    geometry_msgs::Quaternion msg_quat = tf2::toMsg(q);
     return msg_quat;
 }
 
 bool TFPublisher::modelNameAvailable() {
-    std::string path = ament_index_cpp::get_package_share_directory("depthai_descriptions") + "/urdf/models/";
+    std::string path = ::ros::package::getPath("depthai_descriptions") + "/urdf/models/";
     DIR* dir;
     struct dirent* ent;
     convertModelName();
     if((dir = opendir(path.c_str())) != NULL) {
         while((ent = readdir(dir)) != NULL) {
             auto name = std::string(ent->d_name);
-            RCLCPP_DEBUG(_logger, "Found model: %s", name.c_str());
+            ROS_DEBUG("Found model: %s", name.c_str());
             if(name == _camModel + ".stl") {
                 return true;
             }
@@ -179,8 +189,7 @@ bool TFPublisher::modelNameAvailable() {
 
 std::string TFPublisher::prepareXacroArgs() {
     if(!_customURDFLocation.empty() || !modelNameAvailable()) {
-        RCLCPP_ERROR(
-            _logger,
+        ROS_ERROR(
             "Model name %s not found in depthai_descriptions package. If camera model is autodetected, please notify developers. Using default model: OAK-D",
             _camModel.c_str());
         _camModel = "OAK-D";
@@ -217,7 +226,7 @@ void TFPublisher::convertModelName() {
     } else if(_camModel.find("OAK-D") != std::string::npos) {
         _camModel = "OAK-D";
     } else {
-        RCLCPP_WARN(_logger, "Unable to match model name: %s to available model family.", _camModel.c_str());
+        ROS_WARN("Unable to match model name: %s to available model family.", _camModel.c_str());
     }
 }
 
@@ -229,12 +238,12 @@ std::string TFPublisher::getURDF() {
         args = _customXacroArgs;
     }
     if(_customURDFLocation.empty()) {
-        path = ament_index_cpp::get_package_share_directory("depthai_descriptions") + "/urdf/base_descr.urdf.xacro ";
+        path = ::ros::package::getPath("depthai_descriptions") + "/urdf/base_descr.urdf.xacro ";
     } else {
         path = _customURDFLocation + " ";
     }
     std::string cmd = "xacro " + path + args;
-    RCLCPP_DEBUG(_logger, "Xacro command: %s", cmd.c_str());
+    ROS_DEBUG("Xacro command: %s", cmd.c_str());
     std::array<char, 128> buffer;
     std::string result;
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);

@@ -1,13 +1,13 @@
 #include "depthai_ros_driver/param_handlers/camera_param_handler.hpp"
 
 #include "depthai-shared/common/UsbSpeed.hpp"
+#include "depthai_ros_driver/parametersConfig.h"
 #include "depthai_ros_driver/utils.hpp"
-#include "rclcpp/logger.hpp"
-#include "rclcpp/node.hpp"
+#include "ros/node_handle.h"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-CameraParamHandler::CameraParamHandler(rclcpp::Node* node, const std::string& name) : BaseParamHandler(node, name) {
+CameraParamHandler::CameraParamHandler(ros::NodeHandle node, const std::string& name) : BaseParamHandler(node, name) {
     usbSpeedMap = {
         {"LOW", dai::UsbSpeed::LOW},
         {"FULL", dai::UsbSpeed::FULL},
@@ -33,11 +33,10 @@ void CameraParamHandler::declareParams() {
     declareAndLogParam<bool>("i_pipeline_dump", false);
     declareAndLogParam<bool>("i_calibration_dump", false);
     declareAndLogParam<std::string>("i_external_calibration_path", "");
-    declareAndLogParam<int>("i_laser_dot_brightness", 800, getRangedIntDescriptor(0, 1200));
-    declareAndLogParam<int>("i_floodlight_brightness", 0, getRangedIntDescriptor(0, 1500));
-
+    declareAndLogParam("i_laser_dot_brightness", 800, getRangedIntDescriptor(0, 1200));
+    declareAndLogParam("i_floodlight_brightness", 0, getRangedIntDescriptor(0, 1500));
     declareAndLogParam<bool>("i_publish_tf_from_calibration", false);
-    declareAndLogParam<std::string>("i_tf_camera_name", getROSNode()->get_name());
+    declareAndLogParam<std::string>("i_tf_camera_name", "oak");
     declareAndLogParam<std::string>("i_tf_camera_model", "");
     declareAndLogParam<std::string>("i_tf_base_frame", "oak");
     declareAndLogParam<std::string>("i_tf_parent_frame", "oak-d-base-frame");
@@ -51,7 +50,7 @@ void CameraParamHandler::declareParams() {
     declareAndLogParam<std::string>("i_tf_custom_urdf_location", "");
     declareAndLogParam<std::string>("i_tf_custom_xacro_args", "");
 }
-dai::CameraControl CameraParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& /*params*/) {
+dai::CameraControl CameraParamHandler::setRuntimeParams(parametersConfig& /*config*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }
