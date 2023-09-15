@@ -1,12 +1,14 @@
 #include "depthai_ros_driver/param_handlers/imu_param_handler.hpp"
 
 #include "depthai/pipeline/node/IMU.hpp"
+#include "depthai_bridge/ImuConverter.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-ImuParamHandler::ImuParamHandler(ros::NodeHandle node, const std::string& name) : BaseParamHandler(node, name) {}
+ImuParamHandler::ImuParamHandler(rclcpp::Node* node, const std::string& name) : BaseParamHandler(node, name) {}
 ImuParamHandler::~ImuParamHandler() = default;
 void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const std::string& imuType) {
     imuSyncMethodMap = {
@@ -17,7 +19,6 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
     imuMessagetTypeMap = {
         {"IMU", imu::ImuMsgType::IMU}, {"IMU_WITH_MAG", imu::ImuMsgType::IMU_WITH_MAG}, {"IMU_WITH_MAG_SPLIT", imu::ImuMsgType::IMU_WITH_MAG_SPLIT}};
     declareAndLogParam<bool>("i_get_base_device_timestamp", false);
-    declareAndLogParam<int>("i_max_q_size", 30);
     declareAndLogParam<std::string>("i_message_type", "IMU");
     declareAndLogParam<std::string>("i_sync_method", "LINEAR_INTERPOLATE_ACCEL");
     declareAndLogParam<float>("i_acc_cov", 0.0);
@@ -31,7 +32,7 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
             imu->enableIMUSensor(dai::IMUSensor::ROTATION_VECTOR, declareAndLogParam<int>("i_rot_freq", 400));
             imu->enableIMUSensor(dai::IMUSensor::MAGNETOMETER_CALIBRATED, declareAndLogParam<int>("i_mag_freq", 100));
         } else {
-            ROS_ERROR("Rotation enabled but not available with current sensor");
+            RCLCPP_ERROR(getROSNode()->get_logger(), "Rotation enabled but not available with current sensor");
             declareAndLogParam<bool>("i_enable_rotation", false, true);
         }
     }
@@ -49,7 +50,7 @@ imu::ImuMsgType ImuParamHandler::getMsgType() {
     return utils::getValFromMap(utils::getUpperCaseStr(getParam<std::string>("i_message_type")), imuMessagetTypeMap);
 }
 
-dai::CameraControl ImuParamHandler::setRuntimeParams(parametersConfig& /*config*/) {
+dai::CameraControl ImuParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& /*params*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }

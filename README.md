@@ -198,6 +198,9 @@ When setting `stereo.i_align_depth: true`, stereo output is aligned to board soc
 
 You can enable rectified Stereo streams by setting, for example in the case of right stream `i_publish_right_rect: true`. You can also set `i_publish_synced_rect_pair: true` to get both images with the same timestamps.
 
+##### Stereo socket order
+By default, right camera is treated as first when used for stereo computation, which is reflected in CameraInfo messages. If you want to reverse that logic, set `stereo.i_reverse_stereo_socket_order: true` (this can be also set for individual sensors).
+
 ##### Custom Sensor sockets
 
 Configuration of which sensors are used for computing stereo pair can be done either programatically, by specifying them in a constructor of a Stereo node (for example when building a custom pipeline), or via parameters - `stereo.i_left_socket_id`/`stereo.i_right_socket_id`. Please note that currently if you want to use rgb/center socket instead of one of the given pairs you will need to build a custom pipeline for that.
@@ -321,7 +324,6 @@ an example can be seen by running  `ros2 launch depthai_filters example_wls_filt
 - FeatureTrackerOverlay - publishes Tracked Features overlay based on features and images coming from the driver
 - Features3D - uses depth image to republish features as 3D pointcloud
 
-
 ### Using external sources for NN inference or Stereo Depth
 
 There is a possibility of using external image topics as input for NNs or Depth calculation.
@@ -352,6 +354,7 @@ For more examples please check the launch files.
 2. `source install/setup.bash`
 3. `ros2 launch depthai_examples stereo_inertial_node.launch.py` - example node
 For more examples please check the launch files.
+
 
 
 ## Running Examples
@@ -403,6 +406,7 @@ For easier development inside isolated workspace, one can use Visual Studio Code
 - Open workspace directory in VSCode
 
 ### List of parameters:
+```yaml
 /oak:
   ros__parameters:
     camera:
@@ -609,3 +613,4 @@ For easier development inside isolated workspace, one can use Visual Studio Code
       i_update_ros_base_time_on_ros_msg: false
       i_width: 1280
     use_sim_time: false
+```
