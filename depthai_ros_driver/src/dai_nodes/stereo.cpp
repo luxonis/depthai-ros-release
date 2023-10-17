@@ -121,7 +121,7 @@ void Stereo::setupRectQueue(std::shared_ptr<dai::Device> device,
                             std::shared_ptr<dai::DataOutputQueue>& q,
                             image_transport::CameraPublisher& pubIT,
                             bool isLeft) {
-    auto sensorName = getTFPrefix(utils::getSocketName(sensorInfo.socket));
+    auto sensorName = utils::getSocketName(sensorInfo.socket);
     auto tfPrefix = getTFPrefix(sensorName);
     conv = std::make_unique<dai::ros::ImageConverter>(tfPrefix + "_camera_optical_frame", false, ph->getParam<bool>("i_get_base_device_timestamp"));
     conv->setUpdateRosBaseTimeOnToRosMsg(ph->getParam<bool>("i_update_ros_base_time_on_ros_msg"));
@@ -193,7 +193,9 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
     if(ph->getParam<bool>("i_reverse_stereo_socket_order")) {
         stereoConv->reverseStereoSocketOrder();
     }
-
+    if(ph->getParam<bool>("i_enable_alpha_scaling")) {
+        stereoConv->setAlphaScaling(ph->getParam<double>("i_alpha_scaling"));
+    }
     stereoIM = std::make_shared<camera_info_manager::CameraInfoManager>(ros::NodeHandle(getROSNode(), getName()), "/" + getName());
     auto info = sensor_helpers::getCalibInfo(*stereoConv,
                                              device,
@@ -208,15 +210,16 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
             stereoConv->convertDispToDepth(calibHandler.getBaselineDistance(rightSensInfo.socket, leftSensInfo.socket, false));
         }
     }
-    // remove distortion since image is rectified
-    for(auto& d : info.D) {
-        d = 0.0;
+    // remove distortion if alpha scaling is not enabled
+    if(!ph->getParam<bool>("i_enable_alpha_scaling")) {
+        for(auto& d : info.D) {
+            d = 0.0;
+        }
+        for(auto& r : info.R) {
+            r = 0.0;
+        }
+        info.R[0] = info.R[4] = info.R[8] = 1.0;
     }
-    for(auto& r : info.R) {
-        r = 0.0;
-    }
-    info.R[0] = info.R[4] = info.R[8] = 1.0;
-
     stereoIM->setCameraInfo(info);
 
     stereoPubIT = it.advertiseCamera(getName() + "/image_raw", 1);
@@ -280,12 +283,15 @@ void Stereo::closeQueues() {
     if(ph->getParam<bool>("i_publish_topic")) {
         stereoQ->close();
     }
-    if(ph->getParam<bool>("i_publish_left_rect") || ph->getParam<bool>("i_publish_synced_rect_pair")) {
-        syncTimer.reset();
+    if(ph->getParam<bool>("i_publish_left_rect")) {
         leftRectQ->close();
     }
-    if(ph->getParam<bool>("i_publish_right_rect") || ph->getParam<bool>("i_publish_synced_rect_pair")) {
+    if(ph->getParam<bool>("i_publish_right_rect")) {
+        rightRectQ->close();
+    }
+    if(ph->getParam<bool>("i_publish_synced_rect_pair")) {
         syncTimer.reset();
+        leftRectQ->close();
         rightRectQ->close();
     }
     if(ph->getParam<bool>("i_left_rect_enable_feature_tracker")) {
