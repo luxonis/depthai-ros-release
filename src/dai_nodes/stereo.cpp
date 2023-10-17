@@ -136,8 +136,8 @@ void Stereo::setupRectQueue(std::shared_ptr<dai::Device> device,
         auto offset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>(isLeft ? "i_left_rect_exposure_offset" : "i_right_rect_exposure_offset"));
         conv->addExposureOffset(offset);
     }
-    im = std::make_shared<camera_info_manager::CameraInfoManager>(
-        getROSNode()->create_sub_node(std::string(getROSNode()->get_name()) + "/" + sensorName).get(), "/rect");
+    im = std::make_shared<camera_info_manager::CameraInfoManager>(getROSNode()->create_sub_node(std::string(getROSNode()->get_name()) + "/" + sensorName).get(),
+                                                                  "/rect");
     if(ph->getParam<bool>("i_reverse_stereo_socket_order")) {
         conv->reverseStereoSocketOrder();
     }
@@ -212,6 +212,9 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
     if(ph->getParam<bool>("i_reverse_stereo_socket_order")) {
         stereoConv->reverseStereoSocketOrder();
     }
+    if(ph->getParam<bool>("i_enable_alpha_scaling")) {
+        stereoConv->setAlphaScaling(ph->getParam<double>("i_alpha_scaling"));
+    }
     stereoIM = std::make_shared<camera_info_manager::CameraInfoManager>(
         getROSNode()->create_sub_node(std::string(getROSNode()->get_name()) + "/" + getName()).get(), "/" + getName());
     auto info = sensor_helpers::getCalibInfo(getROSNode()->get_logger(),
@@ -228,14 +231,17 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
             stereoConv->convertDispToDepth(calibHandler.getBaselineDistance(rightSensInfo.socket, leftSensInfo.socket, false));
         }
     }
-    // remove distortion since image is rectified
-    for(auto& d : info.d) {
-        d = 0.0;
+    // remove distortion if alpha scaling is not enabled
+    if(!ph->getParam<bool>("i_enable_alpha_scaling")) {
+        for(auto& d : info.d) {
+            d = 0.0;
+        }
+        for(auto& r : info.r) {
+            r = 0.0;
+        }
+        info.r[0] = info.r[4] = info.r[8] = 1.0;
     }
-    for(auto& r : info.r) {
-        r = 0.0;
-    }
-    info.r[0] = info.r[4] = info.r[8] = 1.0;
+
     stereoIM->setCameraInfo(info);
     stereoQ = device->getOutputQueue(stereoQName, ph->getParam<int>("i_max_q_size"), false);
     if(ipcEnabled()) {
@@ -330,12 +336,15 @@ void Stereo::closeQueues() {
     if(ph->getParam<bool>("i_publish_topic")) {
         stereoQ->close();
     }
-    if(ph->getParam<bool>("i_publish_left_rect") || ph->getParam<bool>("i_publish_synced_rect_pair")) {
-        syncTimer->reset();
+    if(ph->getParam<bool>("i_publish_left_rect")) {
         leftRectQ->close();
     }
-    if(ph->getParam<bool>("i_publish_right_rect") || ph->getParam<bool>("i_publish_synced_rect_pair")) {
-        syncTimer->reset();
+    if(ph->getParam<bool>("i_publish_right_rect")) {
+        rightRectQ->close();
+    }
+    if(ph->getParam<bool>("i_publish_synced_rect_pair")) {
+        syncTimer->cancel();
+        leftRectQ->close();
         rightRectQ->close();
     }
     if(ph->getParam<bool>("i_left_rect_enable_feature_tracker")) {
