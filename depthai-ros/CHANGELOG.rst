@@ -10,7 +10,6 @@ Changelog for package depthai-ros
 * Logger restart bugfix
 * URDF parameters fix
 
-
 2.8.1 (2023-09-12)
 -------------------
 
@@ -19,7 +18,6 @@ Changelog for package depthai-ros
 * Updated sensor socket logic
 * Fixed issues when running robot_state_publisher as component
 * Added missing tf2 dependencies
-
 
 2.8.0 (2023-09-01)
 -------------------
@@ -52,7 +50,7 @@ Changelog for package depthai-ros
 * Camera trigger mechanisms
 * Brightness filter
 
-2.7.2 (2023-5-08)
+2.7.2 (2023-05-08)
 -------------------
 * IMU improvements
 

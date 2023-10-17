@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 
@@ -10,24 +11,26 @@
 #include "depthai-shared/common/Point2f.hpp"
 #include "depthai/device/CalibrationHandler.hpp"
 #include "depthai/pipeline/datatype/ImgFrame.hpp"
-#include "ros/time.h"
-#include "sensor_msgs/CameraInfo.h"
-#include "sensor_msgs/Image.h"
-#include "std_msgs/Header.h"
+#include "rclcpp/time.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "std_msgs/msg/header.hpp"
 
 namespace dai {
 
 namespace ros {
 
-namespace StdMsgs = std_msgs;
-namespace ImageMsgs = sensor_msgs;
-using ImagePtr = ImageMsgs::ImagePtr;
+namespace StdMsgs = std_msgs::msg;
+namespace ImageMsgs = sensor_msgs::msg;
+using ImagePtr = ImageMsgs::Image::SharedPtr;
+
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration>;
 
 class ImageConverter {
    public:
     // ImageConverter() = default;
     ImageConverter(const std::string frameName, bool interleaved, bool getBaseDeviceTimestamp = false);
+    ~ImageConverter();
     ImageConverter(bool interleaved, bool getBaseDeviceTimestamp = false);
 
     /**
@@ -77,8 +80,8 @@ class ImageConverter {
      */
     void setAlphaScaling(double alphaScalingFactor = 0.0);
 
-    ImageMsgs::Image toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> inData, const sensor_msgs::CameraInfo& info = sensor_msgs::CameraInfo());
     void toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<ImageMsgs::Image>& outImageMsgs);
+    ImageMsgs::Image toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> inData, const sensor_msgs::msg::CameraInfo& info = sensor_msgs::msg::CameraInfo());
     ImagePtr toRosMsgPtr(std::shared_ptr<dai::ImgFrame> inData);
 
     void toDaiMsg(const ImageMsgs::Image& inMsg, dai::ImgFrame& outData);
@@ -107,7 +110,7 @@ class ImageConverter {
     void interleavedToPlanar(const std::vector<uint8_t>& srcData, std::vector<uint8_t>& destData, int w, int h, int numPlanes, int bpp);
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
 
-    ::ros::Time _rosBaseTime;
+    rclcpp::Time _rosBaseTime;
     bool _getBaseDeviceTimestamp;
     // For handling ROS time shifts and debugging
     int64_t _totalNsChange{0};
@@ -117,10 +120,10 @@ class ImageConverter {
     bool _fromBitstream = false;
     bool _convertDispToDepth = false;
     bool _addExpOffset = false;
+    bool _alphaScalingEnabled = false;
     dai::CameraExposureOffset _expOffset;
     bool _reverseStereoSocketOrder = false;
     double _baseline;
-    bool _alphaScalingEnabled = false;
     double _alphaScalingFactor = 0.0;
 };
 
