@@ -1,7 +1,7 @@
 #include "depthai_ros_driver/dai_nodes/stereo.hpp"
 
 #include "camera_info_manager/camera_info_manager.hpp"
-#include "cv_bridge/cv_bridge.h"
+#include "cv_bridge/cv_bridge.hpp"
 #include "depthai/device/DataQueue.hpp"
 #include "depthai/device/DeviceBase.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
@@ -205,7 +205,6 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
     if(ph->getParam<bool>("i_low_bandwidth")) {
         stereoConv->convertFromBitstream(dai::RawImgFrame::Type::RAW8);
     }
-
     if(ph->getParam<bool>("i_add_exposure_offset")) {
         auto offset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>("i_exposure_offset"));
         stereoConv->addExposureOffset(offset);
@@ -337,10 +336,10 @@ void Stereo::closeQueues() {
     if(ph->getParam<bool>("i_publish_topic")) {
         stereoQ->close();
     }
-    if(ph->getParam<bool>("i_publish_left_rect")){
+    if(ph->getParam<bool>("i_publish_left_rect")) {
         leftRectQ->close();
     }
-    if(ph->getParam<bool>("i_publish_right_rect")){
+    if(ph->getParam<bool>("i_publish_right_rect")) {
         rightRectQ->close();
     }
     if(ph->getParam<bool>("i_publish_synced_rect_pair")) {
