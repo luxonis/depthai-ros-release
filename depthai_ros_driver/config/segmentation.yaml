@@ -1,9 +1,4 @@
 /oak:
-  ros__parameters:
-    camera:
-      i_nn_type: rgb
-      i_pipeline_type: rgb
-    nn:
-      i_nn_config_path: depthai_ros_driver/segmentation
-      i_enable_passthrough: true
-
+    camera_i_nn_type: rgb
+    nn_i_nn_config_path: depthai_ros_driver/segmentation
+    nn_i_enable_passthrough: true

@@ -3,23 +3,21 @@
 #include <deque>
 #include <memory>
 #include <string>
-#include <vision_msgs/msg/detection2_d_array.hpp>
 
 #include "depthai/pipeline/datatype/ImgDetections.hpp"
-#include "rclcpp/time.hpp"
+#include "ros/time.h"
+#include "vision_msgs/Detection2DArray.h"
 
 namespace dai {
 
 namespace ros {
 
-namespace VisionMsgs = vision_msgs::msg;
-using Detection2DArrayPtr = VisionMsgs::Detection2DArray::SharedPtr;
-
+namespace VisionMsgs = vision_msgs;
+using Detection2DArrayPtr = VisionMsgs::Detection2DArray::Ptr;
 class ImgDetectionConverter {
    public:
     // DetectionConverter() = default;
     ImgDetectionConverter(std::string frameName, int width, int height, bool normalized = false, bool getBaseDeviceTimestamp = false);
-    ~ImgDetectionConverter();
 
     /**
      * @brief Handles cases in which the ROS time shifts forward or backward
@@ -47,7 +45,7 @@ class ImgDetectionConverter {
     const std::string _frameName;
     bool _normalized;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-    rclcpp::Time _rosBaseTime;
+    ::ros::Time _rosBaseTime;
     bool _getBaseDeviceTimestamp;
     // For handling ROS time shifts and debugging
     int64_t _totalNsChange{0};
