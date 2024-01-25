@@ -1,24 +1,26 @@
 #pragma once
 
 #include <deque>
+#include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 
 #include "depthai-shared/datatype/RawIMUData.hpp"
 #include "depthai/pipeline/datatype/IMUData.hpp"
-#include "depthaiUtility.hpp"
-#include "depthai_ros_msgs/ImuWithMagneticField.h"
-#include "ros/time.h"
-#include "sensor_msgs/Imu.h"
-#include "sensor_msgs/MagneticField.h"
+#include "depthai_bridge/depthaiUtility.hpp"
+#include "depthai_ros_msgs/msg/imu_with_magnetic_field.hpp"
+#include "rclcpp/time.hpp"
+#include "sensor_msgs/msg/imu.hpp"
+#include "sensor_msgs/msg/magnetic_field.hpp"
 
 namespace dai {
 
 namespace ros {
 
-namespace ImuMsgs = sensor_msgs;
-using ImuPtr = ImuMsgs::Imu::Ptr;
+namespace ImuMsgs = sensor_msgs::msg;
+using ImuPtr = ImuMsgs::Imu::SharedPtr;
 
 enum class ImuSyncMethod { COPY, LINEAR_INTERPOLATE_GYRO, LINEAR_INTERPOLATE_ACCEL };
 
@@ -53,7 +55,7 @@ class ImuConverter {
     }
 
     void toRosMsg(std::shared_ptr<dai::IMUData> inData, std::deque<ImuMsgs::Imu>& outImuMsgs);
-    void toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::ImuWithMagneticField>& outImuMsgs);
+    void toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::msg::ImuWithMagneticField>& outImuMsgs);
 
     template <typename T>
     T lerp(const T& a, const T& b, const double t) {
@@ -107,7 +109,7 @@ class ImuConverter {
             }
 
             if(_syncMode == ImuSyncMethod::LINEAR_INTERPOLATE_ACCEL) {
-                if(accelHist.size() < 3) {
+                if(accelHist.size() < 3 && gyroHist.size() && rotationHist.size() && magnHist.size()) {
                     continue;
                 } else {
                     if(_enable_rotation) {
@@ -122,7 +124,7 @@ class ImuConverter {
                 }
 
             } else if(_syncMode == ImuSyncMethod::LINEAR_INTERPOLATE_GYRO) {
-                if(gyroHist.size() < 3) {
+                if(gyroHist.size() < 3 && accelHist.size() && rotationHist.size() && magnHist.size()) {
                     continue;
                 } else {
                     if(_enable_rotation) {
@@ -146,22 +148,22 @@ class ImuConverter {
     const std::string _frameName = "";
     ImuSyncMethod _syncMode;
     std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
-    ::ros::Time _rosBaseTime;
+    rclcpp::Time _rosBaseTime;
+    bool _getBaseDeviceTimestamp;
     // For handling ROS time shifts and debugging
     int64_t _totalNsChange{0};
     // Whether to update the ROS base time on each message conversion
     bool _updateRosBaseTimeOnToRosMsg{false};
-    bool _getBaseDeviceTimestamp;
 
     void fillImuMsg(ImuMsgs::Imu& msg, dai::IMUReportAccelerometer report);
     void fillImuMsg(ImuMsgs::Imu& msg, dai::IMUReportGyroscope report);
     void fillImuMsg(ImuMsgs::Imu& msg, dai::IMUReportRotationVectorWAcc report);
     void fillImuMsg(ImuMsgs::Imu& msg, dai::IMUReportMagneticField report);
 
-    void fillImuMsg(depthai_ros_msgs::ImuWithMagneticField& msg, dai::IMUReportAccelerometer report);
-    void fillImuMsg(depthai_ros_msgs::ImuWithMagneticField& msg, dai::IMUReportGyroscope report);
-    void fillImuMsg(depthai_ros_msgs::ImuWithMagneticField& msg, dai::IMUReportRotationVectorWAcc report);
-    void fillImuMsg(depthai_ros_msgs::ImuWithMagneticField& msg, dai::IMUReportMagneticField report);
+    void fillImuMsg(depthai_ros_msgs::msg::ImuWithMagneticField& msg, dai::IMUReportAccelerometer report);
+    void fillImuMsg(depthai_ros_msgs::msg::ImuWithMagneticField& msg, dai::IMUReportGyroscope report);
+    void fillImuMsg(depthai_ros_msgs::msg::ImuWithMagneticField& msg, dai::IMUReportRotationVectorWAcc report);
+    void fillImuMsg(depthai_ros_msgs::msg::ImuWithMagneticField& msg, dai::IMUReportMagneticField report);
 
     template <typename I, typename S, typename T, typename F, typename M>
     void CreateUnitMessage(M& msg, std::chrono::_V2::steady_clock::time_point timestamp, I first, S second, T third, F fourth) {
