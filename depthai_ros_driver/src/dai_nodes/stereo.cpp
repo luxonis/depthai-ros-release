@@ -1,7 +1,7 @@
 #include "depthai_ros_driver/dai_nodes/stereo.hpp"
 
 #include "camera_info_manager/camera_info_manager.hpp"
-#include "cv_bridge/cv_bridge.h"
+#include "cv_bridge/cv_bridge.hpp"
 #include "depthai/device/DataQueue.hpp"
 #include "depthai/device/DeviceBase.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
@@ -225,7 +225,6 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
     if(ph->getParam<bool>("i_low_bandwidth")) {
         stereoConv->convertFromBitstream(dai::RawImgFrame::Type::RAW8);
     }
-
     if(ph->getParam<bool>("i_add_exposure_offset")) {
         auto offset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>("i_exposure_offset"));
         stereoConv->addExposureOffset(offset);

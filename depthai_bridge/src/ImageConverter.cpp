@@ -406,7 +406,6 @@ ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
                 std::copy(stereoIntrinsics[i].begin(), stereoIntrinsics[i].end(), stereoFlatIntrinsics.begin() + 4 * i);
                 stereoFlatIntrinsics[(4 * i) + 3] = 0;
             }
-
             // Check stereo socket order
             dai::CameraBoardSocket stereoSocketFirst = calibHandler.getStereoLeftCameraId();
             dai::CameraBoardSocket stereoSocketSecond = calibHandler.getStereoRightCameraId();
