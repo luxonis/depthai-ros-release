@@ -3,8 +3,8 @@
 #include <iostream>
 #include <tuple>
 
-#include "depthai_ros_msgs/msg/tracked_features.hpp"
-#include "rclcpp/rclcpp.hpp"
+#include "depthai_ros_msgs/TrackedFeatures.h"
+#include "ros/ros.h"
 
 // Inludes common necessary includes for development using depthai library
 #include "depthai/device/DataQueue.hpp"
@@ -21,8 +21,8 @@
 #include "depthai_bridge/TrackedFeaturesConverter.hpp"
 
 int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
-    auto node = rclcpp::Node::make_shared("feature_tracker");
+    ros::init(argc, argv, "feature_tracker_node");
+    ros::NodeHandle pnh("~");
 
     dai::Pipeline pipeline;
 
@@ -72,9 +72,9 @@ int main(int argc, char** argv) {
 
     dai::rosBridge::TrackedFeaturesConverter rightConverter(tfPrefix + "_right_camera_optical_frame", true);
 
-    dai::rosBridge::BridgePublisher<depthai_ros_msgs::msg::TrackedFeatures, dai::TrackedFeatures> featuresPubL(
+    dai::rosBridge::BridgePublisher<depthai_ros_msgs::TrackedFeatures, dai::TrackedFeatures> featuresPubL(
         outputFeaturesLeftQueue,
-        node,
+        pnh,
         std::string("features_left"),
         std::bind(&dai::rosBridge::TrackedFeaturesConverter::toRosMsg, &leftConverter, std::placeholders::_1, std::placeholders::_2),
         30,
@@ -83,9 +83,9 @@ int main(int argc, char** argv) {
 
     featuresPubL.addPublisherCallback();
 
-    dai::rosBridge::BridgePublisher<depthai_ros_msgs::msg::TrackedFeatures, dai::TrackedFeatures> featuresPubR(
+    dai::rosBridge::BridgePublisher<depthai_ros_msgs::TrackedFeatures, dai::TrackedFeatures> featuresPubR(
         outputFeaturesRightQueue,
-        node,
+        pnh,
         std::string("features_right"),
         std::bind(&dai::rosBridge::TrackedFeaturesConverter::toRosMsg, &rightConverter, std::placeholders::_1, std::placeholders::_2),
         30,
@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
 
     featuresPubR.addPublisherCallback();
     std::cout << "Ready." << std::endl;
-    rclcpp::spin(node);
+    ros::spin();
 
     return 0;
 }

@@ -19,10 +19,10 @@ class XLinkOut;
 }  // namespace node
 }  // namespace dai
 
-namespace rclcpp {
-class Node;
+namespace ros {
+class NodeHandle;
 class Parameter;
-}  // namespace rclcpp
+}  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -31,7 +31,7 @@ class SyncParamHandler;
 namespace dai_nodes {
 class Sync : public BaseNode {
    public:
-    explicit Sync(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline);
+    explicit Sync(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline);
     ~Sync();
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;

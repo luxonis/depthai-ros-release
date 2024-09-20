@@ -14,20 +14,19 @@ class FeatureTracker;
 }
 }  // namespace dai
 
-namespace rclcpp {
-class Node;
-class Parameter;
-}  // namespace rclcpp
+namespace ros {
+class NodeHandle;
+}  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
 
 class FeatureTrackerParamHandler : public BaseParamHandler {
    public:
-    explicit FeatureTrackerParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name);
+    explicit FeatureTrackerParamHandler(ros::NodeHandle node, const std::string& name);
     ~FeatureTrackerParamHandler();
     void declareParams(std::shared_ptr<dai::node::FeatureTracker> featureTracker);
-    dai::CameraControl setRuntimeParams(const std::vector<rclcpp::Parameter>& params) override;
+    dai::CameraControl setRuntimeParams(parametersConfig& config) override;
     std::unordered_map<std::string, dai::FeatureTrackerConfig::MotionEstimator::Type> motionEstMap;
 };
 }  // namespace param_handlers
