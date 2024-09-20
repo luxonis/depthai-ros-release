@@ -1,8 +1,8 @@
 #pragma once
 
-#include <ros/ros.h>
-
 #include <chrono>
+
+#include "rclcpp/rclcpp.hpp"
 
 namespace dai {
 
@@ -10,11 +10,43 @@ namespace ros {
 
 enum LogLevel { DEBUG, INFO, WARN, ERROR, FATAL };
 
-#define DEPTHAI_ROS_LOG_STREAM(loggerName, level, isOnce, args)                                                                       \
-    if(isOnce) {                                                                                                                      \
-        ROS_LOG_STREAM_ONCE(static_cast<::ros::console::Level>(level), std::string(ROSCONSOLE_NAME_PREFIX) + "." + loggerName, args); \
-    } else {                                                                                                                          \
-        ROS_LOG_STREAM(static_cast<::ros::console::Level>(level), std::string(ROSCONSOLE_NAME_PREFIX) + "." + loggerName, args);      \
+#define DEPTHAI_ROS_LOG_STREAM(loggerName, level, isOnce, args)                 \
+    switch(level) {                                                             \
+        case dai::ros::LogLevel::DEBUG:                                         \
+            if(isOnce) {                                                        \
+                RCLCPP_DEBUG_STREAM_ONCE(rclcpp::get_logger(loggerName), args); \
+            } else {                                                            \
+                RCLCPP_DEBUG_STREAM(rclcpp::get_logger(loggerName), args);      \
+            }                                                                   \
+            break;                                                              \
+        case dai::ros::LogLevel::INFO:                                          \
+            if(isOnce) {                                                        \
+                RCLCPP_INFO_STREAM_ONCE(rclcpp::get_logger(loggerName), args);  \
+            } else {                                                            \
+                RCLCPP_INFO_STREAM(rclcpp::get_logger(loggerName), args);       \
+            }                                                                   \
+            break;                                                              \
+        case dai::ros::LogLevel::WARN:                                          \
+            if(isOnce) {                                                        \
+                RCLCPP_WARN_STREAM_ONCE(rclcpp::get_logger(loggerName), args);  \
+            } else {                                                            \
+                RCLCPP_WARN_STREAM(rclcpp::get_logger(loggerName), args);       \
+            }                                                                   \
+            break;                                                              \
+        case dai::ros::LogLevel::ERROR:                                         \
+            if(isOnce) {                                                        \
+                RCLCPP_ERROR_STREAM_ONCE(rclcpp::get_logger(loggerName), args); \
+            } else {                                                            \
+                RCLCPP_ERROR_STREAM(rclcpp::get_logger(loggerName), args);      \
+            }                                                                   \
+            break;                                                              \
+        case dai::ros::LogLevel::FATAL:                                         \
+            if(isOnce) {                                                        \
+                RCLCPP_FATAL_STREAM_ONCE(rclcpp::get_logger(loggerName), args); \
+            } else {                                                            \
+                RCLCPP_FATAL_STREAM(rclcpp::get_logger(loggerName), args);      \
+            }                                                                   \
+            break;                                                              \
     }
 
 // DEBUG stream macros on top of ROS logger
@@ -44,47 +76,32 @@ enum LogLevel { DEBUG, INFO, WARN, ERROR, FATAL };
 
 static const int64_t ZERO_TIME_DELTA_NS{100};
 
-inline ::ros::Time getFrameTime(::ros::Time rosBaseTime,
-                                std::chrono::time_point<std::chrono::steady_clock> steadyBaseTime,
-                                std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> currTimePoint) {
+inline rclcpp::Time getFrameTime(rclcpp::Time rclBaseTime,
+                                 std::chrono::time_point<std::chrono::steady_clock> steadyBaseTime,
+                                 std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> currTimePoint) {
     auto elapsedTime = currTimePoint - steadyBaseTime;
-    uint64_t nSec = rosBaseTime.toNSec() + std::chrono::duration_cast<std::chrono::nanoseconds>(elapsedTime).count();
-    auto currTime = rosBaseTime;
-    auto rosStamp = currTime.fromNSec(nSec);
-    DEPTHAI_ROS_DEBUG_STREAM("PRINT TIMESTAMP: ", "rosStamp -> " << rosStamp << "  rosBaseTime -> " << rosBaseTime);
-    return rosStamp;
+    // uint64_t nSec = rosBaseTime.toNSec() + std::chrono::duration_cast<std::chrono::nanoseconds>(elapsedTime).count();
+    auto rclStamp = rclBaseTime + elapsedTime;
+    // DEPTHAI_ROS_DEBUG_STREAM("PRINT TIMESTAMP: ", "rosStamp -> " << rclStamp << "  rosBaseTime -> " << rclBaseTime);
+    return rclStamp;
 }
 
-inline void updateBaseTime(std::chrono::time_point<std::chrono::steady_clock> steadyBaseTime, ::ros::Time& rosBaseTime, int64_t& totalNsChange) {
-    ::ros::Time currentRosTime = ::ros::Time::now();
+inline void updateBaseTime(std::chrono::time_point<std::chrono::steady_clock> steadyBaseTime, rclcpp::Time rclBaseTime, int64_t& totalNsChange) {
+    rclcpp::Time currentRosTime = rclcpp::Clock().now();
     std::chrono::time_point<std::chrono::steady_clock> currentSteadyTime = std::chrono::steady_clock::now();
     // In nanoseconds
     auto expectedOffset = std::chrono::duration_cast<std::chrono::nanoseconds>(currentSteadyTime - steadyBaseTime).count();
-    uint64_t previousBaseTimeNs = rosBaseTime.toNSec();
-    rosBaseTime = rosBaseTime.fromNSec(currentRosTime.toNSec() - expectedOffset);
-    uint64_t newBaseTimeNs = rosBaseTime.toNSec();
+    uint64_t previousBaseTimeNs = rclBaseTime.nanoseconds();
+    rclBaseTime = rclcpp::Time(currentRosTime.nanoseconds() - expectedOffset);
+    uint64_t newBaseTimeNs = rclBaseTime.nanoseconds();
     int64_t diff = static_cast<int64_t>(newBaseTimeNs - previousBaseTimeNs);
     totalNsChange += diff;
     if(::abs(diff) > ZERO_TIME_DELTA_NS) {
         // Has been updated
         DEPTHAI_ROS_DEBUG_STREAM("ROS BASE TIME CHANGE: ",
                                  "ROS base time changed by " << std::to_string(diff) << " ns. Total change: " << std::to_string(totalNsChange)
-                                                             << " ns. New time: " << std::to_string(rosBaseTime.toNSec()) << " ns.");
+                                                             << " ns. New time: " << std::to_string(rclBaseTime.nanoseconds()) << " ns.");
     }
-}
-
-template <typename T>
-T lerp(const T& a, const T& b, const double t) {
-    return a * (1.0 - t) + b * t;
-}
-
-template <typename T>
-T lerpImu(const T& a, const T& b, const double t) {
-    T res;
-    res.x = lerp(a.x, b.x, t);
-    res.y = lerp(a.y, b.y, t);
-    res.z = lerp(a.z, b.z, t);
-    return res;
 }
 
 }  // namespace ros

@@ -5,11 +5,12 @@
 #include "depthai/pipeline/node/Camera.hpp"
 #include "depthai/pipeline/node/ToF.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-ToFParamHandler::ToFParamHandler(ros::NodeHandle node, const std::string& name) : BaseParamHandler(node, name) {
+ToFParamHandler::ToFParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name) : BaseParamHandler(node, name) {
     medianFilterMap = {{"MEDIAN_OFF", dai::MedianFilter::MEDIAN_OFF},
                        {"KERNEL_3x3", dai::MedianFilter::KERNEL_3x3},
                        {"KERNEL_5x5", dai::MedianFilter::KERNEL_5x5},
@@ -64,7 +65,7 @@ void ToFParamHandler::declareParams(std::shared_ptr<dai::node::Camera> cam, std:
     tof->initialConfig.set(tofConf);
 }
 
-dai::CameraControl ToFParamHandler::setRuntimeParams(parametersConfig& /*config*/) {
+dai::CameraControl ToFParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& /*params*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }

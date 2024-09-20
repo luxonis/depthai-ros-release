@@ -1,12 +1,15 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package depthai-ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Changelog for package depthai-ros
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 2.10.1 (2024-09-18)
 -------------------
 * Fix ToF synced publishing
 * Add camera_info publishing when publishing compressed images
 * Catch errors when starting the device
+
 
 2.10.0 (2024-08-29)
 -------------------
@@ -42,7 +45,6 @@ Changelog for package depthai-ros
 * Added CameraInfo update based on alpha scaling
 * Logger restart bugfix
 * URDF parameters fix
-
 
 2.8.1 (2023-09-12)
 -------------------
