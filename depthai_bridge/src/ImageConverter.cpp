@@ -266,7 +266,6 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
     }
     return outImageMsg;
 }
-
 std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> getOffsetTimestamp(
     std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> ts,
     CameraExposureOffset offset,
@@ -340,7 +339,6 @@ FFMPEGMsgs::FFMPEGPacket ImageConverter::toRosFFMPEGPacket(std::shared_ptr<dai::
 
     return outFrameMsg;
 }
-
 void ImageConverter::toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<ImageMsgs::Image>& outImageMsgs) {
     auto outImageMsg = toRosMsgRawPtr(inData);
     outImageMsgs.push_back(outImageMsg);
