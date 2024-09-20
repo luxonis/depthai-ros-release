@@ -1,0 +1,12 @@
+Source: ros-noetic-depthai-examples
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libopencv-dev, ros-noetic-camera-info-manager, ros-noetic-catkin, ros-noetic-cv-bridge, ros-noetic-depthai, ros-noetic-depthai-bridge, ros-noetic-depthai-descriptions, ros-noetic-depthai-ros-msgs, ros-noetic-foxglove-msgs, ros-noetic-image-transport, ros-noetic-message-filters, ros-noetic-nodelet, ros-noetic-ros-environment, ros-noetic-roscpp, ros-noetic-rospy, ros-noetic-sensor-msgs, ros-noetic-std-msgs, ros-noetic-stereo-msgs, ros-noetic-vision-msgs
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-noetic-depthai-examples
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopencv-dev, ros-noetic-camera-info-manager, ros-noetic-cv-bridge, ros-noetic-depth-image-proc, ros-noetic-depthai, ros-noetic-depthai-bridge, ros-noetic-depthai-descriptions, ros-noetic-depthai-ros-msgs, ros-noetic-foxglove-msgs, ros-noetic-image-transport, ros-noetic-message-filters, ros-noetic-nodelet, ros-noetic-robot-state-publisher, ros-noetic-ros-environment, ros-noetic-roscpp, ros-noetic-rospy, ros-noetic-sensor-msgs, ros-noetic-std-msgs, ros-noetic-stereo-msgs, ros-noetic-vision-msgs, ros-noetic-xacro
+Description: The depthai_examples package
