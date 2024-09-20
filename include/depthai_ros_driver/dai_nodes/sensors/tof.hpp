@@ -1,55 +1,58 @@
 #pragma once
 
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
+#include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
+
 namespace dai {
 class Pipeline;
 class Device;
 class DataInputQueue;
 class ADatatype;
 namespace node {
-class MonoCamera;
+class Camera;
+class ToF;
+class ImageAlign;
 class XLinkIn;
 }  // namespace node
 }  // namespace dai
 
 namespace ros {
 class NodeHandle;
+class Parameter;
 }  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-class SensorParamHandler;
+class ToFParamHandler;
 }
 namespace dai_nodes {
+
 namespace sensor_helpers {
-struct ImageSensor;
 class ImagePublisher;
 }  // namespace sensor_helpers
-
-class Mono : public BaseNode {
+class ToF : public BaseNode {
    public:
-    explicit Mono(const std::string& daiNodeName,
-                  ros::NodeHandle node,
-                  std::shared_ptr<dai::Pipeline> pipeline,
-                  dai::CameraBoardSocket socket,
-                  sensor_helpers::ImageSensor sensor,
-                  bool publish);
-    ~Mono();
-    void updateParams(parametersConfig& config) override;
+    explicit ToF(const std::string& daiNodeName,
+                 ros::NodeHandle node,
+                 std::shared_ptr<dai::Pipeline> pipeline,
+                 dai::CameraBoardSocket boardSocket = dai::CameraBoardSocket::CAM_A);
+    ~ToF();
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
+    dai::Node::Input getInput(int linkType = 0) override;
     void setNames() override;
     void setXinXout(std::shared_ptr<dai::Pipeline> pipeline) override;
-    void closeQueues() override;
     std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> getPublishers() override;
+    void closeQueues() override;
 
    private:
-    std::shared_ptr<sensor_helpers::ImagePublisher> imagePublisher;
-    std::shared_ptr<dai::node::MonoCamera> monoCamNode;
-    std::unique_ptr<param_handlers::SensorParamHandler> ph;
-    std::shared_ptr<dai::DataInputQueue> controlQ;
-    std::shared_ptr<dai::node::XLinkIn> xinControl;
-    std::string monoQName, controlQName;
+    std::shared_ptr<sensor_helpers::ImagePublisher> tofPub;
+    std::shared_ptr<dai::node::Camera> camNode;
+    std::shared_ptr<dai::node::ToF> tofNode;
+    std::shared_ptr<dai::node::ImageAlign> alignNode;
+    std::unique_ptr<param_handlers::ToFParamHandler> ph;
+    dai::CameraBoardSocket boardSocket;
+    std::string tofQName;
 };
 
 }  // namespace dai_nodes
