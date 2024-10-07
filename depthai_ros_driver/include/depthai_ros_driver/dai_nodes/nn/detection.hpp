@@ -87,8 +87,8 @@ class Detection : public BaseNode {
             convConf.updateROSBaseTimeOnRosMsg = ph->getParam<bool>("i_update_ros_base_time_on_ros_msg");
 
             utils::ImgPublisherConfig pubConf;
-			pubConf.width = width;
-			pubConf.height = height;
+            pubConf.width = width;
+            pubConf.height = height;
             pubConf.daiNodeName = getName();
             pubConf.topicName = "~/" + getName() + "/passthrough";
             pubConf.infoSuffix = "/passthrough";
@@ -137,7 +137,6 @@ class Detection : public BaseNode {
             ptPub = setupOutput(pipeline, ptQName, [&](dai::Node::Input input) { detectionNode->passthrough.link(input); });
         }
     };
-
     /**
      * @brief      Closes the queues for the DetectionNetwork node and the passthrough.
      */
