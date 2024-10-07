@@ -1,6 +1,12 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package depthai-ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2.10.2 (2024-09-26)
+-------------------
+* Fix Stereo K matrix publishing
+* Fix socket ID for NN detections
+* Remove catching errors when starting the device since it introduced undefined behavior
+* Add desqueeze to NN node
 
 2.10.1 (2024-09-18)
 -------------------
@@ -42,6 +48,7 @@ Changelog for package depthai-ros
 * Added CameraInfo update based on alpha scaling
 * Logger restart bugfix
 * URDF parameters fix
+
 
 2.8.1 (2023-09-12)
 -------------------
