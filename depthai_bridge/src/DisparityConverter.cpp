@@ -16,8 +16,10 @@ DisparityConverter::DisparityConverter(
       _maxDepth(maxDepth / 100.0),
       _steadyBaseTime(std::chrono::steady_clock::now()),
       _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
-    _rosBaseTime = ::ros::Time::now();
+    _rosBaseTime = rclcpp::Clock().now();
 }
+
+DisparityConverter::~DisparityConverter() = default;
 
 void DisparityConverter::updateRosBaseTime() {
     updateBaseTime(_steadyBaseTime, _rosBaseTime, _totalNsChange);
@@ -32,14 +34,18 @@ void DisparityConverter::toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::de
         tstamp = inData->getTimestampDevice();
     else
         tstamp = inData->getTimestamp();
+
     DisparityMsgs::DisparityImage outDispImageMsg;
     outDispImageMsg.header.frame_id = _frameName;
     outDispImageMsg.f = _focalLength;
     outDispImageMsg.min_disparity = _focalLength * _baseline / _maxDepth;
     outDispImageMsg.max_disparity = _focalLength * _baseline / _minDepth;
 
-    outDispImageMsg.T = _baseline / 100.0;  // converting cm to meters
+    outDispImageMsg.t = _baseline / 100.0;  // converting cm to meters
 
+    // copying the data to ros msg
+    // outDispImageMsg.header       = imgHeader;
+    // std::string temp_str(encodingEnumMap[inData->getType()]);
     ImageMsgs::Image& outImageMsg = outDispImageMsg.image;
     outDispImageMsg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
 
@@ -92,7 +98,9 @@ DisparityImagePtr DisparityConverter::toRosMsgPtr(std::shared_ptr<dai::ImgFrame>
     std::deque<DisparityMsgs::DisparityImage> msgQueue;
     toRosMsg(inData, msgQueue);
     auto msg = msgQueue.front();
-    DisparityImagePtr ptr = boost::make_shared<DisparityMsgs::DisparityImage>(msg);
+
+    DisparityImagePtr ptr = std::make_shared<DisparityMsgs::DisparityImage>(msg);
+
     return ptr;
 }
 
