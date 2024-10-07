@@ -1,0 +1,12 @@
+Source: ros-humble-depthai-descriptions
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), ros-humble-ament-cmake, ros-humble-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-humble-depthai-descriptions
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-humble-robot-state-publisher, ros-humble-xacro, ros-humble-ros-workspace
+Description: The depthai_descriptions package
