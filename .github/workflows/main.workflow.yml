@@ -22,7 +22,7 @@ on:
       - iron
       - jazzy
 env:
-  ROS_DISTRO: humble
+  ROS_DISTRO: iron
 
 jobs:
   clang-format-lint:
