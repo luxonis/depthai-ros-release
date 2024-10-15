@@ -12,10 +12,8 @@ SpatialDetectionConverter::SpatialDetectionConverter(std::string frameName, int 
       _normalized(normalized),
       _steadyBaseTime(std::chrono::steady_clock::now()),
       _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
-    _rosBaseTime = rclcpp::Clock().now();
+    _rosBaseTime = ::ros::Time::now();
 }
-
-SpatialDetectionConverter::~SpatialDetectionConverter() = default;
 
 void SpatialDetectionConverter::updateRosBaseTime() {
     updateBaseTime(_steadyBaseTime, _rosBaseTime, _totalNsChange);
@@ -26,6 +24,7 @@ void SpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::SpatialImgDetectio
     if(_updateRosBaseTimeOnToRosMsg) {
         updateRosBaseTime();
     }
+    // setting the header
     std::chrono::_V2::steady_clock::time_point tstamp;
     if(_getBaseDeviceTimestamp)
         tstamp = inNetData->getTimestampDevice();
@@ -59,11 +58,11 @@ void SpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::SpatialImgDetectio
         float yCenter = yMin + ySize / 2;
         opDetectionMsg.detections[i].results.resize(1);
 
-        opDetectionMsg.detections[i].results[0].class_id = std::to_string(inNetData->detections[i].label);
+        opDetectionMsg.detections[i].results[0].id = inNetData->detections[i].label;
         opDetectionMsg.detections[i].results[0].score = inNetData->detections[i].confidence;
 
-        opDetectionMsg.detections[i].bbox.center.position.x = xCenter;
-        opDetectionMsg.detections[i].bbox.center.position.y = yCenter;
+        opDetectionMsg.detections[i].bbox.center.x = xCenter;
+        opDetectionMsg.detections[i].bbox.center.y = yCenter;
         opDetectionMsg.detections[i].bbox.size_x = xSize;
         opDetectionMsg.detections[i].bbox.size_y = ySize;
 
@@ -76,16 +75,8 @@ void SpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::SpatialImgDetectio
     opDetectionMsgs.push_back(opDetectionMsg);
 }
 
-SpatialDetectionArrayPtr SpatialDetectionConverter::toRosMsgPtr(std::shared_ptr<dai::SpatialImgDetections> inNetData) {
-    std::deque<SpatialMessages::SpatialDetectionArray> msgQueue;
-    toRosMsg(inNetData, msgQueue);
-    auto msg = msgQueue.front();
-    SpatialDetectionArrayPtr ptr = std::make_shared<SpatialMessages::SpatialDetectionArray>(msg);
-    return ptr;
-}
-
 void SpatialDetectionConverter::toRosVisionMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData,
-                                               std::deque<vision_msgs::msg::Detection3DArray>& opDetectionMsgs) {
+                                               std::deque<vision_msgs::Detection3DArray>& opDetectionMsgs) {
     if(_updateRosBaseTimeOnToRosMsg) {
         updateRosBaseTime();
     }
@@ -94,7 +85,7 @@ void SpatialDetectionConverter::toRosVisionMsg(std::shared_ptr<dai::SpatialImgDe
         tstamp = inNetData->getTimestampDevice();
     else
         tstamp = inNetData->getTimestamp();
-    vision_msgs::msg::Detection3DArray opDetectionMsg;
+    vision_msgs::Detection3DArray opDetectionMsg;
 
     opDetectionMsg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
     opDetectionMsg.header.frame_id = _frameName;
@@ -122,13 +113,13 @@ void SpatialDetectionConverter::toRosVisionMsg(std::shared_ptr<dai::SpatialImgDe
         float yCenter = yMin + ySize / 2;
         opDetectionMsg.detections[i].results.resize(1);
 
-        opDetectionMsg.detections[i].results[0].hypothesis.class_id = std::to_string(inNetData->detections[i].label);
-        opDetectionMsg.detections[i].results[0].hypothesis.score = inNetData->detections[i].confidence;
+        opDetectionMsg.detections[i].results[0].id = inNetData->detections[i].label;
+        opDetectionMsg.detections[i].results[0].score = inNetData->detections[i].confidence;
+
         opDetectionMsg.detections[i].bbox.center.position.x = xCenter;
         opDetectionMsg.detections[i].bbox.center.position.y = yCenter;
         opDetectionMsg.detections[i].bbox.size.x = xSize;
         opDetectionMsg.detections[i].bbox.size.y = ySize;
-        opDetectionMsg.detections[i].bbox.size.z = 0.01;
 
         // converting mm to meters since per ros rep-103 lenght should always be in meters
         opDetectionMsg.detections[i].results[0].pose.pose.position.x = inNetData->detections[i].spatialCoordinates.x / 1000;
@@ -137,6 +128,14 @@ void SpatialDetectionConverter::toRosVisionMsg(std::shared_ptr<dai::SpatialImgDe
     }
 
     opDetectionMsgs.push_back(opDetectionMsg);
+}
+
+SpatialDetectionArrayPtr SpatialDetectionConverter::toRosMsgPtr(std::shared_ptr<dai::SpatialImgDetections> inNetData) {
+    std::deque<SpatialMessages::SpatialDetectionArray> msgQueue;
+    toRosMsg(inNetData, msgQueue);
+    auto msg = msgQueue.front();
+    SpatialDetectionArrayPtr ptr = boost::make_shared<SpatialMessages::SpatialDetectionArray>(msg);
+    return ptr;
 }
 
 }  // namespace ros

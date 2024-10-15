@@ -8,24 +8,23 @@
 #include "depthai/pipeline/datatype/StereoDepthConfig.hpp"
 #include "depthai/pipeline/node/StereoDepth.hpp"
 #include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
+#include "depthai_ros_driver/parametersConfig.h"
 
 namespace dai {
 class CameraFeatures;
 }
-
-namespace rclcpp {
-class Node;
-class Parameter;
-}  // namespace rclcpp
+namespace ros {
+class NodeHandle;
+}  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
 class StereoParamHandler : public BaseParamHandler {
    public:
-    explicit StereoParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name);
+    explicit StereoParamHandler(ros::NodeHandle node, const std::string& name);
     ~StereoParamHandler();
     void declareParams(std::shared_ptr<dai::node::StereoDepth> stereo);
-    dai::CameraControl setRuntimeParams(const std::vector<rclcpp::Parameter>& params) override;
+    dai::CameraControl setRuntimeParams(parametersConfig& config) override;
     void updateSocketsFromParams(dai::CameraBoardSocket& left, dai::CameraBoardSocket& right, dai::CameraBoardSocket& align);
 
    private:
