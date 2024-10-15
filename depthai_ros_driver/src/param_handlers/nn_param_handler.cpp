@@ -2,6 +2,7 @@
 
 #include <fstream>
 
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai/pipeline/node/DetectionNetwork.hpp"
 #include "depthai/pipeline/node/ImageManip.hpp"
@@ -9,13 +10,14 @@
 #include "depthai/pipeline/node/SpatialDetectionNetwork.hpp"
 #include "depthai_ros_driver/utils.hpp"
 #include "nlohmann/json.hpp"
-#include "ros/node_handle.h"
-#include "ros/package.h"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
 
-NNParamHandler::NNParamHandler(ros::NodeHandle node, const std::string& name, const dai::CameraBoardSocket& socket) : BaseParamHandler(node, name) {
+NNParamHandler::NNParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name, const dai::CameraBoardSocket& socket)
+    : BaseParamHandler(node, name) {
     nnFamilyMap = {
         {"segmentation", nn::NNFamily::Segmentation},
         {"mobilenet", nn::NNFamily::Mobilenet},
@@ -24,41 +26,36 @@ NNParamHandler::NNParamHandler(ros::NodeHandle node, const std::string& name, co
     declareAndLogParam<int>("i_board_socket_id", static_cast<int>(socket));
 }
 NNParamHandler::~NNParamHandler() = default;
-std::string NNParamHandler::getConfigPath() {
-    std::string configPath = ros::package::getPath("depthai_ros_driver") + "/config/nn/";
-    std::string default_nn_conf_name = "mobilenet.json";
-    std::string default_path = configPath + default_nn_conf_name;
-    auto nnPath = declareAndLogParam<std::string>("i_nn_config_path", default_path);
-    if(nnPath == "depthai_ros_driver/yolo") {
-        nnPath = configPath + "yolo.json";
-    } else if(nnPath == "depthai_ros_driver/segmentation") {
-        nnPath = configPath + "segmentation.json";
-    } else if(nnPath == "depthai_ros_driver/mobilenet") {
-        nnPath = configPath + "mobilenet.json";
-    }
-    return nnPath;
-}
 nn::NNFamily NNParamHandler::getNNFamily() {
-    auto nnPath = getConfigPath();
+    std::string config_path = ament_index_cpp::get_package_share_directory("depthai_ros_driver") + "/config/nn/";
+    std::string default_nn_conf_name = "mobilenet.json";
+    std::string default_path = config_path + default_nn_conf_name;
+    auto nn_path = declareAndLogParam<std::string>("i_nn_config_path", default_path);
+    if(nn_path == "depthai_ros_driver/yolo") {
+        nn_path = config_path + "yolo.json";
+    } else if(nn_path == "depthai_ros_driver/segmentation") {
+        nn_path = config_path + "segmentation.json";
+    } else if(nn_path == "depthai_ros_driver/mobilenet") {
+        nn_path = config_path + "mobilenet.json";
+    }
+    auto final_path = declareAndLogParam<std::string>("i_nn_config_path", nn_path, true);
     using json = nlohmann::json;
-    std::ifstream f(nnPath);
+    std::ifstream f(final_path);
     json data = json::parse(f);
     std::string nnFamily;
     if(data.contains("model") && data.contains("nn_config")) {
         nnFamily = data["nn_config"]["NN_family"].get<std::string>();
-        ROS_INFO("NN Family: %s", nnFamily.c_str());
+        RCLCPP_INFO(getROSNode()->get_logger(), "NN Family: %s", nnFamily.c_str());
     } else {
         throw std::runtime_error("No required fields");
     }
-    return nnFamilyMap.at(nnFamily);
+    return utils::getValFromMap(nnFamily, nnFamilyMap);
 }
 
 void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node::NeuralNetwork> /*nn*/) {
-    if(data["mappings"].contains("labels")) {
-        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-        if(!labels.empty()) {
-            declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
-        }
+    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
+    if(!labels.empty()) {
+        declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
     }
 }
 
@@ -67,8 +64,9 @@ void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node:
         auto conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    if(data["mappings"].contains("labels")) {
-        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
+    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
+    if(!labels.empty()) {
+        declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
     }
 }
 
@@ -77,11 +75,9 @@ void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node:
         auto conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    if(data["mappings"].contains("labels")) {
-        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-        if(!labels.empty()) {
-            declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
-        }
+    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
+    if(!labels.empty()) {
+        declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
     }
     setSpatialParams(nn);
 }
@@ -91,8 +87,9 @@ void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node:
         conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    if(data["mappings"].contains("labels")) {
-        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
+    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
+    if(!labels.empty()) {
+        declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
     }
     setSpatialParams(nn);
     if(data["nn_config"].contains("NN_specific_metadata")) {
@@ -106,11 +103,9 @@ void NNParamHandler::setNNParams(nlohmann::json data, std::shared_ptr<dai::node:
         conf_threshold = data["nn_config"]["confidence_threshold"].get<float>();
         nn->setConfidenceThreshold(conf_threshold);
     }
-    if(data["mappings"].contains("labels")) {
-        labels = data["mappings"]["labels"].get<std::vector<std::string>>();
-        if(!labels.empty()) {
-            declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
-        }
+    auto labels = data["mappings"]["labels"].get<std::vector<std::string>>();
+    if(!labels.empty()) {
+        declareAndLogParam<std::vector<std::string>>("i_label_map", labels);
     }
     if(data["nn_config"].contains("NN_specific_metadata")) {
         setYoloParams(data, nn);
@@ -133,14 +128,14 @@ void NNParamHandler::setImageManip(const std::string& model_path, std::shared_pt
     imageManip->inputImage.setBlocking(false);
     imageManip->inputImage.setQueueSize(8);
     imageManip->setKeepAspectRatio(false);
-    ROS_INFO("NN input size: %d x %d. Resizing input image in case of different dimensions.", inputWidth, inputHeight);
+    RCLCPP_INFO(getROSNode()->get_logger(), "NN input size: %d x %d. Resizing input image in case of different dimensions.", inputWidth, inputHeight);
     imageManip->initialConfig.setResize(inputWidth, inputHeight);
 }
 std::string NNParamHandler::getModelPath(const nlohmann::json& data) {
     std::string modelPath;
     auto source = data["model"]["zoo"].get<std::string>();
     if(source == "depthai_examples") {
-        modelPath = ros::package::getPath("depthai_examples") + "/resources/" + data["model"]["model_name"].get<std::string>() + ".blob";
+        modelPath = ament_index_cpp::get_package_share_directory("depthai_examples") + "/resources/" + data["model"]["model_name"].get<std::string>() + ".blob";
     } else if(source == "path") {
         modelPath = data["model"]["model_name"].get<std::string>();
     } else {
@@ -149,7 +144,7 @@ std::string NNParamHandler::getModelPath(const nlohmann::json& data) {
     return modelPath;
 }
 
-dai::CameraControl NNParamHandler::setRuntimeParams(parametersConfig& /*config*/) {
+dai::CameraControl NNParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& /*params*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }

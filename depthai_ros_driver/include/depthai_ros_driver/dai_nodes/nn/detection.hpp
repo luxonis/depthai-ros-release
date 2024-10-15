@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "camera_info_manager/camera_info_manager.h"
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai/device/DataQueue.hpp"
 #include "depthai/device/Device.hpp"
@@ -18,11 +17,7 @@
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/param_handlers/nn_param_handler.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
-#include "depthai_ros_driver/utils.hpp"
-#include "image_transport/camera_publisher.h"
-#include "image_transport/image_transport.h"
-#include "ros/node_handle.h"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 
@@ -40,17 +35,17 @@ class Detection : public BaseNode {
      * @param      pipeline     The pipeline
      */
     Detection(const std::string& daiNodeName,
-              ros::NodeHandle node,
+              std::shared_ptr<rclcpp::Node> node,
               std::shared_ptr<dai::Pipeline> pipeline,
               const dai::CameraBoardSocket& socket = dai::CameraBoardSocket::CAM_A)
         : BaseNode(daiNodeName, node, pipeline) {
-        ROS_DEBUG("Creating node %s", daiNodeName.c_str());
+        RCLCPP_DEBUG(getLogger(), "Creating node %s", daiNodeName.c_str());
         setNames();
         detectionNode = pipeline->create<T>();
         imageManip = pipeline->create<dai::node::ImageManip>();
         ph = std::make_unique<param_handlers::NNParamHandler>(node, daiNodeName, socket);
         ph->declareParams(detectionNode, imageManip);
-        ROS_DEBUG("Node %s created", daiNodeName.c_str());
+        RCLCPP_DEBUG(getLogger(), "Node %s created", daiNodeName.c_str());
         imageManip->out.link(detectionNode->input);
         setXinXout(pipeline);
     }
@@ -77,9 +72,12 @@ class Detection : public BaseNode {
             width = imageManip->initialConfig.getResizeConfig().width;
             height = imageManip->initialConfig.getResizeConfig().height;
         }
+
         detConverter = std::make_unique<dai::ros::ImgDetectionConverter>(tfPrefix, width, height, false, ph->getParam<bool>("i_get_base_device_timestamp"));
         detConverter->setUpdateRosBaseTimeOnToRosMsg(ph->getParam<bool>("i_update_ros_base_time_on_ros_msg"));
-        detPub = getROSNode().template advertise<vision_msgs::Detection2DArray>(getName() + "/detections", 10);
+        rclcpp::PublisherOptions options;
+        options.qos_overriding_options = rclcpp::QosOverridingOptions();
+        detPub = getROSNode()->template create_publisher<vision_msgs::msg::Detection2DArray>("~/" + getName() + "/detections", 10, options);
         nnQ->addCallback(std::bind(&Detection::detectionCB, this, std::placeholders::_1, std::placeholders::_2));
 
         if(ph->getParam<bool>("i_enable_passthrough")) {
@@ -92,9 +90,8 @@ class Detection : public BaseNode {
             pubConf.width = width;
             pubConf.height = height;
             pubConf.daiNodeName = getName();
-            pubConf.topicName = getName() + "/passthrough";
+            pubConf.topicName = "~/" + getName() + "/passthrough";
             pubConf.infoSuffix = "/passthrough";
-            pubConf.infoMgrSuffix = "/passthrough";
             pubConf.socket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"));
 
             ptPub->setup(device, convConf, pubConf);
@@ -122,6 +119,7 @@ class Detection : public BaseNode {
         }
         return imageManip->inputImage;
     };
+
     void setNames() override {
         nnQName = getName() + "_nn";
         ptQName = getName() + "_pt";
@@ -145,12 +143,12 @@ class Detection : public BaseNode {
     void closeQueues() override {
         nnQ->close();
         if(ph->getParam<bool>("i_enable_passthrough")) {
-            ptPub->closeQueue();
+            ptQ->close();
         }
     };
 
-    void updateParams(parametersConfig& config) override {
-        ph->setRuntimeParams(config);
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override {
+        ph->setRuntimeParams(params);
     };
 
    private:
@@ -162,23 +160,23 @@ class Detection : public BaseNode {
      */
     void detectionCB(const std::string& /*name*/, const std::shared_ptr<dai::ADatatype>& data) {
         auto inDet = std::dynamic_pointer_cast<dai::ImgDetections>(data);
-        std::deque<vision_msgs::Detection2DArray> deq;
+        std::deque<vision_msgs::msg::Detection2DArray> deq;
         detConverter->toRosMsg(inDet, deq);
         while(deq.size() > 0) {
             auto currMsg = deq.front();
-            detPub.publish(currMsg);
+            detPub->publish(currMsg);
             deq.pop_front();
         }
     };
     std::unique_ptr<dai::ros::ImgDetectionConverter> detConverter;
     std::vector<std::string> labelNames;
-    ros::Publisher detPub;
+    rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr detPub;
     std::shared_ptr<sensor_helpers::ImagePublisher> ptPub;
     std::shared_ptr<T> detectionNode;
     std::shared_ptr<dai::node::ImageManip> imageManip;
     std::unique_ptr<param_handlers::NNParamHandler> ph;
     std::shared_ptr<dai::DataOutputQueue> nnQ, ptQ;
-    std::shared_ptr<dai::node::XLinkOut> xoutNN, xoutPT;
+    std::shared_ptr<dai::node::XLinkOut> xoutNN;
     std::string nnQName, ptQName;
 };
 
