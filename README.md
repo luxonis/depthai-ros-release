@@ -1,3 +1,33 @@
+## depthai-ros (jazzy) - 2.10.3-1
+
+The packages in the `depthai-ros` repository were released into the `jazzy` distro by running `/usr/bin/bloom-release depthai-ros --rosdistro jazzy` on `Tue, 15 Oct 2024 12:44:20 -0000`
+
+These packages were released:
+- `depthai-ros`
+- `depthai_bridge`
+- `depthai_descriptions`
+- `depthai_examples`
+- `depthai_filters`
+- `depthai_ros_driver`
+- `depthai_ros_msgs`
+
+Version of package(s) in repository `depthai-ros`:
+
+- upstream repository: https://github.com/luxonis/depthai-ros.git
+- release repository: https://github.com/luxonis/depthai-ros-release.git
+- rosdistro version: `2.10.2-1`
+- old version: `2.10.2-1`
+- new version: `2.10.3-1`
+
+Versions of tools used:
+
+- bloom version: `0.12.0`
+- catkin_pkg version: `1.0.0`
+- rosdep version: `0.24.0`
+- rosdistro version: `0.9.1`
+- vcstools version: `0.1.42`
+
+
 ## depthai-ros (iron) - 2.10.3-1
 
 The packages in the `depthai-ros` repository were released into the `iron` distro by running `/usr/bin/bloom-release depthai-ros --rosdistro iron` on `Tue, 15 Oct 2024 12:38:25 -0000`
