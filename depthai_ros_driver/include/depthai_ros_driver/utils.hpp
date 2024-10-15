@@ -4,6 +4,11 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
+
+namespace dai {
+enum class CameraBoardSocket;
+}  // namespace dai
 
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai-shared/datatype/RawImgFrame.hpp"
@@ -66,7 +71,7 @@ struct ImgPublisherConfig {
     dai::CameraBoardSocket rightSocket = dai::CameraBoardSocket::CAM_C;
     std::string calibrationFile = "";
     std::string topicSuffix = "/image_raw";
-	std::string infoSuffix = "";
+	std::string infoSuffix = "/camera_info";
     std::string compressedTopicSuffix = "/image_raw/compressed";
     std::string infoMgrSuffix = "";
     bool rectified = false;
