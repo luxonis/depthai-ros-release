@@ -10,7 +10,7 @@ Changelog for package depthai-ros
 -------------------
 * Fix Stereo K matrix publishing
 * Fix socket ID for NN detections
-* Remove catching errors when starting the device since it introduced unexcpected behavior
+* Remove catching errors when starting the device since it introduced undefined behavior
 * Add desqueeze to NN node
 
 2.10.1 (2024-09-18)
@@ -18,7 +18,6 @@ Changelog for package depthai-ros
 * Fix ToF synced publishing
 * Add camera_info publishing when publishing compressed images
 * Catch errors when starting the device
-
 
 2.10.0 (2024-08-29)
 -------------------
