@@ -20,7 +20,9 @@ Camera::Camera(const rclcpp::NodeOptions& options) : rclcpp::Node("camera", opti
     });
     rclcpp::on_shutdown([this]() { stop(); });
 }
-Camera::~Camera() = default;
+Camera::~Camera() {
+    stop();
+}
 void Camera::onConfigure() {
     getDeviceType();
     createPipeline();
@@ -116,7 +118,6 @@ void Camera::saveCalib() {
     savePath << "/tmp/" << device->getMxId().c_str() << "_calibration.json";
     RCLCPP_INFO(get_logger(), "Saving calibration to: %s", savePath.str().c_str());
     calibHandler.eepromToJsonFile(savePath.str());
-    auto json = calibHandler.eepromToJson();
 }
 
 void Camera::loadCalib(const std::string& path) {

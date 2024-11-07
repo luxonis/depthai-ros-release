@@ -4,11 +4,6 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <vector>
-
-namespace dai {
-enum class CameraBoardSocket;
-}  // namespace dai
 
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai-shared/datatype/RawImgFrame.hpp"
