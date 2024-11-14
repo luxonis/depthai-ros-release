@@ -79,7 +79,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::MonoCamera> mo
     }
     monoCam->setImageOrientation(
         utils::getValFromMap(declareAndLogParam<std::string>("i_sensor_img_orientation", "AUTO"), dai_nodes::sensor_helpers::cameraImageOrientationMap));
-	int expLimit = declareAndLogParam<int>("r_auto_exposure_limit", 1000);
+    int expLimit = declareAndLogParam<int>("r_auto_exposure_limit", 1000);
     if(declareAndLogParam<bool>("r_set_auto_exposure_limit", false)) {
         monoCam->initialControl.setAutoExposureLimit(expLimit);
     }
@@ -194,7 +194,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     }
     colorCam->setImageOrientation(
         utils::getValFromMap(declareAndLogParam<std::string>("i_sensor_img_orientation", "AUTO"), dai_nodes::sensor_helpers::cameraImageOrientationMap));
-	int expLimit = declareAndLogParam<int>("r_auto_exposure_limit", 1000);
+    int expLimit = declareAndLogParam<int>("r_auto_exposure_limit", 1000);
     if(declareAndLogParam<bool>("r_set_auto_exposure_limit", false)) {
         colorCam->initialControl.setAutoExposureLimit(expLimit);
     }

@@ -69,10 +69,12 @@ void ImagePublisher::setup(std::shared_ptr<dai::Device> device, const utils::Img
             ffmpegPub = node->create_publisher<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>(
                 pubConfig.topicName + pubConfig.compressedTopicSuffix, rclcpp::QoS(10), pubOptions);
         }
-        infoPub = node->create_publisher<sensor_msgs::msg::CameraInfo>(pubConfig.topicName + pubConfig.infoSuffix + "/camera_info", rclcpp::QoS(10), pubOptions);
+        infoPub =
+            node->create_publisher<sensor_msgs::msg::CameraInfo>(pubConfig.topicName + pubConfig.infoSuffix + "/camera_info", rclcpp::QoS(10), pubOptions);
     } else if(ipcEnabled) {
         imgPub = node->create_publisher<sensor_msgs::msg::Image>(pubConfig.topicName + pubConfig.topicSuffix, rclcpp::QoS(10), pubOptions);
-        infoPub = node->create_publisher<sensor_msgs::msg::CameraInfo>(pubConfig.topicName + pubConfig.infoSuffix + "/camera_info", rclcpp::QoS(10), pubOptions);
+        infoPub =
+            node->create_publisher<sensor_msgs::msg::CameraInfo>(pubConfig.topicName + pubConfig.infoSuffix + "/camera_info", rclcpp::QoS(10), pubOptions);
     } else {
         imgPubIT = image_transport::create_camera_publisher(node.get(), pubConfig.topicName + pubConfig.topicSuffix);
     }
@@ -97,7 +99,7 @@ void ImagePublisher::createImageConverter(std::shared_ptr<dai::Device> device) {
     if(convConfig.alphaScalingEnabled) {
         converter->setAlphaScaling(convConfig.alphaScaling);
     }
-    if(convConfig.outputDisparity) {
+    if(!convConfig.outputDisparity) {
         auto calHandler = device->readCalibration();
         double baseline = calHandler.getBaselineDistance(pubConfig.leftSocket, pubConfig.rightSocket, false);
         if(convConfig.reverseSocketOrder) {
