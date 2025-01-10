@@ -1,0 +1,12 @@
+Source: ros-noetic-depthai-ros-driver
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), ros-noetic-camera-info-manager, ros-noetic-catkin, ros-noetic-cv-bridge, ros-noetic-depthai, ros-noetic-depthai-bridge, ros-noetic-depthai-descriptions, ros-noetic-depthai-examples, ros-noetic-depthai-ros-msgs, ros-noetic-diagnostic-msgs, ros-noetic-diagnostic-updater, ros-noetic-dynamic-reconfigure, ros-noetic-image-pipeline, ros-noetic-image-transport, ros-noetic-image-transport-plugins, ros-noetic-message-filters, ros-noetic-nodelet, ros-noetic-pluginlib, ros-noetic-roscpp, ros-noetic-rospy, ros-noetic-sensor-msgs, ros-noetic-std-msgs, ros-noetic-std-srvs, ros-noetic-vision-msgs
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-noetic-depthai-ros-driver
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-noetic-camera-info-manager, ros-noetic-cv-bridge, ros-noetic-depthai, ros-noetic-depthai-bridge, ros-noetic-depthai-descriptions, ros-noetic-depthai-examples, ros-noetic-depthai-ros-msgs, ros-noetic-diagnostic-msgs, ros-noetic-diagnostic-updater, ros-noetic-dynamic-reconfigure, ros-noetic-image-pipeline, ros-noetic-image-transport, ros-noetic-image-transport-plugins, ros-noetic-message-filters, ros-noetic-nodelet, ros-noetic-pluginlib, ros-noetic-roscpp, ros-noetic-rospy, ros-noetic-sensor-msgs, ros-noetic-std-msgs, ros-noetic-std-srvs, ros-noetic-vision-msgs
+Description: Depthai ROS Monolithic node.
