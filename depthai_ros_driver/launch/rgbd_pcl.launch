@@ -36,7 +36,7 @@
         <arg name="cam_pitch" value="$(arg  cam_pitch)" />
         <arg name="cam_yaw" value="$(arg  cam_yaw)" />
 		<arg name="rectify_rgb" value="$(arg rectify_rgb)" />
-		<arg name="pointcloud_enable" value="true" />
+		<arg name="enable_pointcloud" value="true" />
     </include>
 
 
