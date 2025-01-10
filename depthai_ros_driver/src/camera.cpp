@@ -20,7 +20,9 @@ Camera::Camera(const rclcpp::NodeOptions& options) : rclcpp::Node("camera", opti
     });
     rclcpp::on_shutdown([this]() { stop(); });
 }
-Camera::~Camera() = default;
+Camera::~Camera() {
+    stop();
+}
 void Camera::onConfigure() {
     getDeviceType();
     createPipeline();
@@ -116,7 +118,6 @@ void Camera::saveCalib() {
     savePath << "/tmp/" << device->getMxId().c_str() << "_calibration.json";
     RCLCPP_INFO(get_logger(), "Saving calibration to: %s", savePath.str().c_str());
     calibHandler.eepromToJsonFile(savePath.str());
-    auto json = calibHandler.eepromToJson();
 }
 
 void Camera::loadCalib(const std::string& path) {
@@ -287,13 +288,13 @@ rcl_interfaces::msg::SetParametersResult Camera::parameterCB(const std::vector<r
             if(p.get_name() == ph->getFullParamName("i_laser_dot_brightness")) {
                 float laserdotBrightness = float(p.get_value<int>());
                 if(laserdotBrightness > 1.0) {
-                    laserdotBrightness = 1200.0 / laserdotBrightness;
+                    laserdotBrightness = laserdotBrightness / 1200.0;
                 }
                 device->setIrLaserDotProjectorIntensity(laserdotBrightness);
             } else if(p.get_name() == ph->getFullParamName("i_floodlight_brightness")) {
                 float floodlightBrightness = float(p.get_value<int>());
                 if(floodlightBrightness > 1.0) {
-                    floodlightBrightness = 1500.0 / floodlightBrightness;
+                    floodlightBrightness = floodlightBrightness / 1500.0;
                 }
                 device->setIrFloodLightIntensity(floodlightBrightness);
             }
