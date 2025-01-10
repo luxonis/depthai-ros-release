@@ -83,15 +83,15 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::MonoCamera> mo
     if(declareAndLogParam<bool>("r_set_auto_exposure_limit", false)) {
         monoCam->initialControl.setAutoExposureLimit(expLimit);
     }
-	int sharpness = declareAndLogParam<int>("r_sharpness", 1);
+    int sharpness = declareAndLogParam<int>("r_sharpness", 1);
     if(declareAndLogParam("r_set_sharpness", false)) {
         monoCam->initialControl.setSharpness(sharpness);
     }
-	int chromaDenoise = declareAndLogParam<int>("r_chroma_denoise", 1);
+    int chromaDenoise = declareAndLogParam<int>("r_chroma_denoise", 1);
     if(declareAndLogParam("r_set_chroma_denoise", false)) {
         monoCam->initialControl.setChromaDenoise(chromaDenoise);
     }
-	int lumaDenoise = declareAndLogParam<int>("r_luma_denoise", 1);
+    int lumaDenoise = declareAndLogParam<int>("r_luma_denoise", 1);
     if(declareAndLogParam("r_set_luma_denoise", false)) {
         monoCam->initialControl.setLumaDenoise(lumaDenoise);
     }
@@ -198,15 +198,15 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     if(declareAndLogParam<bool>("r_set_auto_exposure_limit", false)) {
         colorCam->initialControl.setAutoExposureLimit(expLimit);
     }
-	int sharpness = declareAndLogParam<int>("r_sharpness", 1);
+    int sharpness = declareAndLogParam<int>("r_sharpness", 1);
     if(declareAndLogParam("r_set_sharpness", false)) {
         colorCam->initialControl.setSharpness(sharpness);
     }
-	int chromaDenoise = declareAndLogParam<int>("r_chroma_denoise", 1);
+    int chromaDenoise = declareAndLogParam<int>("r_chroma_denoise", 1);
     if(declareAndLogParam("r_set_chroma_denoise", false)) {
         colorCam->initialControl.setChromaDenoise(chromaDenoise);
     }
-	int lumaDenoise = declareAndLogParam<int>("r_luma_denoise", 1);
+    int lumaDenoise = declareAndLogParam<int>("r_luma_denoise", 1);
     if(declareAndLogParam("r_set_luma_denoise", false)) {
         colorCam->initialControl.setLumaDenoise(lumaDenoise);
     }
