@@ -63,6 +63,13 @@ const std::unordered_map<NodeNameEnum, std::string> NodeNameMap = {
 bool rsCompabilityMode(std::shared_ptr<rclcpp::Node> node) {
     return node->get_parameter("camera.i_rs_compat").as_bool();
 }
+
+std::string tfPrefix(std::shared_ptr<rclcpp::Node> node) {
+    if(node->get_parameter("camera.i_publish_tf_from_calibration").as_bool()) {
+        return node->get_parameter("camera.i_tf_base_frame").as_string();
+    }
+    return node->get_name();
+}
 std::string getNodeName(std::shared_ptr<rclcpp::Node> node, NodeNameEnum name) {
     if(rsCompabilityMode(node)) {
         return rsNodeNameMap.at(name);

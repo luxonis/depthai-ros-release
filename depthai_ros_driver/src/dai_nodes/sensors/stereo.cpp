@@ -80,8 +80,9 @@ void Stereo::setNames() {
 
 void Stereo::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
     bool outputDisparity = ph->getParam<bool>("i_output_disparity");
+    bool lowBandwidth = ph->getParam<bool>("i_low_bandwidth");
     std::function<void(dai::Node::Input)> stereoLinkChoice;
-    if(outputDisparity) {
+    if(outputDisparity || lowBandwidth) {
         stereoLinkChoice = [&](auto input) { stereoCamNode->disparity.link(input); };
     } else {
         stereoLinkChoice = [&](auto input) { stereoCamNode->depth.link(input); };
@@ -92,7 +93,7 @@ void Stereo::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
         encConf.bitrate = ph->getParam<int>("i_low_bandwidth_bitrate");
         encConf.frameFreq = ph->getParam<int>("i_low_bandwidth_frame_freq");
         encConf.quality = ph->getParam<int>("i_low_bandwidth_quality");
-        encConf.enabled = ph->getParam<bool>("i_low_bandwidth");
+        encConf.enabled = lowBandwidth;
 
         stereoPub = setupOutput(pipeline, stereoQName, stereoLinkChoice, ph->getParam<bool>("i_synced"), encConf);
     }
@@ -193,11 +194,12 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
         convConfig.alphaScaling = ph->getParam<double>("i_alpha_scaling");
     }
     convConfig.outputDisparity = ph->getParam<bool>("i_output_disparity");
+    convConfig.isStereo = true;
 
     utils::ImgPublisherConfig pubConf;
     pubConf.daiNodeName = getName();
     pubConf.topicName = "~/" + getName();
-	pubConf.topicSuffix = rsCompabilityMode() ? "/image_rect_raw" : "/image_raw";
+    pubConf.topicSuffix = rsCompabilityMode() ? "/image_rect_raw" : "/image_raw";
     pubConf.rectified = !convConfig.alphaScalingEnabled;
     pubConf.width = ph->getParam<int>("i_width");
     pubConf.height = ph->getParam<int>("i_height");
