@@ -1,0 +1,12 @@
+Source: ros-humble-depthai-ros-driver
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), ros-humble-ament-cmake, ros-humble-ament-cmake-auto, ros-humble-camera-calibration, ros-humble-cv-bridge, ros-humble-depthai, ros-humble-depthai-bridge, ros-humble-depthai-descriptions, ros-humble-depthai-examples, ros-humble-depthai-ros-msgs, ros-humble-diagnostic-msgs, ros-humble-diagnostic-updater, ros-humble-ffmpeg-image-transport-msgs, ros-humble-image-pipeline, ros-humble-image-transport, ros-humble-image-transport-plugins, ros-humble-pluginlib, ros-humble-rclcpp, ros-humble-rclcpp-components, ros-humble-sensor-msgs, ros-humble-std-msgs, ros-humble-std-srvs, ros-humble-vision-msgs, ros-humble-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-humble-depthai-ros-driver
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-humble-ament-cmake-auto, ros-humble-camera-calibration, ros-humble-cv-bridge, ros-humble-depthai, ros-humble-depthai-bridge, ros-humble-depthai-descriptions, ros-humble-depthai-examples, ros-humble-depthai-ros-msgs, ros-humble-diagnostic-msgs, ros-humble-diagnostic-updater, ros-humble-ffmpeg-image-transport-msgs, ros-humble-image-pipeline, ros-humble-image-transport, ros-humble-image-transport-plugins, ros-humble-pluginlib, ros-humble-rclcpp, ros-humble-rclcpp-components, ros-humble-sensor-msgs, ros-humble-std-msgs, ros-humble-std-srvs, ros-humble-vision-msgs, ros-humble-ros-workspace
+Description: Depthai ROS Monolithic node.
