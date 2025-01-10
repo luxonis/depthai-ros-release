@@ -1,10 +1,4 @@
 /oak:
-  ros__parameters:
-    camera:
-      i_nn_type: none
-    stereo:
-      i_align_depth: true
-      i_board_socket_id: 2
-      i_subpixel: true
-      i_right_rect_publish_topic: true
-      i_right_rect_synced: false
+  camera_i_nn_type: none
+  right_i_publish_topic: true
+  stereo_i_align_depth: false

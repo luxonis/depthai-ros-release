@@ -1,16 +1,18 @@
 #include "depthai_filters/utils.hpp"
 
-#include "cv_bridge/cv_bridge.hpp"
-#include "rclcpp/rclcpp.hpp"
+#include "cv_bridge/cv_bridge.h"
+#include "opencv2/core/mat.hpp"
+#include "ros/console.h"
+#include "sensor_msgs/Image.h"
 
 namespace depthai_filters {
 namespace utils {
-cv::Mat msgToMat(const rclcpp::Logger& logger, const sensor_msgs::msg::Image::ConstSharedPtr& img, const std::string& encoding) {
+cv::Mat msgToMat(const sensor_msgs::ImageConstPtr& img, const std::string& encoding) {
     cv::Mat mat;
     try {
         mat = cv_bridge::toCvCopy(img, encoding)->image;
     } catch(cv_bridge::Exception& e) {
-        RCLCPP_ERROR(logger, "%s", e.what());
+        ROS_ERROR("%s", e.what());
     }
     return mat;
 }

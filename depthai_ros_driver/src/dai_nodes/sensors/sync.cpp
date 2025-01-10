@@ -13,8 +13,7 @@
 namespace depthai_ros_driver {
 namespace dai_nodes {
 
-Sync::Sync(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline)
-    : BaseNode(daiNodeName, node, pipeline) {
+Sync::Sync(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline) : BaseNode(daiNodeName, node, pipeline) {
     syncNode = pipeline->create<dai::node::Sync>();
     paramHandler = std::make_unique<param_handlers::SyncParamHandler>(node, daiNodeName);
     paramHandler->declareParams(syncNode);
@@ -40,7 +39,7 @@ void Sync::setupQueues(std::shared_ptr<dai::Device> device) {
         auto group = std::dynamic_pointer_cast<dai::MessageGroup>(in);
         if(group) {
             bool firstMsg = true;
-            rclcpp::Time timestamp;
+            ros::Time timestamp;
             for(auto& msg : *group) {
                 // find publisher by message namespace
                 for(auto& pub : publishers) {

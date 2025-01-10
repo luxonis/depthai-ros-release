@@ -16,10 +16,10 @@ class XLinkIn;
 }  // namespace node
 }  // namespace dai
 
-namespace rclcpp {
-class Node;
+namespace ros {
+class NodeHandle;
 class Parameter;
-}  // namespace rclcpp
+}  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -33,11 +33,10 @@ class ImagePublisher;
 class ToF : public BaseNode {
    public:
     explicit ToF(const std::string& daiNodeName,
-                 std::shared_ptr<rclcpp::Node> node,
+                 ros::NodeHandle node,
                  std::shared_ptr<dai::Pipeline> pipeline,
                  dai::CameraBoardSocket boardSocket = dai::CameraBoardSocket::CAM_A);
     ~ToF();
-    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     dai::Node::Input getInput(int linkType = 0) override;
