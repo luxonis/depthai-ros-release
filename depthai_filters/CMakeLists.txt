@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10.2)
-project(depthai_filters VERSION 2.10.5 LANGUAGES CXX C)
+project(depthai_filters VERSION 2.11.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,6 +59,7 @@ add_library(${PROJECT_NAME} SHARED
     src/spatial_bb.cpp
     src/feature_tracker_overlay.cpp
     src/features_3d.cpp
+    src/thermal_temp.cpp
     src/utils.cpp
 )
 
