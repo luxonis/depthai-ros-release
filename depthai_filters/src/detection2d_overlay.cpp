@@ -1,8 +1,6 @@
 #include "depthai_filters/detection2d_overlay.hpp"
 
-#include <opencv2/core/cvdef.h>
-
-#include "cv_bridge/cv_bridge.h"
+#include "cv_bridge/cv_bridge.hpp"
 #include "depthai_filters/utils.hpp"
 
 namespace depthai_filters {
