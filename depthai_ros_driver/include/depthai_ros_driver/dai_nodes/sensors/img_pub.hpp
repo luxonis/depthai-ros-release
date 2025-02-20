@@ -5,12 +5,11 @@
 #include "depthai/pipeline/Node.hpp"
 #include "depthai/pipeline/datatype/ADatatype.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "depthai_ros_msgs/FFMPEGPacket.h"
-#include "image_transport/camera_publisher.h"
-#include "image_transport/image_transport.h"
-#include "sensor_msgs/CameraInfo.h"
-#include "sensor_msgs/CompressedImage.h"
-#include "sensor_msgs/Image.h"
+#include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
+#include "image_transport/camera_publisher.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
+#include "sensor_msgs/msg/image.hpp"
 
 namespace dai {
 class Device;
@@ -24,6 +23,11 @@ namespace ros {
 class ImageConverter;
 }
 }  // namespace dai
+
+namespace rclcpp {
+class Logger;
+class Node;
+}  // namespace rclcpp
 
 namespace camera_info_manager {
 class CameraInfoManager;
@@ -39,10 +43,10 @@ namespace sensor_helpers {
  */
 class Image {
    public:
-    sensor_msgs::Image::Ptr image;
-    sensor_msgs::CameraInfo::Ptr info;
-    depthai_ros_msgs::FFMPEGPacket::Ptr ffmpegPacket;
-    sensor_msgs::CompressedImage::Ptr compressedImg;
+    sensor_msgs::msg::Image::UniquePtr image;
+    sensor_msgs::msg::CameraInfo::UniquePtr info;
+    ffmpeg_image_transport_msgs::msg::FFMPEGPacket::UniquePtr ffmpegPacket;
+    sensor_msgs::msg::CompressedImage::UniquePtr compressedImg;
 };
 /**
  * @brief ImagePublisher class
@@ -56,11 +60,12 @@ class ImagePublisher {
      *
      * Creates XLinkOut if synced and VideoEncoder if lowBandwidth is enabled. linkFunc is stored and returned when link is called.
      */
-    ImagePublisher(ros::NodeHandle node,
+    ImagePublisher(std::shared_ptr<rclcpp::Node> node,
                    std::shared_ptr<dai::Pipeline> pipeline,
                    const std::string& qName,
                    std::function<void(dai::Node::Input in)> linkFunc,
                    bool synced = false,
+                   bool ipcEnabled = false,
                    const utils::VideoEncoderConfig& encoderConfig = {});
 
     ~ImagePublisher();
@@ -79,14 +84,14 @@ class ImagePublisher {
     std::string getQueueName();
     void publish(const std::shared_ptr<dai::ADatatype>& data);
     void publish(std::shared_ptr<Image> img);
-    void publish(std::shared_ptr<Image> img, ros::Time timestamp);
+    void publish(std::shared_ptr<Image> img, rclcpp::Time timestamp);
     std::shared_ptr<Image> convertData(const std::shared_ptr<dai::ADatatype>& data);
     std::shared_ptr<dai::node::VideoEncoder> createEncoder(std::shared_ptr<dai::Pipeline> pipeline, const utils::VideoEncoderConfig& encoderConfig);
 
    private:
-    bool detectSubscription(const ros::Publisher pub, const ros::Publisher infoPub);
-    ros::NodeHandle node;
-    image_transport::ImageTransport it;
+    bool detectSubscription(const rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr& pub,
+                            const rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr& infoPub);
+    std::shared_ptr<rclcpp::Node> node;
     utils::VideoEncoderConfig encConfig;
     utils::ImgPublisherConfig pubConfig;
     utils::ImgConverterConfig convConfig;
@@ -95,9 +100,10 @@ class ImagePublisher {
     std::shared_ptr<dai::node::XLinkOut> xout;
     std::shared_ptr<dai::node::VideoEncoder> encoder;
     std::function<void(dai::Node::Input in)> linkCB;
-    ros::Publisher infoPub;
-    ros::Publisher ffmpegPub;
-    ros::Publisher compressedImgPub;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr imgPub;
+    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr infoPub;
+    rclcpp::Publisher<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>::SharedPtr ffmpegPub;
+    rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr compressedImgPub;
     image_transport::CameraPublisher imgPubIT;
     std::shared_ptr<dai::DataOutputQueue> dataQ;
     int cbID;

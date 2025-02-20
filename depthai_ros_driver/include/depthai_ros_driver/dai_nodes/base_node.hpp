@@ -5,8 +5,8 @@
 
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai/pipeline/Node.hpp"
-#include "depthai_ros_driver/parametersConfig.h"
 #include "depthai_ros_driver/utils.hpp"
+#include "rclcpp/logger.hpp"
 
 namespace dai {
 class Pipeline;
@@ -17,10 +17,10 @@ class VideoEncoder;
 }  // namespace node
 }  // namespace dai
 
-namespace ros {
-class NodeHandle;
+namespace rclcpp {
+class Node;
 class Parameter;
-}  // namespace ros
+}  // namespace rclcpp
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
@@ -37,9 +37,9 @@ class BaseNode {
      * @param      node         The node
      * @param      pipeline     The pipeline
      */
-    BaseNode(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> /*pipeline*/);
+    BaseNode(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline);
     virtual ~BaseNode();
-    virtual void updateParams(parametersConfig& config);
+    virtual void updateParams(const std::vector<rclcpp::Parameter>& params);
     virtual void link(dai::Node::Input in, int linkType = 0);
     virtual dai::Node::Input getInput(int linkType = 0);
     virtual dai::Node::Input getInputByName(const std::string& name = "");
@@ -61,17 +61,16 @@ class BaseNode {
                                                                 bool isSynced = false,
                                                                 const utils::VideoEncoderConfig& encoderConfig = {});
     virtual void closeQueues() = 0;
-
     std::shared_ptr<dai::node::XLinkOut> setupXout(std::shared_ptr<dai::Pipeline> pipeline, const std::string& name);
 
     void setNodeName(const std::string& daiNodeName);
-    void setROSNodePointer(ros::NodeHandle node);
+    void setROSNodePointer(std::shared_ptr<rclcpp::Node> node);
     /**
      * @brief      Gets the ROS node pointer.
      *
      * @return     The ROS node pointer.
      */
-    ros::NodeHandle getROSNode();
+    std::shared_ptr<rclcpp::Node> getROSNode();
     /**
      * @brief      Gets the name of the node.
      *
@@ -90,12 +89,16 @@ class BaseNode {
      * @param[in]  frameName  The frame name
      */
     std::string getOpticalTFPrefix(const std::string& frameName = "");
+    bool ipcEnabled();
     std::string getSocketName(dai::CameraBoardSocket socket);
     bool rsCompabilityMode();
+    rclcpp::Logger getLogger();
 
    private:
-    ros::NodeHandle baseNode;
+    std::shared_ptr<rclcpp::Node> baseNode;
     std::string baseDAINodeName;
+    bool intraProcessEnabled;
+    rclcpp::Logger logger;
 };
 }  // namespace dai_nodes
 }  // namespace depthai_ros_driver

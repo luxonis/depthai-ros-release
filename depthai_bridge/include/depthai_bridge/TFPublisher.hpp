@@ -1,18 +1,22 @@
 #pragma once
 #include "depthai-shared/common/CameraFeatures.hpp"
 #include "depthai/device/CalibrationHandler.hpp"
-#include "geometry_msgs/Quaternion.h"
-#include "geometry_msgs/TransformStamped.h"
+#include "geometry_msgs/msg/quaternion.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "nlohmann/json.hpp"
-#include "robot_state_publisher/robot_state_publisher.h"
-#include "ros/node_handle.h"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/parameter_client.hpp"
 #include "tf2_ros/static_transform_broadcaster.h"
+
+namespace rclcpp {
+class Node;
+}  // namespace rclcpp
 
 namespace dai {
 namespace ros {
 class TFPublisher {
    public:
-    explicit TFPublisher(::ros::NodeHandle node,
+    explicit TFPublisher(std::shared_ptr<rclcpp::Node> node,
                          const dai::CalibrationHandler& calHandler,
                          const std::vector<dai::CameraFeatures>& camFeatures,
                          const std::string& camName,
@@ -27,13 +31,14 @@ class TFPublisher {
                          const std::string& camYaw,
                          const std::string& imuFromDescr,
                          const std::string& customURDFLocation,
-                         const std::string& customXacroArgs);
+                         const std::string& customXacroArgs,
+                         const bool rsCompatibilityMode);
     /**
      * @brief Obtain URDF description by running Xacro with provided arguments.
      */
     std::string getURDF();
-    geometry_msgs::Vector3 transFromExtr(std::vector<float> translation);
-    geometry_msgs::Quaternion quatFromRotM(std::vector<std::vector<float>> extrMat);
+    geometry_msgs::msg::Vector3 transFromExtr(std::vector<float> translation);
+    geometry_msgs::msg::Quaternion quatFromRotM(std::vector<std::vector<float>> extrMat);
 
    private:
     /**
@@ -47,26 +52,26 @@ class TFPublisher {
     /**
      * @brief Get URDF description and set it as a parameter for robot_state_publisher
      */
-    void publishDescription(::ros::NodeHandle node);
+    void publishDescription();
     /**
      * @brief Publish camera transforms ("standard" and optical) based on calibration data.
      * Frame names are based on socket names and use following convention: [base_frame]_[socket_name]_camera_frame and
      * [base_frame]_[socket_name]_camera_optical_frame
      */
-    void publishCamTransforms(nlohmann::json camData, ::ros::NodeHandle node, const dai::CalibrationHandler& calHandler);
+    void publishCamTransforms(nlohmann::json camData, std::shared_ptr<rclcpp::Node> node, const dai::CalibrationHandler& calHandler);
     /**
      * @brief Publish IMU transform based on calibration data.
      * Frame name is based on IMU name and uses following convention: [base_frame]_imu_frame.
      * If IMU extrinsics are not set, warning is printed out and imu frame is published with zero translation and rotation.
      */
-    void publishImuTransform(nlohmann::json json, ::ros::NodeHandle node, const dai::CalibrationHandler& calHandler);
+    void publishImuTransform(nlohmann::json json, std::shared_ptr<rclcpp::Node> node, const dai::CalibrationHandler& calHandler);
     /**
      * @brief Check if model STL file is available in depthai_descriptions package.
      */
     bool modelNameAvailable();
     std::string getCamSocketName(int socketNum);
+    std::unique_ptr<rclcpp::AsyncParametersClient> paramClient;
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> tfPub;
-    std::shared_ptr<robot_state_publisher::RobotStatePublisher> rsp;
     std::string camName;
     std::string camModel;
     std::string baseFrame;
@@ -81,6 +86,8 @@ class TFPublisher {
     std::string customURDFLocation;
     std::string customXacroArgs;
     std::vector<dai::CameraFeatures> camFeatures;
+    bool rsCompatibilityMode;
+    rclcpp::Logger logger;
     const std::unordered_map<dai::CameraBoardSocket, std::string> socketNameMap = {
         {dai::CameraBoardSocket::AUTO, "rgb"},
         {dai::CameraBoardSocket::CAM_A, "rgb"},
@@ -88,6 +95,12 @@ class TFPublisher {
         {dai::CameraBoardSocket::CAM_C, "right"},
         {dai::CameraBoardSocket::CAM_D, "left_back"},
         {dai::CameraBoardSocket::CAM_E, "right_back"},
+    };
+    const std::unordered_map<dai::CameraBoardSocket, std::string> rsSocketNameMap = {
+        {dai::CameraBoardSocket::AUTO, "color"},
+        {dai::CameraBoardSocket::CAM_A, "color"},
+        {dai::CameraBoardSocket::CAM_B, "infra2"},
+        {dai::CameraBoardSocket::CAM_C, "infra1"},
     };
 };
 }  // namespace ros

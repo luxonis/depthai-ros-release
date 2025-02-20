@@ -2,11 +2,12 @@
 
 #include "depthai/pipeline/node/FeatureTracker.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-FeatureTrackerParamHandler::FeatureTrackerParamHandler(ros::NodeHandle node, const std::string& name) : BaseParamHandler(node, name) {}
+FeatureTrackerParamHandler::FeatureTrackerParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name) : BaseParamHandler(node, name) {}
 FeatureTrackerParamHandler::~FeatureTrackerParamHandler() = default;
 void FeatureTrackerParamHandler::declareParams(std::shared_ptr<dai::node::FeatureTracker> featureTracker) {
     declareAndLogParam<bool>("i_get_base_device_timestamp", false);
@@ -21,7 +22,7 @@ void FeatureTrackerParamHandler::declareParams(std::shared_ptr<dai::node::Featur
     featureTracker->initialConfig.set(config);
 }
 
-dai::CameraControl FeatureTrackerParamHandler::setRuntimeParams(parametersConfig& /*config*/) {
+dai::CameraControl FeatureTrackerParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& /*params*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }

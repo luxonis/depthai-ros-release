@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <memory>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 
@@ -11,29 +12,31 @@
 #include "depthai/device/CalibrationHandler.hpp"
 #include "depthai/pipeline/datatype/EncodedFrame.hpp"
 #include "depthai/pipeline/datatype/ImgFrame.hpp"
-#include "depthai_ros_msgs/FFMPEGPacket.h"
-#include "ros/time.h"
-#include "sensor_msgs/CameraInfo.h"
-#include "sensor_msgs/CompressedImage.h"
-#include "sensor_msgs/Image.h"
-#include "std_msgs/Header.h"
+#include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
+#include "rclcpp/time.hpp"
+#include "sensor_msgs/msg/camera_info.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "std_msgs/msg/header.hpp"
 
 namespace dai {
 
 namespace ros {
 
-namespace StdMsgs = std_msgs;
-namespace ImageMsgs = sensor_msgs;
-namespace DepthAiRosMsgs = depthai_ros_msgs;
-using ImagePtr = ImageMsgs::ImagePtr;
+namespace StdMsgs = std_msgs::msg;
+namespace ImageMsgs = sensor_msgs::msg;
+namespace FFMPEGMsgs = ffmpeg_image_transport_msgs::msg;
+using ImagePtr = ImageMsgs::Image::SharedPtr;
+using FFMPEGImagePtr = FFMPEGMsgs::FFMPEGPacket::SharedPtr;
+using CompImagePtr = ImageMsgs::CompressedImage::SharedPtr;
+
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration>;
-using FFMPegImagePtr = DepthAiRosMsgs::FFMPEGPacketPtr;
-using CompImagePtr = ImageMsgs::CompressedImagePtr;
 
 class ImageConverter {
    public:
     // ImageConverter() = default;
     ImageConverter(const std::string frameName, bool interleaved, bool getBaseDeviceTimestamp = false);
+    ~ImageConverter();
     ImageConverter(bool interleaved, bool getBaseDeviceTimestamp = false);
 
     /**
@@ -89,11 +92,11 @@ class ImageConverter {
      */
     void setFFMPEGEncoding(const std::string& encoding);
 
-    ImageMsgs::Image toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> inData, const sensor_msgs::CameraInfo& info = sensor_msgs::CameraInfo());
     void toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<ImageMsgs::Image>& outImageMsgs);
+    ImageMsgs::Image toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> inData, const sensor_msgs::msg::CameraInfo& info = sensor_msgs::msg::CameraInfo());
     ImagePtr toRosMsgPtr(std::shared_ptr<dai::ImgFrame> inData);
 
-    DepthAiRosMsgs::FFMPEGPacket toRosFFMPEGPacket(std::shared_ptr<dai::EncodedFrame> inData);
+    FFMPEGMsgs::FFMPEGPacket toRosFFMPEGPacket(std::shared_ptr<dai::EncodedFrame> inData);
 
     ImageMsgs::CompressedImage toRosCompressedMsg(std::shared_ptr<dai::ImgFrame> inData);
 
@@ -112,17 +115,18 @@ class ImageConverter {
                                                   Point2f bottomRightPixelId = Point2f());
 
    private:
+    void planarToInterleaved(const std::vector<uint8_t>& srcData, std::vector<uint8_t>& destData, int w, int h, int numPlanes, int bpp);
+    void interleavedToPlanar(const std::vector<uint8_t>& srcData, std::vector<uint8_t>& destData, int w, int h, int numPlanes, int bpp);
     static std::unordered_map<dai::RawImgFrame::Type, std::string> encodingEnumMap;
     static std::unordered_map<dai::RawImgFrame::Type, std::string> planarEncodingEnumMap;
 
+    // dai::RawImgFrame::Type _srcType;
     bool daiInterleaved;
     // bool c
     const std::string frameName = "";
-    void planarToInterleaved(const std::vector<uint8_t>& srcData, std::vector<uint8_t>& destData, int w, int h, int numPlanes, int bpp);
-    void interleavedToPlanar(const std::vector<uint8_t>& srcData, std::vector<uint8_t>& destData, int w, int h, int numPlanes, int bpp);
     std::chrono::time_point<std::chrono::steady_clock> steadyBaseTime;
 
-    ::ros::Time rosBaseTime;
+    rclcpp::Time rosBaseTime;
     bool getBaseDeviceTimestamp;
     // For handling ROS time shifts and debugging
     int64_t totalNsChange{0};
@@ -132,10 +136,10 @@ class ImageConverter {
     bool fromBitstream = false;
     bool dispToDepth = false;
     bool addExpOffset = false;
+    bool alphaScalingEnabled = false;
     dai::CameraExposureOffset expOffset;
     bool reversedStereoSocketOrder = false;
     double baseline;
-    bool alphaScalingEnabled = false;
     double alphaScalingFactor = 0.0;
     int camHeight = -1;
     int camWidth = -1;
@@ -143,7 +147,5 @@ class ImageConverter {
 };
 
 }  // namespace ros
-
-namespace rosBridge = ros;
 
 }  // namespace dai
