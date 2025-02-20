@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(depthai_ros_driver VERSION 2.10.5)
+project(depthai_ros_driver VERSION 2.11.0)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_BUILD_SHARED_LIBS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -91,6 +91,7 @@ add_library(
   src/dai_nodes/sensors/feature_tracker.cpp
   src/dai_nodes/sensors/sensor_wrapper.cpp
   src/dai_nodes/sensors/stereo.cpp
+  src/dai_nodes/sensors/thermal.cpp
   src/dai_nodes/sensors/tof.cpp
   src/dai_nodes/sensors/sync.cpp
 )
