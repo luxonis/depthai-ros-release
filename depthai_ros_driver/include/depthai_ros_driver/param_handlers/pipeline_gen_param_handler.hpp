@@ -10,20 +10,20 @@ namespace dai {
 enum class UsbSpeed;
 }
 
-namespace ros {
-class NodeHandle;
+namespace rclcpp {
+class Node;
 class Parameter;
-}  // namespace ros
+}  // namespace rclcpp
 
 namespace depthai_ros_driver {
 namespace param_handlers {
 
 class PipelineGenParamHandler : public BaseParamHandler {
    public:
-    explicit PipelineGenParamHandler(ros::NodeHandle node, const std::string& name);
+    explicit PipelineGenParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name);
     ~PipelineGenParamHandler();
     void declareParams();
-    dai::CameraControl setRuntimeParams(parametersConfig& config) override;
+    dai::CameraControl setRuntimeParams(const std::vector<rclcpp::Parameter>& params) override;
 };
 }  // namespace param_handlers
 }  // namespace depthai_ros_driver

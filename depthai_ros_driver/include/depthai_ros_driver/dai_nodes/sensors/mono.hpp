@@ -1,6 +1,7 @@
 #pragma once
 
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
+
 namespace dai {
 class Pipeline;
 class Device;
@@ -12,9 +13,10 @@ class XLinkIn;
 }  // namespace node
 }  // namespace dai
 
-namespace ros {
-class NodeHandle;
-}  // namespace ros
+namespace rclcpp {
+class Node;
+class Parameter;
+}  // namespace rclcpp
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -29,13 +31,13 @@ class ImagePublisher;
 class Mono : public BaseNode {
    public:
     explicit Mono(const std::string& daiNodeName,
-                  ros::NodeHandle node,
+                  std::shared_ptr<rclcpp::Node> node,
                   std::shared_ptr<dai::Pipeline> pipeline,
                   dai::CameraBoardSocket socket,
                   sensor_helpers::ImageSensor sensor,
                   bool publish);
     ~Mono();
-    void updateParams(parametersConfig& config) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     void setNames() override;

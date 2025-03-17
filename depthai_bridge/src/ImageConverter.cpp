@@ -1,9 +1,12 @@
 
 #include "depthai_bridge/ImageConverter.hpp"
 
+#include "depthai-shared/datatype/RawEncodedFrame.hpp"
+#include "depthai/pipeline/datatype/EncodedFrame.hpp"
 #include "depthai_bridge/depthaiUtility.hpp"
 #include "opencv2/calib3d.hpp"
 #include "opencv2/imgcodecs.hpp"
+#include "sensor_msgs/image_encodings.hpp"
 
 namespace dai {
 
@@ -28,13 +31,15 @@ std::unordered_map<dai::RawImgFrame::Type, std::string> ImageConverter::planarEn
 
 ImageConverter::ImageConverter(bool interleaved, bool getBaseDeviceTimestamp)
     : daiInterleaved(interleaved), steadyBaseTime(std::chrono::steady_clock::now()), getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
-    rosBaseTime = ::ros::Time::now();
+    rosBaseTime = rclcpp::Clock().now();
 }
 
 ImageConverter::ImageConverter(const std::string frameName, bool interleaved, bool getBaseDeviceTimestamp)
     : frameName(frameName), daiInterleaved(interleaved), steadyBaseTime(std::chrono::steady_clock::now()), getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
-    rosBaseTime = ::ros::Time::now();
+    rosBaseTime = rclcpp::Clock().now();
 }
+
+ImageConverter::~ImageConverter() = default;
 
 void ImageConverter::updateRosBaseTime() {
     updateBaseTime(steadyBaseTime, rosBaseTime, totalNsChange);
@@ -50,25 +55,25 @@ void ImageConverter::convertDispToDepth(double baseline) {
     this->baseline = baseline;
 }
 
-void ImageConverter::reverseStereoSocketOrder() {
-    reversedStereoSocketOrder = true;
-}
-
 void ImageConverter::addExposureOffset(dai::CameraExposureOffset& offset) {
     expOffset = offset;
     addExpOffset = true;
 }
 
+void ImageConverter::reverseStereoSocketOrder() {
+    reversedStereoSocketOrder = true;
+}
+
 void ImageConverter::setAlphaScaling(double alphaScalingFactor) {
     alphaScalingEnabled = true;
-    alphaScalingFactor = alphaScalingFactor;
+    this->alphaScalingFactor = alphaScalingFactor;
 }
 
 void ImageConverter::setFFMPEGEncoding(const std::string& encoding) {
     ffmpegEncoding = encoding;
 }
 
-ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> inData, const sensor_msgs::CameraInfo& info) {
+ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> inData, const sensor_msgs::msg::CameraInfo& info) {
     if(updateRosBaseTimeOnToRosMsg) {
         updateRosBaseTime();
     }
@@ -128,7 +133,7 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
 
         // converting disparity
         if(dispToDepth) {
-            auto factor = std::abs(baseline * 10) * info.P[0];
+            auto factor = std::abs(baseline * 10) * info.p[0];
             cv::Mat depthOut = cv::Mat(cv::Size(output.cols, output.rows), CV_16UC1);
             depthOut.forEach<uint16_t>([&output, &factor](uint16_t& pixel, const int* position) -> void {
                 auto disp = output.at<uint8_t>(position);
@@ -142,7 +147,9 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
         cv_bridge::CvImage(header, encoding, output).toImageMsg(outImageMsg);
         return outImageMsg;
     }
+
     if(planarEncodingEnumMap.find(inData->getType()) != planarEncodingEnumMap.end()) {
+        // cv::Mat inImg = inData->getCvFrame();
         cv::Mat mat, output;
         cv::Size size = {0, 0};
         int type = 0;
@@ -159,7 +166,7 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
                 break;
 
             default:
-                throw std::runtime_error("Invalid dataType inputs..");
+                std::runtime_error("Invalid dataType inputs..");
                 break;
         }
         mat = cv::Mat(size, type, inData->getData().data());
@@ -199,6 +206,7 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
 
     } else if(encodingEnumMap.find(inData->getType()) != encodingEnumMap.end()) {
         // copying the data to ros msg
+        outImageMsg.header = header;
         if(inData->getType() == dai::RawImgFrame::Type::GRAYF16) {
             // we need to convert from FP16 to FP32
             cv::Mat mat = cv::Mat(inData->getHeight(), inData->getWidth(), CV_16F, inData->getData().data());
@@ -206,13 +214,12 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
             mat.convertTo(frameFp32, CV_32F);
             cv_bridge::CvImage(header, sensor_msgs::image_encodings::TYPE_32FC1, frameFp32).toImageMsg(outImageMsg);
         } else {
-            outImageMsg.header = header;
             std::string temp_str(encodingEnumMap[inData->getType()]);
             outImageMsg.encoding = temp_str;
             outImageMsg.height = inData->getHeight();
             outImageMsg.width = inData->getWidth();
             outImageMsg.step = inData->getData().size() / inData->getHeight();
-            if(outImageMsg.encoding == "16UC1")
+            if(outImageMsg.encoding == "16UC1" || outImageMsg.encoding == "32FC1")
                 outImageMsg.is_bigendian = false;
             else
                 outImageMsg.is_bigendian = true;
@@ -224,7 +231,6 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
     }
     return outImageMsg;
 }
-
 std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> getOffsetTimestamp(
     std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration> ts,
     CameraExposureOffset offset,
@@ -266,7 +272,7 @@ ImageMsgs::CompressedImage ImageConverter::toRosCompressedMsg(std::shared_ptr<da
     return outImageMsg;
 }
 
-DepthAiRosMsgs::FFMPEGPacket ImageConverter::toRosFFMPEGPacket(std::shared_ptr<dai::EncodedFrame> inData) {
+FFMPEGMsgs::FFMPEGPacket ImageConverter::toRosFFMPEGPacket(std::shared_ptr<dai::EncodedFrame> inData) {
     if(updateRosBaseTimeOnToRosMsg) {
         updateRosBaseTime();
     }
@@ -281,7 +287,7 @@ DepthAiRosMsgs::FFMPEGPacket ImageConverter::toRosFFMPEGPacket(std::shared_ptr<d
     else
         tstamp = inData->getTimestamp();
 
-    DepthAiRosMsgs::FFMPEGPacket outFrameMsg;
+    FFMPEGMsgs::FFMPEGPacket outFrameMsg;
     StdMsgs::Header header;
     header.frame_id = frameName;
     header.stamp = getFrameTime(rosBaseTime, steadyBaseTime, tstamp);
@@ -291,14 +297,13 @@ DepthAiRosMsgs::FFMPEGPacket ImageConverter::toRosFFMPEGPacket(std::shared_ptr<d
     outFrameMsg.width = camWidth;
     outFrameMsg.height = camHeight;
     outFrameMsg.encoding = ffmpegEncoding;
-    outFrameMsg.pts = header.stamp.sec * 1000000000 + header.stamp.nsec;  // in nanoseconds
+    outFrameMsg.pts = header.stamp.sec * 1000000000 + header.stamp.nanosec;  // in nanoseconds
     outFrameMsg.flags = (int)(ft == RawEncodedFrame::FrameType::I);
     outFrameMsg.is_bigendian = false;
     outFrameMsg.data = inData->getData();
 
     return outFrameMsg;
 }
-
 void ImageConverter::toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<ImageMsgs::Image>& outImageMsgs) {
     auto outImageMsg = toRosMsgRawPtr(inData);
     outImageMsgs.push_back(outImageMsg);
@@ -307,11 +312,11 @@ void ImageConverter::toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<
 
 ImagePtr ImageConverter::toRosMsgPtr(std::shared_ptr<dai::ImgFrame> inData) {
     auto msg = toRosMsgRawPtr(inData);
-    ImagePtr ptr = boost::make_shared<ImageMsgs::Image>(msg);
+
+    ImagePtr ptr = std::make_shared<ImageMsgs::Image>(msg);
     return ptr;
 }
 
-// TODO(sachin): Not tested
 void ImageConverter::toDaiMsg(const ImageMsgs::Image& inMsg, dai::ImgFrame& outData) {
     std::unordered_map<dai::RawImgFrame::Type, std::string>::iterator revEncodingIter;
     if(daiInterleaved) {
@@ -340,6 +345,19 @@ void ImageConverter::toDaiMsg(const ImageMsgs::Image& inMsg, dai::ImgFrame& outD
         outData.setData(opData);
     }
 
+    /** FIXME(sachin) : is this time convertion correct ???
+     * Print the original time and ros time in seconds in
+     * ImageFrame::toRosMsg(std::shared_ptr<dai::ImgFrame> inData,
+     *ImageMsgs::Image& opMsg) to cross verify..
+     **/
+    /* #ifdef IS_ROS2
+          TimePoint ts(std::chrono::seconds((int)inMsg.header.stamp.seconds ()) + std::chrono::nanoseconds(inMsg.header.stamp.nanoseconds()));
+      #else
+          TimePoint ts(std::chrono::seconds((int)inMsg.header.stamp.toSec()) + std::chrono::nanoseconds(inMsg.header.stamp.toNSec()));
+      #endif
+
+      outData.setTimestamp(ts);
+      outData.setSequenceNum(inMsg.header.seq); */
     outData.setWidth(inMsg.width);
     outData.setHeight(inMsg.height);
     outData.setType(revEncodingIter->first);
@@ -380,6 +398,14 @@ void ImageConverter::interleavedToPlanar(const std::vector<uint8_t>& srcData, st
             destData[i + w * h * 1] = g;
             destData[i + w * h * 2] = r;
         }
+        // for(int i = 0; i < w*h; i++) {
+        //     uint8_t g = srcData.data()[i + w*h * 1];
+        //     destData[i*3+1] = g;
+        // }
+        // for(int i = 0; i < w*h; i++) {
+        //     uint8_t r = srcData.data()[i + w*h * 2];
+        //     destData[i*3+2] = r;
+        // }
     } else {
         throw std::runtime_error(
             "If you encounter the scenario where you need this "
@@ -399,7 +425,6 @@ cv::Mat ImageConverter::rosMsgtoCvMat(ImageMsgs::Image& inMsg) {
         return rgb;
     }
 }
-
 ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
     dai::CalibrationHandler calibHandler, dai::CameraBoardSocket cameraId, int width, int height, Point2f topLeftPixelId, Point2f bottomRightPixelId) {
     std::vector<std::vector<float>> camIntrinsics, rectifiedRotation;
@@ -423,7 +448,6 @@ ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
 
     camWidth = cameraData.width;
     camHeight = cameraData.height;
-
     camIntrinsics = calibHandler.getCameraIntrinsics(cameraId, cameraData.width, cameraData.height, topLeftPixelId, bottomRightPixelId);
 
     flatIntrinsics.resize(9);
@@ -431,10 +455,10 @@ ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
         std::copy(camIntrinsics[i].begin(), camIntrinsics[i].end(), flatIntrinsics.begin() + 3 * i);
     }
 
-    auto& intrinsics = cameraData.K;
-    auto& distortions = cameraData.D;
-    auto& projection = cameraData.P;
-    auto& rotation = cameraData.R;
+    auto& intrinsics = cameraData.k;
+    auto& distortions = cameraData.d;
+    auto& projection = cameraData.p;
+    auto& rotation = cameraData.r;
     // Set rotation to reasonable default even for non-stereo pairs
     rotation[0] = rotation[4] = rotation[8] = 1;
     for(size_t i = 0; i < 3; i++) {
@@ -511,6 +535,5 @@ ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(
 
     return cameraData;
 }
-
 }  // namespace ros
 }  // namespace dai

@@ -1,12 +1,14 @@
 #include "depthai_ros_driver/param_handlers/imu_param_handler.hpp"
 
 #include "depthai/pipeline/node/IMU.hpp"
+#include "depthai_bridge/ImuConverter.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-ImuParamHandler::ImuParamHandler(ros::NodeHandle node, const std::string& name) : BaseParamHandler(node, name) {
+ImuParamHandler::ImuParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name) : BaseParamHandler(node, name) {
     syncMethodMap = {
         {"COPY", dai::ros::ImuSyncMethod::COPY},
         {"LINEAR_INTERPOLATE_GYRO", dai::ros::ImuSyncMethod::LINEAR_INTERPOLATE_GYRO},
@@ -65,7 +67,7 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
 
             imu->enableIMUSensor(magnetometerMode, magnetometerFreq);
         } else {
-            ROS_ERROR("Magnetometer enabled but not available with current sensor");
+            RCLCPP_ERROR(getROSNode()->get_logger(), "Magnetometer enabled but not available with current sensor");
             declareAndLogParam<bool>("i_enable_mag", false, true);
         }
     }
@@ -80,13 +82,14 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
 
             imu->enableIMUSensor(rotationMode, rotationFreq);
         } else {
-            ROS_ERROR("Rotation enabled but not available with current sensor");
+            RCLCPP_ERROR(getROSNode()->get_logger(), "Rotation enabled but not available with current sensor");
             declareAndLogParam<bool>("i_enable_rotation", false, true);
         }
         imu->setBatchReportThreshold(declareAndLogParam<int>("i_batch_report_threshold", 5));
         imu->setMaxBatchReports(declareAndLogParam<int>("i_max_batch_reports", 10));
     }
 }
+
 dai::ros::ImuSyncMethod ImuParamHandler::getSyncMethod() {
     return utils::getValFromMap(utils::getUpperCaseStr(getParam<std::string>("i_sync_method")), syncMethodMap);
 }
@@ -95,7 +98,7 @@ imu::ImuMsgType ImuParamHandler::getMsgType() {
     return utils::getValFromMap(utils::getUpperCaseStr(getParam<std::string>("i_message_type")), messagetTypeMap);
 }
 
-dai::CameraControl ImuParamHandler::setRuntimeParams(parametersConfig& /*config*/) {
+dai::CameraControl ImuParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& /*params*/) {
     dai::CameraControl ctrl;
     return ctrl;
 }

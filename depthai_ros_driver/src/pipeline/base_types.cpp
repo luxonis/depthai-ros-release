@@ -13,11 +13,12 @@
 #include "depthai_ros_driver/dai_nodes/sensors/tof.hpp"
 #include "depthai_ros_driver/pipeline/base_pipeline.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace pipeline_gen {
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(ros::NodeHandle node,
+
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                       std::shared_ptr<dai::Device> device,
                                                                       std::shared_ptr<dai::Pipeline> pipeline,
                                                                       const std::string& nnType) {
@@ -36,7 +37,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(ros::NodeH
             break;
         }
         case NNType::Spatial: {
-            ROS_WARN("Spatial NN selected, but configuration is RGB. Please change camera.i_nn_type parameter to RGB.");
+            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGB. Please change camera.i_nn_type parameter to RGB.");
         }
         default:
             break;
@@ -44,7 +45,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(ros::NodeH
     daiNodes.push_back(std::move(rgb));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBD::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBD::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                        std::shared_ptr<dai::Device> device,
                                                                        std::shared_ptr<dai::Pipeline> pipeline,
                                                                        const std::string& nnType) {
@@ -75,7 +76,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBD::createPipeline(ros::Node
     daiNodes.push_back(std::move(stereo));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                             std::shared_ptr<dai::Device> device,
                                                                             std::shared_ptr<dai::Pipeline> pipeline,
                                                                             const std::string& nnType) {
@@ -96,7 +97,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(ros:
             break;
         }
         case NNType::Spatial: {
-            ROS_WARN("Spatial NN selected, but configuration is RGBStereo. Please change camera.i_nn_type parameter to RGB.");
+            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGBStereo. Please change camera.i_nn_type parameter to RGB.");
         }
         default:
             break;
@@ -106,7 +107,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(ros:
     daiNodes.push_back(std::move(right));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> Stereo::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> Stereo::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                          std::shared_ptr<dai::Device> device,
                                                                          std::shared_ptr<dai::Pipeline> pipeline,
                                                                          const std::string& /*nnType*/) {
@@ -118,7 +119,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> Stereo::createPipeline(ros::No
     daiNodes.push_back(std::move(right));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> Depth::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> Depth::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                         std::shared_ptr<dai::Device> device,
                                                                         std::shared_ptr<dai::Pipeline> pipeline,
                                                                         const std::string& /*nnType*/) {
@@ -128,7 +129,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> Depth::createPipeline(ros::Nod
     daiNodes.push_back(std::move(stereo));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> CamArray::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> CamArray::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                            std::shared_ptr<dai::Device> device,
                                                                            std::shared_ptr<dai::Pipeline> pipeline,
                                                                            const std::string& /*nnType*/) {
@@ -143,7 +144,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> CamArray::createPipeline(ros::
     return daiNodes;
 }
 
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> DepthToF::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> DepthToF::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                            std::shared_ptr<dai::Device> device,
                                                                            std::shared_ptr<dai::Pipeline> pipeline,
                                                                            const std::string& /*nnType*/) {
@@ -154,7 +155,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> DepthToF::createPipeline(ros::
     daiNodes.push_back(std::move(stereo));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> StereoToF::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> StereoToF::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                             std::shared_ptr<dai::Device> device,
                                                                             std::shared_ptr<dai::Pipeline> pipeline,
                                                                             const std::string& /*nnType*/) {
@@ -169,7 +170,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> StereoToF::createPipeline(ros:
     return daiNodes;
 }
 
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> ToF::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> ToF::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                       std::shared_ptr<dai::Device> /*device*/,
                                                                       std::shared_ptr<dai::Pipeline> pipeline,
                                                                       const std::string& /*nnType*/) {
@@ -178,7 +179,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> ToF::createPipeline(ros::NodeH
     daiNodes.push_back(std::move(tof));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBToF::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBToF::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                          std::shared_ptr<dai::Device> device,
                                                                          std::shared_ptr<dai::Pipeline> pipeline,
                                                                          const std::string& nnType) {
@@ -198,7 +199,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBToF::createPipeline(ros::No
             break;
         }
         case NNType::Spatial: {
-            ROS_WARN("Spatial NN selected, but configuration is RGBToF. Please change camera.i_nn_type parameter to RGB.");
+            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGBToF. Please change camera.i_nn_type parameter to RGB.");
         }
         default:
             break;
@@ -207,7 +208,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBToF::createPipeline(ros::No
     daiNodes.push_back(std::move(tof));
     return daiNodes;
 }
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> Thermal::createPipeline(ros::NodeHandle node,
+std::vector<std::unique_ptr<dai_nodes::BaseNode>> Thermal::createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                           std::shared_ptr<dai::Device> device,
                                                                           std::shared_ptr<dai::Pipeline> pipeline,
                                                                           const std::string& nnType) {
@@ -225,7 +226,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> Thermal::createPipeline(ros::N
             break;
         }
         case NNType::Spatial: {
-            ROS_WARN("Spatial NN selected, but configuration is RGB. Please change camera.i_nn_type parameter to RGB.");
+            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGB. Please change camera.i_nn_type parameter to RGB.");
         }
         default:
             break;

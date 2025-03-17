@@ -1,5 +1,7 @@
 
-/oak:
-  camera_i_enable_ir: false
-  camera_i_nn_type: none
-  camera_i_pipeline_type: Thermal
+/**:
+  ros__parameters:
+    camera:
+      i_nn_type: none
+      i_enable_ir: false
+      i_pipeline_type: Thermal

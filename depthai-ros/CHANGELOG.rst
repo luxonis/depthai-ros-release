@@ -66,7 +66,7 @@ Changelog for package depthai-ros
 * Syncing & RS updates Humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/586
 
 2.9.0 (2024-01-24)
--------------------
+------------------
 * New documentation homepage
 * Updated support for LR and SR cameras
 * Added parameter to toggle restart on logging error
@@ -80,7 +80,6 @@ Changelog for package depthai-ros
 * Added CameraInfo update based on alpha scaling
 * Logger restart bugfix
 * URDF parameters fix
-
 
 2.8.1 (2023-09-12)
 ------------------
@@ -167,7 +166,7 @@ Changelog for package depthai-ros
 * Contributors: Sachin
 
 2.5.2 (2022-06-01)
--------------------
+------------------
 * Upgraded examples
 * Fixed bugs for Noetic
 

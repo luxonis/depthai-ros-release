@@ -6,13 +6,16 @@
 #include "depthai_ros_driver/dai_nodes/nn/detection.hpp"
 #include "depthai_ros_driver/dai_nodes/nn/segmentation.hpp"
 #include "depthai_ros_driver/param_handlers/nn_param_handler.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
-NNWrapper::NNWrapper(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline, const dai::CameraBoardSocket& socket)
+NNWrapper::NNWrapper(const std::string& daiNodeName,
+                     std::shared_ptr<rclcpp::Node> node,
+                     std::shared_ptr<dai::Pipeline> pipeline,
+                     const dai::CameraBoardSocket& socket)
     : BaseNode(daiNodeName, node, pipeline) {
-    ROS_DEBUG("Creating node %s base", daiNodeName.c_str());
+    RCLCPP_DEBUG(node->get_logger(), "Creating node %s base", daiNodeName.c_str());
     ph = std::make_unique<param_handlers::NNParamHandler>(node, daiNodeName, socket);
     auto family = ph->getNNFamily();
     switch(family) {
@@ -30,9 +33,10 @@ NNWrapper::NNWrapper(const std::string& daiNodeName, ros::NodeHandle node, std::
         }
     }
 
-    ROS_DEBUG("Base node %s created", daiNodeName.c_str());
+    RCLCPP_DEBUG(node->get_logger(), "Base node %s created", daiNodeName.c_str());
 }
 NNWrapper::~NNWrapper() = default;
+
 void NNWrapper::setNames() {}
 
 void NNWrapper::setXinXout(std::shared_ptr<dai::Pipeline> /*pipeline*/) {}
@@ -52,9 +56,9 @@ dai::Node::Input NNWrapper::getInput(int linkType) {
     return nnNode->getInput(linkType);
 }
 
-void NNWrapper::updateParams(parametersConfig& config) {
-    ph->setRuntimeParams(config);
-    nnNode->updateParams(config);
+void NNWrapper::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    ph->setRuntimeParams(params);
+    nnNode->updateParams(params);
 }
 
 }  // namespace dai_nodes

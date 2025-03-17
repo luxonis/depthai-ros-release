@@ -1,14 +1,13 @@
-
-
 #include <cstdio>
 #include <functional>
 #include <iostream>
 #include <tuple>
 
-#include "camera_info_manager/camera_info_manager.h"
-#include "ros/node_handle.h"
-#include "sensor_msgs/Image.h"
-#include "stereo_msgs/DisparityImage.h"
+#include "camera_info_manager/camera_info_manager.hpp"
+#include "rclcpp/executors.hpp"
+#include "rclcpp/node.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "stereo_msgs/msg/disparity_image.hpp"
 
 // Inludes common necessary includes for development using depthai library
 #include "depthai/device/DataQueue.hpp"
@@ -60,7 +59,7 @@ std::tuple<dai::Pipeline, int, int> createPipeline(
         width = 640;
         height = 480;
     } else {
-        ROS_ERROR("Invalid parameter. -> monoResolution: %s", resolution.c_str());
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid parameter. -> monoResolution: %s", resolution.c_str());
         throw std::runtime_error("Invalid mono camera resolution.");
     }
 
@@ -82,8 +81,8 @@ std::tuple<dai::Pipeline, int, int> createPipeline(
     monoLeft->out.link(stereo->left);
     monoRight->out.link(stereo->right);
 
-    stereo->syncedLeft.link(xoutLeft->input);
-    stereo->syncedRight.link(xoutRight->input);
+    stereo->rectifiedLeft.link(xoutLeft->input);
+    stereo->rectifiedRight.link(xoutRight->input);
 
     if(withDepth) {
         stereo->depth.link(xoutDepth->input);
@@ -95,33 +94,32 @@ std::tuple<dai::Pipeline, int, int> createPipeline(
 }
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "stereo_node");
-    ros::NodeHandle pnh("~");
+    rclcpp::init(argc, argv);
+    auto node = rclcpp::Node::make_shared("stereo_node");
 
-    std::string tfPrefix, mode;
-    std::string cameraParamUri;
-    int badParams = 0;
+    std::string tfPrefix, mode, monoResolution;
     bool lrcheck, extended, subpixel, enableDepth;
-    int confidence = 200;
+    int confidence, LRchecktresh;
     int monoWidth, monoHeight;
-    int LRchecktresh = 5;
-    std::string monoResolution = "720p";
     dai::Pipeline pipeline;
 
-    badParams += !pnh.getParam("camera_param_uri", cameraParamUri);
-    badParams += !pnh.getParam("tf_prefix", tfPrefix);
-    badParams += !pnh.getParam("mode", mode);
-    badParams += !pnh.getParam("lrcheck", lrcheck);
-    badParams += !pnh.getParam("extended", extended);
-    badParams += !pnh.getParam("subpixel", subpixel);
-    badParams += !pnh.getParam("confidence", confidence);
-    badParams += !pnh.getParam("LRchecktresh", LRchecktresh);
-    badParams += !pnh.getParam("monoResolution", monoResolution);
+    node->declare_parameter("tf_prefix", "oak");
+    node->declare_parameter("mode", "depth");
+    node->declare_parameter("lrcheck", true);
+    node->declare_parameter("extended", false);
+    node->declare_parameter("subpixel", true);
+    node->declare_parameter("confidence", 200);
+    node->declare_parameter("LRchecktresh", 5);
+    node->declare_parameter("monoResolution", "720p");
 
-    if(badParams > 0) {
-        std::cout << " Bad parameters -> " << badParams << std::endl;
-        throw std::runtime_error("Couldn't find %d of the parameters");
-    }
+    node->get_parameter("tf_prefix", tfPrefix);
+    node->get_parameter("mode", mode);
+    node->get_parameter("lrcheck", lrcheck);
+    node->get_parameter("extended", extended);
+    node->get_parameter("subpixel", subpixel);
+    node->get_parameter("confidence", confidence);
+    node->get_parameter("LRchecktresh", LRchecktresh);
+    node->get_parameter("monoResolution", monoResolution);
 
     if(mode == "depth") {
         enableDepth = true;
@@ -130,7 +128,6 @@ int main(int argc, char** argv) {
     }
 
     std::tie(pipeline, monoWidth, monoHeight) = createPipeline(enableDepth, lrcheck, extended, subpixel, confidence, LRchecktresh, monoResolution);
-
     dai::Device device(pipeline);
     auto leftQueue = device.getOutputQueue("left", 30, false);
     auto rightQueue = device.getOutputQueue("right", 30, false);
@@ -151,10 +148,10 @@ int main(int argc, char** argv) {
 
     dai::rosBridge::ImageConverter converter(tfPrefix + "_left_camera_optical_frame", true);
     auto leftCameraInfo = converter.calibrationToCameraInfo(calibrationHandler, dai::CameraBoardSocket::CAM_B, monoWidth, monoHeight);
-    dai::rosBridge::BridgePublisher<sensor_msgs::Image, dai::ImgFrame> leftPublish(
+    dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame> leftPublish(
         leftQueue,
-        pnh,
-        std::string("left/image"),
+        node,
+        std::string("left/image_rect"),
         std::bind(&dai::rosBridge::ImageConverter::toRosMsg, &converter, std::placeholders::_1, std::placeholders::_2),
         30,
         leftCameraInfo,
@@ -165,10 +162,10 @@ int main(int argc, char** argv) {
     dai::rosBridge::ImageConverter rightconverter(tfPrefix + "_right_camera_optical_frame", true);
     auto rightCameraInfo = converter.calibrationToCameraInfo(calibrationHandler, dai::CameraBoardSocket::CAM_C, monoWidth, monoHeight);
 
-    dai::rosBridge::BridgePublisher<sensor_msgs::Image, dai::ImgFrame> rightPublish(
+    dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame> rightPublish(
         rightQueue,
-        pnh,
-        std::string("right/image"),
+        node,
+        std::string("right/image_rect"),
         std::bind(&dai::rosBridge::ImageConverter::toRosMsg, &rightconverter, std::placeholders::_1, std::placeholders::_2),
         30,
         rightCameraInfo,
@@ -177,9 +174,9 @@ int main(int argc, char** argv) {
     rightPublish.addPublisherCallback();
 
     if(mode == "depth") {
-        dai::rosBridge::BridgePublisher<sensor_msgs::Image, dai::ImgFrame> depthPublish(
+        dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame> depthPublish(
             stereoQueue,
-            pnh,
+            node,
             std::string("stereo/depth"),
             std::bind(&dai::rosBridge::ImageConverter::toRosMsg,
                       &rightconverter,  // since the converter has the same frame name
@@ -190,19 +187,19 @@ int main(int argc, char** argv) {
             rightCameraInfo,
             "stereo");
         depthPublish.addPublisherCallback();
-        ros::spin();
+        rclcpp::spin(node);
     } else {
         dai::rosBridge::DisparityConverter dispConverter(tfPrefix + "_right_camera_optical_frame", 880, 7.5, 20, 2000);
-        dai::rosBridge::BridgePublisher<stereo_msgs::DisparityImage, dai::ImgFrame> dispPublish(
+        dai::rosBridge::BridgePublisher<stereo_msgs::msg::DisparityImage, dai::ImgFrame> dispPublish(
             stereoQueue,
-            pnh,
+            node,
             std::string("stereo/disparity"),
             std::bind(&dai::rosBridge::DisparityConverter::toRosMsg, &dispConverter, std::placeholders::_1, std::placeholders::_2),
             30,
             rightCameraInfo,
             "stereo");
         dispPublish.addPublisherCallback();
-        ros::spin();
+        rclcpp::spin(node);
     }
     return 0;
 }

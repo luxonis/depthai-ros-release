@@ -1,5 +1,6 @@
 
 #pragma once
+
 #include "depthai-shared/common/CameraFeatures.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
@@ -12,22 +13,29 @@ namespace node {
 class Camera;
 }  // namespace node
 }  // namespace dai
-namespace ros {
-class NodeHandle;
-}  // namespace ros
+
+namespace rclcpp {
+class Node;
+class Parameter;
+}  // namespace rclcpp
+
 namespace depthai_ros_driver {
 namespace param_handlers {
 class SensorParamHandler;
 }
 namespace dai_nodes {
+
 namespace sensor_helpers {
 class ImagePublisher;
 }  // namespace sensor_helpers
 class Thermal : public BaseNode {
    public:
-    explicit Thermal(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline, dai::CameraFeatures camFeatures);
+    explicit Thermal(const std::string& daiNodeName,
+                     std::shared_ptr<rclcpp::Node> node,
+                     std::shared_ptr<dai::Pipeline> pipeline,
+                     dai::CameraFeatures camFeatures);
     ~Thermal();
-    void updateParams(parametersConfig& config) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     void setNames() override;
@@ -42,5 +50,6 @@ class Thermal : public BaseNode {
     dai::CameraBoardSocket boardSocket;
     std::string thermalQName, rawQName;
 };
+
 }  // namespace dai_nodes
 }  // namespace depthai_ros_driver

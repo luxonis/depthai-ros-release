@@ -19,7 +19,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import rospy
+from geometry_msgs.msg import TransformStamped
+import rclpy
+from rclpy.duration import Duration
+from rclpy.node import Node
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 from vision_msgs.msg import Detection3DArray
 from visualization_msgs.msg import ImageMarker, MarkerArray, Marker
 from geometry_msgs.msg import Point, Pose, Vector3
@@ -27,19 +31,20 @@ from std_msgs.msg import ColorRGBA, String
 from foxglove_msgs.msg import ImageMarkerArray
 
 
-class ObjectPublisher():
+class ObjectPublisher(Node):
 
     def __init__(self):
-        rospy.init_node('object_publisher')
-        self._sub_ = rospy.Subscriber(
-            '/oak/nn/detections', Detection3DArray, self.publish_data, queue_size=1)
-        self._det_pub = rospy.Publisher(
-            '/oak/nn/detection_markers', ImageMarkerArray, queue_size=1)
-        self._text_pub = rospy.Publisher(
-            '/oak/nn/text_markers', MarkerArray, queue_size=1)
+        super().__init__('object_publisher')
+        self._sub_ = self.create_subscription(
+            Detection3DArray, '/oak/nn/detections', self.publish_data, 10)
+        self._det_pub = self.create_publisher(
+            ImageMarkerArray, '/oak/nn/detection_markers', 10)
+        self._text_pub = self.create_publisher(
+            MarkerArray, '/oak/nn/text_markers', 10)
+        self._br = TransformBroadcaster(self)
         self._unique_id = 0
 
-        rospy.loginfo('ObjectPublisher node Up!')
+        self.get_logger().info('ObjectPublisher node Up!')
 
     def publish_data(self, msg: Detection3DArray):
         markerArray = ImageMarkerArray()
@@ -50,7 +55,7 @@ class ObjectPublisher():
         for det in msg.detections:
             bbox = det.bbox
             det.results[0]
-            label = f'{det.results[0].id}_{i + self._unique_id}'
+            label = f'{det.results[0].hypothesis.class_id}_{i + self._unique_id}'
             det_pose = det.results[0].pose.pose
             textMarker.markers.append(Marker(
                     header=msg.header,
@@ -81,6 +86,14 @@ class ObjectPublisher():
                     ],
                 ))
 
+            tf = TransformStamped()
+            tf.child_frame_id = label
+            tf.header.frame_id = msg.header.frame_id
+            tf.header.stamp = self.get_clock().now().to_msg()
+            tf.transform.translation.x = det.results[0].pose.pose.position.x
+            tf.transform.translation.y = det.results[0].pose.pose.position.y
+            tf.transform.translation.z = det.results[0].pose.pose.position.z
+            self._br.sendTransform(tf)
             i += 1
             self._unique_id += 1
 
@@ -89,8 +102,18 @@ class ObjectPublisher():
 
 
 def main(args=None):
-    ObjectPublisher()
-    rospy.spin()
+    rclpy.init(args=args)
+    try:
+        node = ObjectPublisher()
+        executor = rclpy.executors.SingleThreadedExecutor()
+        executor.add_node(node)
+        try:
+            executor.spin()
+        finally:
+            executor.shutdown()
+            node.destroy_node()
+    finally:
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

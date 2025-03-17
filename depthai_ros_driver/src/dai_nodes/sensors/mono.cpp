@@ -1,6 +1,5 @@
 #include "depthai_ros_driver/dai_nodes/sensors/mono.hpp"
 
-#include "depthai/device/DataQueue.hpp"
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/node/MonoCamera.hpp"
@@ -9,24 +8,24 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/param_handlers/sensor_param_handler.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "ros/node_handle.h"
+#include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
 Mono::Mono(const std::string& daiNodeName,
-           ros::NodeHandle node,
+           std::shared_ptr<rclcpp::Node> node,
            std::shared_ptr<dai::Pipeline> pipeline,
            dai::CameraBoardSocket socket,
            dai_nodes::sensor_helpers::ImageSensor sensor,
            bool publish = true)
     : BaseNode(daiNodeName, node, pipeline) {
-    ROS_DEBUG("Creating node %s", daiNodeName.c_str());
+    RCLCPP_DEBUG(getLogger(), "Creating node %s", daiNodeName.c_str());
     setNames();
     monoCamNode = pipeline->create<dai::node::MonoCamera>();
     ph = std::make_unique<param_handlers::SensorParamHandler>(node, daiNodeName, socket);
     ph->declareParams(monoCamNode, sensor, publish);
     setXinXout(pipeline);
-    ROS_DEBUG("Node %s created", daiNodeName.c_str());
+    RCLCPP_DEBUG(getLogger(), "Node %s created", daiNodeName.c_str());
 }
 Mono::~Mono() = default;
 void Mono::setNames() {
@@ -66,7 +65,7 @@ void Mono::setupQueues(std::shared_ptr<dai::Device> device) {
 
         utils::ImgPublisherConfig pubConf;
         pubConf.daiNodeName = getName();
-        pubConf.topicName = getName();
+        pubConf.topicName = "~/" + getName();
         pubConf.lazyPub = ph->getParam<bool>("i_enable_lazy_publisher");
         pubConf.socket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"));
         pubConf.calibrationFile = ph->getParam<std::string>("i_calibration_file");
@@ -98,8 +97,9 @@ std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> Mono::getPublishers
     }
     return publishers;
 }
-void Mono::updateParams(parametersConfig& config) {
-    auto ctrl = ph->setRuntimeParams(config);
+
+void Mono::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    auto ctrl = ph->setRuntimeParams(params);
     controlQ->send(ctrl);
 }
 

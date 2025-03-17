@@ -1,20 +1,20 @@
 #pragma once
 
-#include "image_transport/image_transport.h"
-#include "nodelet/nodelet.h"
-#include "ros/ros.h"
-#include "sensor_msgs/Image.h"
+#include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/image.hpp"
 
 namespace depthai_filters {
-class ThermalTemp : public nodelet::Nodelet {
+class ThermalTemp : public rclcpp::Node {
    public:
-    void onInit() override;
+    explicit ThermalTemp(const rclcpp::NodeOptions& options);
+    void onInit();
 
-    void subCB(const sensor_msgs::ImageConstPtr& img);
+    void subCB(const sensor_msgs::msg::Image::ConstSharedPtr& preview);
     void mouseCallback(int event, int x, int y, int flags, void* userdata);
-    image_transport::Subscriber sub;
-    ros::Publisher colorPub;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr colorPub;
     int mouseX = 0;
     int mouseY = 0;
 };
+
 }  // namespace depthai_filters
