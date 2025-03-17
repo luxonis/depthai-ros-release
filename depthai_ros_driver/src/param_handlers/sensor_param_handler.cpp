@@ -109,6 +109,14 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::MonoCamera> mo
     if(declareAndLogParam("r_set_luma_denoise", false)) {
         monoCam->initialControl.setLumaDenoise(lumaDenoise);
     }
+    bool setAutoExpRegion = declareAndLogParam<bool>("r_set_auto_exp_region", false);
+    int autoExpStartX = declareAndLogParam<int>("r_auto_exp_region_start_x", 0);
+    int autoExpStartY = declareAndLogParam<int>("r_auto_exp_region_start_y", 0);
+    int autoExpWidth = declareAndLogParam<int>("r_auto_exp_region_width", 0);
+    int autoExpHeight = declareAndLogParam<int>("r_auto_exp_region_height", 0);
+    if(setAutoExpRegion) {
+        monoCam->initialControl.setAutoExposureRegion(autoExpStartX, autoExpStartY, autoExpWidth, autoExpHeight);
+    }
 }
 void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> colorCam, dai_nodes::sensor_helpers::ImageSensor sensor, bool publish) {
     declareAndLogParam<bool>("i_publish_topic", publish);
@@ -137,6 +145,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     int height = colorCam->getResolutionHeight();
 
     colorCam->setInterleaved(declareAndLogParam<bool>("i_interleaved", false));
+    colorCam->setColorOrder(utils::getValFromMap(declareAndLogParam<std::string>("i_color_order", "BGR"), dai_nodes::sensor_helpers::colorOrderMap));
 
     bool setIspScale = true;
     if(sensor.defaultResolution != "1080P"
@@ -160,7 +169,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
             err_stream << " which are not divisible by 16.\n";
             err_stream << "This will result in errors when aligning stereo to RGB. To fix that, either adjust i_num and i_den values";
             err_stream << " or set i_output_isp parameter to false and set i_width and i_height parameters accordingly.";
-            RCLCPP_ERROR(getROSNode()->get_logger(), err_stream.str().c_str());
+            RCLCPP_ERROR(getROSNode()->get_logger(), "%s", err_stream.str().c_str());
         }
     }
     int maxVideoWidth = 3840;
@@ -223,6 +232,14 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     int lumaDenoise = declareAndLogParam<int>("r_luma_denoise", 1);
     if(declareAndLogParam("r_set_luma_denoise", false)) {
         colorCam->initialControl.setLumaDenoise(lumaDenoise);
+    }
+    bool setAutoExpRegion = declareAndLogParam<bool>("r_set_auto_exp_region", false);
+    int autoExpStartX = declareAndLogParam<int>("r_auto_exp_region_start_x", 0);
+    int autoExpStartY = declareAndLogParam<int>("r_auto_exp_region_start_y", 0);
+    int autoExpWidth = declareAndLogParam<int>("r_auto_exp_region_width", 0);
+    int autoExpHeight = declareAndLogParam<int>("r_auto_exp_region_height", 0);
+    if(setAutoExpRegion) {
+        colorCam->initialControl.setAutoExposureRegion(autoExpStartX, autoExpStartY, autoExpWidth, autoExpHeight);
     }
 }
 dai::CameraControl SensorParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& params) {
@@ -293,6 +310,34 @@ dai::CameraControl SensorParamHandler::setRuntimeParams(const std::vector<rclcpp
         } else if(p.get_name() == getFullParamName("r_luma_denoise")) {
             if(getParam<bool>("r_set_luma_denoise")) {
                 ctrl.setLumaDenoise(p.get_value<int>());
+            }
+        } else if(p.get_name() == getFullParamName("r_auto_exp_region_start_x")) {
+            if(getParam<bool>("r_set_auto_exp_region")) {
+                ctrl.setAutoExposureRegion(p.get_value<int>(),
+                                           getParam<int>("r_auto_exp_region_start_y"),
+                                           getParam<int>("r_auto_exp_region_width"),
+                                           getParam<int>("r_auto_exp_region_height"));
+            }
+        } else if(p.get_name() == getFullParamName("r_auto_exp_region_start_y")) {
+            if(getParam<bool>("r_set_auto_exp_region")) {
+                ctrl.setAutoExposureRegion(getParam<int>("r_auto_exp_region_start_x"),
+                                           p.get_value<int>(),
+                                           getParam<int>("r_auto_exp_region_width"),
+                                           getParam<int>("r_auto_exp_region_height"));
+            }
+        } else if(p.get_name() == getFullParamName("r_auto_exp_region_width")) {
+            if(getParam<bool>("r_set_auto_exp_region")) {
+                ctrl.setAutoExposureRegion(getParam<int>("r_auto_exp_region_start_x"),
+                                           getParam<int>("r_auto_exp_region_start_y"),
+                                           p.get_value<int>(),
+                                           getParam<int>("r_auto_exp_region_height"));
+            }
+        } else if(p.get_name() == getFullParamName("r_auto_exp_region_height")) {
+            if(getParam<bool>("r_set_auto_exp_region")) {
+                ctrl.setAutoExposureRegion(getParam<int>("r_auto_exp_region_start_x"),
+                                           getParam<int>("r_auto_exp_region_start_y"),
+                                           getParam<int>("r_auto_exp_region_width"),
+                                           p.get_value<int>());
             }
         }
     }
