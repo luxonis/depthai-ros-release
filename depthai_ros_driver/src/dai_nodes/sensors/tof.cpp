@@ -9,13 +9,13 @@
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
 #include "depthai_ros_driver/param_handlers/tof_param_handler.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "rclcpp/node.hpp"
+#include "ros/node_handle.h"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
-ToF::ToF(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline, dai::CameraBoardSocket socket)
+ToF::ToF(const std::string& daiNodeName, ros::NodeHandle node, std::shared_ptr<dai::Pipeline> pipeline, dai::CameraBoardSocket socket)
     : BaseNode(daiNodeName, node, pipeline) {
-    RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
+    ROS_DEBUG("Creating node %s", daiNodeName.c_str());
     setNames();
     camNode = pipeline->create<dai::node::Camera>();
     tofNode = pipeline->create<dai::node::ToF>();
@@ -23,7 +23,7 @@ ToF::ToF(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std
     ph = std::make_unique<param_handlers::ToFParamHandler>(node, daiNodeName);
     ph->declareParams(camNode, tofNode);
     setXinXout(pipeline);
-    RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
+    ROS_DEBUG("Node %s created", daiNodeName.c_str());
 }
 ToF::~ToF() = default;
 void ToF::setNames() {
@@ -69,7 +69,7 @@ void ToF::setupQueues(std::shared_ptr<dai::Device> device) {
 
         utils::ImgPublisherConfig pubConfig;
         pubConfig.daiNodeName = getName();
-        pubConfig.topicName = "~/" + getName();
+        pubConfig.topicName = getName();
         pubConfig.lazyPub = ph->getParam<bool>("i_enable_lazy_publisher");
         pubConfig.socket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"));
         pubConfig.calibrationFile = ph->getParam<std::string>("i_calibration_file");
@@ -101,10 +101,6 @@ std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> ToF::getPublishers(
         pubs.push_back(tofPub);
     }
     return pubs;
-}
-
-void ToF::updateParams(const std::vector<rclcpp::Parameter>& params) {
-    ph->setRuntimeParams(params);
 }
 
 }  // namespace dai_nodes

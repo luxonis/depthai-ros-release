@@ -2,6 +2,8 @@
  * This example shows usage of depth camera in crop mode with the possibility to move the crop.
  * Use 'WASD' in order to do it.
  */
+
+#include <iostream>
 #include <memory>
 #include <string>
 
@@ -15,49 +17,45 @@
 #include "depthai/pipeline/node/XLinkOut.hpp"
 #include "depthai_bridge/BridgePublisher.hpp"
 #include "depthai_bridge/ImageConverter.hpp"
-#include "depthai_ros_msgs/srv/NormalizedImageCrop.hpp"
-#include "rclcpp/node.hpp"
-#include "sensor_msgs/msg/Image.hpp"
+#include "depthai_ros_msgs/NormalizedImageCrop.h"
+#include "ros/node_handle.h"
+#include "sensor_msgs/Image.h"
 
 // Step size ('W','A','S','D' controls)
 static constexpr float stepSize = 0.02;
 std::shared_ptr<dai::DataInputQueue> configQueue;
 
-void cropDepthImage(depthai_ros_msgs::srv::NormalizedImageCrop::Request request, depthai_ros_msgs::srv::NormalizedImageCrop::Response response) {
+bool cropDepthImage(depthai_ros_msgs::NormalizedImageCrop::Request request, depthai_ros_msgs::NormalizedImageCrop::Response response) {
     dai::ImageManipConfig cfg;
     cfg.setCropRect(request.topLeft.x, request.topLeft.y, request.bottomRight.x, request.bottomRight.y);
     configQueue->send(cfg);
-    response->status = true;
-    return;
+    return true;
 }
 
 int main() {
-    rclcpp::init(argc, argv);
-    auto node = rclcpp::Node::make_shared("depth_crop_control");
-    std::string cameraName, monoResolution;
-    int confidence, LRchecktresh;
-    bool lrcheck, extended, subpixel;
+    ros::init(argc, argv, "depth_crop_control");
+    ros::NodeHandle pnh("~");
+    std::string cameraName;
+    std::string monoResolution = "720p";
+    int confidence = 200;
+    int LRchecktresh = 5;
 
-    node->declare_parameter("tf_prefix", "oak");
-    node->declare_parameter("lrcheck", true);
-    node->declare_parameter("extended", false);
-    node->declare_parameter("subpixel", true);
-    node->declare_parameter("confidence", 200);
-    node->declare_parameter("LRchecktresh", 5);
-    node->declare_parameter("monoResolution", "400p");
+    int badParams = 0;
+    badParams += !pnh.getParam("tf_prefix", cameraName);
+    badParams += !pnh.getParam("lrcheck", lrcheck);
+    badParams += !pnh.getParam("extended", extended);
+    badParams += !pnh.getParam("subpixel", subpixel);
+    badParams += !pnh.getParam("confidence", confidence);
+    badParams += !pnh.getParam("LRchecktresh", LRchecktresh);
 
-    node->get_parameter("tf_prefix", cameraName);
-    node->get_parameter("lrcheck", lrcheck);
-    node->get_parameter("extended", extended);
-    node->get_parameter("subpixel", subpixel);
-    node->get_parameter("confidence", confidence);
-    node->get_parameter("LRchecktresh", LRchecktresh);
-    node->get_parameter("monoResolution", monoResolution);
+    badParams += !pnh.getParam("monoResolution", monoResolution);
 
-    rclcpp::Service<depthai_ros_msgs::srv::NormalizedImageCrop>::SharedPtr service =
-        node->create_service<depthai_ros_msgs::srv::NormalizedImageCrop>("crop_control_srv", &cropDepthImage);
+    if(badParams > 0) {
+        std::cout << " Bad parameters -> " << badParams << std::endl;
+        throw std::runtime_error("Couldn't find the parameters", );
+    }
 
-    // ros::ServiceServer service = n.advertiseService("crop_control_srv", cropDepthImage);
+    ros::ServiceServer service = n.advertiseService("crop_control_srv", cropDepthImage);
 
     // Create pipeline
     dai::Pipeline pipeline;
@@ -78,8 +76,8 @@ int main() {
     dai::Point2f topLeft(0.2, 0.2);
     dai::Point2f bottomRight(0.8, 0.8);
 
-    int monoWidth, monoHeight;
     dai::node::MonoCamera::Properties::SensorResolution monoRes;
+    int monoWidth, monoHeight;
     if(monoResolution == "720p") {
         monoRes = dai::node::MonoCamera::Properties::SensorResolution::THE_720_P;
         monoWidth = 1280;
@@ -97,7 +95,7 @@ int main() {
         monoWidth = 640;
         monoHeight = 480;
     } else {
-        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid parameter. -> monoResolution: %s", resolution.c_str());
+        ROS_ERROR("Invalid parameter. -> monoResolution: %s", monoResolution.c_str());
         throw std::runtime_error("Invalid mono camera resolution.");
     }
 
@@ -141,20 +139,19 @@ int main() {
     // TODO(sachin): Modify the calibration based on crop from service
     auto rightCameraInfo = converter.calibrationToCameraInfo(calibrationHandler, dai::CameraBoardSocket::CAM_C, monoWidth, monoHeight);
 
-    dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame> depthPublish(
-        depthQueue,
-        node,
-        std::string("stereo/depth"),
-        std::bind(&dai::rosBridge::ImageConverter::toRosMsg,
-                  &depthConverter,  // since the converter has the same frame name
-                                    // and image type is also same we can reuse it
-                  std::placeholders::_1,
-                  std::placeholders::_2),
-        30,
-        rightCameraInfo,
-        "stereo");
+    dai::rosBridge::BridgePublisher<sensor_msgs::Image, dai::ImgFrame> depthPublish(depthQueue,
+                                                                                    pnh,
+                                                                                    std::string("stereo/depth"),
+                                                                                    std::bind(&dai::rosBridge::ImageConverter::toRosMsg,
+                                                                                              &depthConverter,  // since the converter has the same frame name
+                                                                                                                // and image type is also same we can reuse it
+                                                                                              std::placeholders::_1,
+                                                                                              std::placeholders::_2),
+                                                                                    30,
+                                                                                    rightCameraInfo,
+                                                                                    "stereo");
     depthPublish.addPublisherCallback();
-    rclcpp::spin(node);
+    ros::spin();
 
     return 0;
 }

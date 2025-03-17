@@ -1,26 +1,30 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
-<package format="3">
+<package format="2">
   <name>depthai_filters</name>
-  <version>2.11.0</version>
-  <description>Depthai filters package</description>
+  <version>2.11.2</version>
+  <description>The depthai_filters package</description>
+
   <maintainer email="adam.serafin@luxonis.com">Adam Serafin</maintainer>
+
   <license>MIT</license>
+  <buildtool_depend>catkin</buildtool_depend>
 
-  <buildtool_depend>ament_cmake_auto</buildtool_depend>
-
-  <depend>sensor_msgs</depend>
-  <depend>rclcpp</depend>
-  <depend>rclcpp_components</depend>
-  <depend>vision_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>dynamic_reconfigure</depend>
   <depend>message_filters</depend>
-  <depend>libopencv-dev</depend>
+  <depend>sensor_msgs</depend>
+  <depend>vision_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>image_transport</depend>
+  <depend>image_transport_plugins</depend>
+  <depend>image_pipeline</depend>
+  <depend>nodelet</depend>
+  <depend>libopencv-dev</depend>
   <depend>visualization_msgs</depend>
   <depend>depthai_ros_msgs</depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
+    <nodelet plugin="${prefix}/nodelet_plugins.xml" />
+    <build_type>catkin</build_type>
   </export>
 </package>

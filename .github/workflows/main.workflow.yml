@@ -5,74 +5,36 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
-      - humble
-      - galactic
-      - foxy
-      - iron
-      - jazzy
+      - noetic
     tags:
       - 'v*'
   pull_request:
     branches:
-      - main
-      - humble
-      - galactic
-      - foxy
-      - iron
-      - jazzy
-env:
-  ROS_DISTRO: jazzy
+      - noetic
 
 jobs:
-  clang-format-lint:
-    name: ament_clang_format
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-    steps:
-    - uses: actions/checkout@v3.3.0
-    - uses: ros-tooling/setup-ros@0.7.8
-      with:
-        required-ros-distributions: ${{ env.ROS_DISTRO }}
-    - uses: ros-tooling/action-ros2-lint@0.1.3
-      with:
-        distribution: ${{ env.ROS_DISTRO }}
-        linter: clang_format
-        arguments: --config ./.clang-format
-        package-name: |
-          depthai_bridge
-          depthai_examples
-          depthai_ros_msgs
-          depthai_ros_driver
-          depthai_ros
-  linting:
-    name: ament_${{ matrix.linter }}
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false 
-      matrix:
-        linter: [xmllint, pep257, lint_cmake]
-    steps:
-    - uses: actions/checkout@v3.3.0
-    - uses: ros-tooling/setup-ros@0.7.8
-      with:
-        required-ros-distributions: ${{ env.ROS_DISTRO }}
-    - uses: ros-tooling/action-ros2-lint@0.1.3
-      with:
-        distribution: ${{ env.ROS_DISTRO }}
-        linter: ${{ matrix.linter }}
-        package-name: |
-          depthai_bridge
-          depthai_examples
-          depthai_ros_msgs
-          depthai_ros
 
+  style:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Clang-Format lint
+      
+      uses: DoozyX/clang-format-lint-action@v0.13
+      with:
+        source: '.'
+        extensions: 'h,hpp,c,cpp'
+        clangFormatVersion: 10
+  
   docker-build:
     name: Build and Upload to Docker Hub
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      matrix: 
+        ROS_DISTRO: [noetic]
     env: 
       PUSH: ${{ (github.event_name != 'pull_request') && (github.repository == 'luxonis/depthai-ros') && startsWith(github.ref, 'refs/tags/v') }}
     steps:
@@ -81,6 +43,7 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3.3.0
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
@@ -100,7 +63,7 @@ jobs:
         if: env.PUSH == 'false'
         with:
           build-args: |
-            ROS_DISTRO=${{ env.ROS_DISTRO }}
+            ROS_DISTRO=${{ matrix.ROS_DISTRO }}
             USE_RVIZ=1
             BUILD_SEQUENTIAL=1
           platforms: |
@@ -113,7 +76,7 @@ jobs:
         if: env.PUSH == 'true'
         with:
           build-args: |
-            ROS_DISTRO=${{ env.ROS_DISTRO }}
+            ROS_DISTRO=${{ matrix.ROS_DISTRO }}
             USE_RVIZ=1
           platforms: |
             amd64
@@ -122,4 +85,4 @@ jobs:
           no-cache: true
           tags: | 
             luxonis/depthai-ros:${{ steps.vars.outputs.short_ref }}
-            luxonis/depthai-ros:${{ env.ROS_DISTRO }}-latest
+            luxonis/depthai-ros:${{ matrix.ROS_DISTRO }}-latest

@@ -4,12 +4,12 @@
 #include <string>
 #include <vector>
 
-#include "cv_bridge/cv_bridge.hpp"
+#include "cv_bridge/cv_bridge.h"
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
-#include "image_transport/camera_publisher.hpp"
-#include "image_transport/image_transport.hpp"
-#include "sensor_msgs/msg/camera_info.hpp"
+#include "depthai_ros_driver/parametersConfig.h"
+#include "image_transport/camera_publisher.h"
+#include "image_transport/image_transport.h"
 
 namespace dai {
 class Pipeline;
@@ -28,10 +28,9 @@ class ImageConverter;
 namespace camera_info_manager {
 class CameraInfoManager;
 }
-namespace rclcpp {
-class Node;
-class Parameter;
-}  // namespace rclcpp
+namespace ros {
+class NodeHandle;
+}  // namespace ros
 
 namespace depthai_ros_driver {
 namespace param_handlers {
@@ -42,26 +41,27 @@ namespace nn {
 class Segmentation : public BaseNode {
    public:
     Segmentation(const std::string& daiNodeName,
-                 std::shared_ptr<rclcpp::Node> node,
+                 ros::NodeHandle node,
                  std::shared_ptr<dai::Pipeline> pipeline,
                  const dai::CameraBoardSocket& socket = dai::CameraBoardSocket::CAM_A);
     ~Segmentation();
-    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
+    void updateParams(parametersConfig& config) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
-    dai::Node::Input getInput(int linkType = 0) override;
+    dai::Node::Input getInput(int linkType = 0);
     void setNames() override;
     void setXinXout(std::shared_ptr<dai::Pipeline> pipeline) override;
     void closeQueues() override;
 
    private:
     cv::Mat decodeDeeplab(cv::Mat mat);
+    image_transport::ImageTransport it;
     void segmentationCB(const std::string& name, const std::shared_ptr<dai::ADatatype>& data);
     std::vector<std::string> labelNames;
+    image_transport::CameraPublisher nnPub, ptPub;
+    sensor_msgs::CameraInfo nnInfo;
     std::shared_ptr<dai::ros::ImageConverter> imageConverter;
     std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager;
-    image_transport::CameraPublisher nnPub, ptPub;
-    sensor_msgs::msg::CameraInfo nnInfo;
     std::shared_ptr<dai::node::NeuralNetwork> segNode;
     std::shared_ptr<dai::node::ImageManip> imageManip;
     std::unique_ptr<param_handlers::NNParamHandler> ph;

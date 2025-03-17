@@ -8,15 +8,13 @@
 #include "depthai/pipeline/node/MonoCamera.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/utils.hpp"
-#include "rclcpp/logger.hpp"
-#include "rclcpp/node.hpp"
+#include "ros/node_handle.h"
 
 namespace depthai_ros_driver {
 namespace param_handlers {
-SensorParamHandler::SensorParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name, dai::CameraBoardSocket socket)
-    : BaseParamHandler(node, name) {
+SensorParamHandler::SensorParamHandler(ros::NodeHandle node, const std::string& name, dai::CameraBoardSocket socket) : BaseParamHandler(node, name) {
     declareCommonParams(socket);
-};
+}
 SensorParamHandler::~SensorParamHandler() = default;
 
 void SensorParamHandler::declareCommonParams(dai::CameraBoardSocket socket) {
@@ -48,11 +46,9 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::Camera> cam, d
     cam->setBoardSocket(socketID);
     cam->setFps(declareAndLogParam<double>("i_fps", 30.0));
     declareAndLogParam<bool>("i_publish_topic", publish);
-
     int width = declareAndLogParam<int>("i_width", features.width);
     int height = declareAndLogParam<int>("i_height", features.height);
     declareAndLogParam<bool>("i_publish_raw", true);
-
     cam->setPreviewSize(width, height);
 }
 
@@ -60,15 +56,13 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::MonoCamera> mo
     monoCam->setBoardSocket(socketID);
     monoCam->setFps(declareAndLogParam<double>("i_fps", 30.0));
     declareAndLogParam<bool>("i_publish_topic", publish);
+
     auto resString = declareAndLogParam<std::string>("i_resolution", sensor.defaultResolution);
 
     // if resolution not in allowed resolutions, use default
     if(std::find(sensor.allowedResolutions.begin(), sensor.allowedResolutions.end(), resString) == sensor.allowedResolutions.end()) {
-        RCLCPP_WARN(getROSNode()->get_logger(),
-                    "Resolution %s not supported by sensor %s. Using default resolution %s",
-                    resString.c_str(),
-                    sensor.name.c_str(),
-                    sensor.defaultResolution.c_str());
+        ROS_WARN(
+            "Resolution %s not supported by sensor %s. Using default resolution %s", resString.c_str(), sensor.name.c_str(), sensor.defaultResolution.c_str());
         resString = sensor.defaultResolution;
     }
 
@@ -109,12 +103,21 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::MonoCamera> mo
     if(declareAndLogParam("r_set_luma_denoise", false)) {
         monoCam->initialControl.setLumaDenoise(lumaDenoise);
     }
+    bool setAutoExpRegion = declareAndLogParam<bool>("r_set_auto_exp_region", false);
+    int autoExpStartX = declareAndLogParam<int>("r_auto_exp_region_start_x", 0);
+    int autoExpStartY = declareAndLogParam<int>("r_auto_exp_region_start_y", 0);
+    int autoExpWidth = declareAndLogParam<int>("r_auto_exp_region_width", 0);
+    int autoExpHeight = declareAndLogParam<int>("r_auto_exp_region_height", 0);
+    if(setAutoExpRegion) {
+        monoCam->initialControl.setAutoExposureRegion(autoExpStartX, autoExpStartY, autoExpWidth, autoExpHeight);
+    }
 }
+
 void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> colorCam, dai_nodes::sensor_helpers::ImageSensor sensor, bool publish) {
     declareAndLogParam<bool>("i_publish_topic", publish);
-    colorCam->setBoardSocket(socketID);
     declareAndLogParam<bool>("i_output_isp", true);
     declareAndLogParam<bool>("i_enable_preview", false);
+    colorCam->setBoardSocket(socketID);
     colorCam->setFps(declareAndLogParam<double>("i_fps", 30.0));
     int preview_size = declareAndLogParam<int>("i_preview_size", 300);
     int preview_width = declareAndLogParam<int>("i_preview_width", preview_size);
@@ -124,11 +127,8 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
 
     // if resolution not in allowed resolutions, use default
     if(std::find(sensor.allowedResolutions.begin(), sensor.allowedResolutions.end(), resString) == sensor.allowedResolutions.end()) {
-        RCLCPP_WARN(getROSNode()->get_logger(),
-                    "Resolution %s not supported by sensor %s. Using default resolution %s",
-                    resString.c_str(),
-                    sensor.name.c_str(),
-                    sensor.defaultResolution.c_str());
+        ROS_WARN(
+            "Resolution %s not supported by sensor %s. Using default resolution %s", resString.c_str(), sensor.name.c_str(), sensor.defaultResolution.c_str());
         resString = sensor.defaultResolution;
     }
 
@@ -137,6 +137,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     int height = colorCam->getResolutionHeight();
 
     colorCam->setInterleaved(declareAndLogParam<bool>("i_interleaved", false));
+    colorCam->setColorOrder(utils::getValFromMap(declareAndLogParam<std::string>("i_color_order", "BGR"), dai_nodes::sensor_helpers::colorOrderMap));
 
     bool setIspScale = true;
     if(sensor.defaultResolution != "1080P"
@@ -160,7 +161,7 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
             err_stream << " which are not divisible by 16.\n";
             err_stream << "This will result in errors when aligning stereo to RGB. To fix that, either adjust i_num and i_den values";
             err_stream << " or set i_output_isp parameter to false and set i_width and i_height parameters accordingly.";
-            RCLCPP_ERROR(getROSNode()->get_logger(), err_stream.str().c_str());
+            ROS_ERROR(err_stream.str().c_str());
         }
     }
     int maxVideoWidth = 3840;
@@ -168,17 +169,11 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     int videoWidth = declareAndLogParam<int>("i_width", width);
     int videoHeight = declareAndLogParam<int>("i_height", height);
     if(videoWidth > maxVideoWidth) {
-        RCLCPP_WARN(getROSNode()->get_logger(),
-                    "Video width %d is greater than max video width %d. Setting video width to max video width.",
-                    videoWidth,
-                    maxVideoWidth);
+        ROS_WARN("Video width %d is greater than max video width %d. Setting video width to max video width.", videoWidth, maxVideoWidth);
         videoWidth = maxVideoWidth;
     }
     if(videoHeight > maxVideoHeight) {
-        RCLCPP_WARN(getROSNode()->get_logger(),
-                    "Video height %d is greater than max video height %d. Setting video height to max video height.",
-                    videoHeight,
-                    maxVideoHeight);
+        ROS_WARN("Video height %d is greater than max video height %d. Setting video height to max video height.", videoHeight, maxVideoHeight);
         videoHeight = maxVideoHeight;
     }
     colorCam->setVideoSize(videoWidth, videoHeight);
@@ -224,79 +219,127 @@ void SensorParamHandler::declareParams(std::shared_ptr<dai::node::ColorCamera> c
     if(declareAndLogParam("r_set_luma_denoise", false)) {
         colorCam->initialControl.setLumaDenoise(lumaDenoise);
     }
+    bool setAutoExpRegion = declareAndLogParam<bool>("r_set_auto_exp_region", false);
+    int autoExpStartX = declareAndLogParam<int>("r_auto_exp_region_start_x", 0);
+    int autoExpStartY = declareAndLogParam<int>("r_auto_exp_region_start_y", 0);
+    int autoExpWidth = declareAndLogParam<int>("r_auto_exp_region_width", 0);
+    int autoExpHeight = declareAndLogParam<int>("r_auto_exp_region_height", 0);
+    if(setAutoExpRegion) {
+        colorCam->initialControl.setAutoExposureRegion(autoExpStartX, autoExpStartY, autoExpWidth, autoExpHeight);
+    }
 }
-dai::CameraControl SensorParamHandler::setRuntimeParams(const std::vector<rclcpp::Parameter>& params) {
+dai::CameraControl SensorParamHandler::setRuntimeParams(parametersConfig& config) {
     dai::CameraControl ctrl;
-    for(const auto& p : params) {
-        if(p.get_name() == getFullParamName("r_set_man_exposure")) {
-            if(p.get_value<bool>()) {
-                ctrl.setManualExposure(getParam<int>("r_exposure"), getParam<int>("r_iso"));
-            } else {
-                ctrl.setAutoExposureEnable();
-            }
-        } else if(p.get_name() == getFullParamName("r_exposure")) {
-            if(getParam<bool>("r_set_man_exposure")) {
-                ctrl.setManualExposure(p.get_value<int>(), getParam<int>("r_iso"));
-            }
-        } else if(p.get_name() == getFullParamName("r_iso")) {
-            if(getParam<bool>("r_set_man_exposure")) {
-                ctrl.setManualExposure(getParam<int>("r_exposure"), p.get_value<int>());
-            }
-        } else if(p.get_name() == getFullParamName("r_set_man_focus")) {
-            if(p.get_value<bool>()) {
-                ctrl.setManualFocus(getParam<int>("r_focus"));
-            } else {
-                ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
-            }
-        } else if(p.get_name() == getFullParamName("r_focus")) {
-            if(getParam<bool>("r_set_man_focus")) {
-                ctrl.setManualFocus(p.get_value<int>());
-            }
-        } else if(p.get_name() == getFullParamName("r_set_man_whitebalance")) {
-            if(p.get_value<bool>()) {
-                ctrl.setManualWhiteBalance(getParam<int>("r_whitebalance"));
-            } else {
-                ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
-            }
-        } else if(p.get_name() == getFullParamName("r_whitebalance")) {
-            if(getParam<bool>("r_set_man_whitebalance")) {
-                ctrl.setManualWhiteBalance(p.get_value<int>());
-            }
-        } else if(p.get_name() == getFullParamName("r_set_auto_exposure_limit")) {
-            if(p.get_value<bool>()) {
-                ctrl.setAutoExposureLimit(getParam<int>("r_auto_exposure_limit"));
-            }
-        } else if(p.get_name() == getFullParamName("r_auto_exposure_limit")) {
-            if(getParam<bool>("r_set_auto_exposure_limit")) {
-                ctrl.setAutoExposureLimit(p.get_value<int>());
-            }
-        } else if(p.get_name() == getFullParamName("r_set_sharpness")) {
-            if(p.get_value<bool>()) {
-                ctrl.setSharpness(getParam<int>("r_sharpness"));
-            }
-        } else if(p.get_name() == getFullParamName("r_sharpness")) {
-            if(getParam<bool>("r_set_sharpness")) {
-                ctrl.setSharpness(p.get_value<int>());
-            }
-        } else if(p.get_name() == getFullParamName("r_set_chroma_denoise")) {
-            if(p.get_value<bool>()) {
-                ctrl.setChromaDenoise(getParam<int>("r_chroma_denoise"));
-            }
-        } else if(p.get_name() == getFullParamName("r_chroma_denoise")) {
-            if(getParam<bool>("r_set_chroma_denoise")) {
-                ctrl.setChromaDenoise(p.get_value<int>());
-            }
-        } else if(p.get_name() == getFullParamName("r_set_luma_denoise")) {
-            if(p.get_value<bool>()) {
-                ctrl.setLumaDenoise(getParam<int>("r_luma_denoise"));
-            }
-        } else if(p.get_name() == getFullParamName("r_luma_denoise")) {
-            if(getParam<bool>("r_set_luma_denoise")) {
-                ctrl.setLumaDenoise(p.get_value<int>());
-            }
+
+    if(getName() == "rgb") {
+        if(config.rgb_r_set_man_exposure) {
+            ctrl.setManualExposure(config.rgb_r_exposure, config.rgb_r_iso);
+        } else {
+            ctrl.setAutoExposureEnable();
+        }
+
+        if(config.rgb_r_set_man_focus) {
+            ctrl.setManualFocus(config.rgb_r_focus);
+        } else {
+            ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
+        }
+        if(config.rgb_r_set_man_whitebalance) {
+            ctrl.setManualWhiteBalance(config.rgb_r_whitebalance);
+        } else {
+            ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
+        }
+        if(config.rgb_r_set_auto_exposure_limit) {
+            ctrl.setAutoExposureLimit(config.rgb_r_auto_exposure_limit);
+        }
+        if(config.rgb_r_set_sharpness) {
+            ctrl.setSharpness(config.rgb_r_sharpness);
+        }
+        if(config.rgb_r_set_chroma_denoise) {
+            ctrl.setChromaDenoise(config.rgb_r_chroma_denoise);
+        }
+        if(config.rgb_r_set_luma_denoise) {
+            ctrl.setLumaDenoise(config.rgb_r_luma_denoise);
+        }
+        if(config.rgb_r_set_auto_exp_region) {
+            ctrl.setAutoExposureRegion(config.rgb_r_auto_exp_region_start_x,
+                                       config.rgb_r_auto_exp_region_start_y,
+                                       config.rgb_r_auto_exp_region_width,
+                                       config.rgb_r_auto_exp_region_height);
+        }
+    } else if(getName() == "left") {
+        if(config.left_r_set_man_exposure) {
+            ctrl.setManualExposure(config.left_r_exposure, config.left_r_iso);
+        } else {
+            ctrl.setAutoExposureEnable();
+        }
+
+        if(config.left_r_set_man_focus) {
+            ctrl.setManualFocus(config.left_r_focus);
+        } else {
+            ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
+        }
+        if(config.left_r_set_man_whitebalance) {
+            ctrl.setManualWhiteBalance(config.left_r_whitebalance);
+        } else {
+            ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
+        }
+        if(config.left_r_set_auto_exposure_limit) {
+            ctrl.setAutoExposureLimit(config.left_r_auto_exposure_limit);
+        }
+        if(config.left_r_set_sharpness) {
+            ctrl.setSharpness(config.left_r_sharpness);
+        }
+        if(config.left_r_set_chroma_denoise) {
+            ctrl.setChromaDenoise(config.left_r_chroma_denoise);
+        }
+        if(config.left_r_set_luma_denoise) {
+            ctrl.setLumaDenoise(config.left_r_luma_denoise);
+        }
+        if(config.left_r_set_auto_exp_region) {
+            ctrl.setAutoExposureRegion(config.left_r_auto_exp_region_start_x,
+                                       config.left_r_auto_exp_region_start_y,
+                                       config.left_r_auto_exp_region_width,
+                                       config.left_r_auto_exp_region_height);
+        }
+    } else if(getName() == "right") {
+        if(config.right_r_set_man_exposure) {
+            ctrl.setManualExposure(config.right_r_exposure, config.right_r_iso);
+        } else {
+            ctrl.setAutoExposureEnable();
+        }
+
+        if(config.right_r_set_man_focus) {
+            ctrl.setManualFocus(config.right_r_focus);
+        } else {
+            ctrl.setAutoFocusMode(dai::CameraControl::AutoFocusMode::CONTINUOUS_PICTURE);
+        }
+        if(config.right_r_set_man_whitebalance) {
+            ctrl.setManualWhiteBalance(config.right_r_whitebalance);
+        } else {
+            ctrl.setAutoWhiteBalanceMode(dai::CameraControl::AutoWhiteBalanceMode::AUTO);
+        }
+        if(config.right_r_set_auto_exposure_limit) {
+            ctrl.setAutoExposureLimit(config.right_r_auto_exposure_limit);
+        }
+        if(config.right_r_set_sharpness) {
+            ctrl.setSharpness(config.right_r_sharpness);
+        }
+        if(config.right_r_set_chroma_denoise) {
+            ctrl.setChromaDenoise(config.right_r_chroma_denoise);
+        }
+        if(config.right_r_set_luma_denoise) {
+            ctrl.setLumaDenoise(config.right_r_luma_denoise);
+        }
+        if(config.right_r_set_auto_exp_region) {
+            ctrl.setAutoExposureRegion(config.right_r_auto_exp_region_start_x,
+                                       config.right_r_auto_exp_region_start_y,
+                                       config.right_r_auto_exp_region_width,
+                                       config.right_r_auto_exp_region_height);
         }
     }
+
     return ctrl;
 }
+
 }  // namespace param_handlers
 }  // namespace depthai_ros_driver

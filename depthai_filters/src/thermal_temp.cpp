@@ -1,25 +1,27 @@
 #include "depthai_filters/thermal_temp.hpp"
 
-#include "cv_bridge/cv_bridge.hpp"
+#include <memory>
+#include <string>
+
+#include "cv_bridge/cv_bridge.h"
 #include "depthai_filters/utils.hpp"
+#include "nodelet/nodelet.h"
 #include "opencv2/highgui/highgui.hpp"
+#include "pluginlib/class_list_macros.h"
 
 namespace depthai_filters {
-
-ThermalTemp::ThermalTemp(const rclcpp::NodeOptions& options) : rclcpp::Node("thermal_temp", options) {
-    onInit();
-}
 void ThermalTemp::onInit() {
-    sub = this->create_subscription<sensor_msgs::msg::Image>("/thermal/raw_data/image_raw", 10, std::bind(&ThermalTemp::subCB, this, std::placeholders::_1));
-    colorPub = this->create_publisher<sensor_msgs::msg::Image>("color", 10);
+    auto pNH = getPrivateNodeHandle();
+    image_transport::ImageTransport it(pNH);
+    sub = it.subscribe("/thermal/raw_data/image_raw", 1, [this](const sensor_msgs::ImageConstPtr& img) { subCB(img); });
+    colorPub = pNH.advertise<sensor_msgs::Image>("thermal_colormap", 10);
 }
 
 void ThermalTemp::mouseCallback(int /* event */, int x, int y, int /* flags */, void* /* userdata */) {
     mouseX = x;
     mouseY = y;
 }
-
-void ThermalTemp::subCB(const sensor_msgs::msg::Image::ConstSharedPtr& img) {
+void ThermalTemp::subCB(const sensor_msgs::ImageConstPtr& img) {
     const char* tempWindow = "temperature";
     cv::namedWindow(tempWindow, cv::WINDOW_NORMAL);
     cv::setMouseCallback(
@@ -29,7 +31,7 @@ void ThermalTemp::subCB(const sensor_msgs::msg::Image::ConstSharedPtr& img) {
             self->mouseCallback(event, x, y, flags, userdata);
         },
         this);
-    cv::Mat frameFp32 = utils::msgToMat(this->get_logger(), img, sensor_msgs::image_encodings::TYPE_32FC1);
+    cv::Mat frameFp32 = utils::msgToMat(img, sensor_msgs::image_encodings::TYPE_32FC1);
     cv::Mat normalized;
     cv::normalize(frameFp32, normalized, 0, 255, cv::NORM_MINMAX, CV_8UC1);
     cv::Mat colormapped;
@@ -51,12 +53,14 @@ void ThermalTemp::subCB(const sensor_msgs::msg::Image::ConstSharedPtr& img) {
     cv::putText(colormapped, text, cv::Point(putTextLeft ? mouseX - 100 : mouseX + 10, mouseY - 10), cv::FONT_HERSHEY_SIMPLEX, 0.5, textColor, 1);
     cv::imshow(tempWindow, colormapped);
     cv::waitKey(1);
-    sensor_msgs::msg::Image outMsg;
+    sensor_msgs::Image outMsg;
     cv_bridge::CvImage(img->header, sensor_msgs::image_encodings::BGR8, colormapped).toImageMsg(outMsg);
 
-    colorPub->publish(outMsg);
+    colorPub.publish(outMsg);
 }
-
 }  // namespace depthai_filters
-#include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(depthai_filters::ThermalTemp);
+
+#include <pluginlib/class_list_macros.h>
+
+// watch the capitalization carefully
+PLUGINLIB_EXPORT_CLASS(depthai_filters::ThermalTemp, nodelet::Nodelet)
