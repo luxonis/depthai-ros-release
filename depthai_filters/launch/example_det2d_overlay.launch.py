@@ -17,7 +17,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, 'launch', 'camera.launch.py')),
+                os.path.join(depthai_prefix, 'launch', 'driver.launch.py')),
             launch_arguments={"name": name,
                               "params_file": params_file}.items()),
 
@@ -28,7 +28,7 @@ def launch_setup(context, *args, **kwargs):
                         package="depthai_filters",
                         name="detection_overlay",
                         plugin="depthai_filters::Detection2DOverlay",
-                        remappings=[('rgb/preview/image_raw', name+'/nn/passthrough/image_raw'),
+                        remappings=[('nn/passthrough/image_raw', name+'/nn/passthrough/image_raw'),
                                     ('nn/detections', name+'/nn/detections')],
                         parameters=[params_file],
                     ),

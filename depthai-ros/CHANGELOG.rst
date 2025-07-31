@@ -1,6 +1,21 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package depthai-ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+3.0.0 (2025-07-31)
+------------------
+* Updating to DepthAI V3
+* Switching to Camera nodes instead of Mono/Color cams
+* Updated socket/frame naming
+* IMU publishing now in RDF frame across the board
+* Using TFPublisher instead of URDF description by default for more accurate results
+* Undistorted streams can now be requested
+* `depthai_examples` have been largely modified to remove deprecated examples and simplify code
+* Tests added for converters in `depthai_bridge`
+* NN creation simplified both in `depthai_examples` and `depthai_ros_driver`
+* RGBD Node and Pointcloud converter have been added
+* Thermal node added
+
 2.11.2 (2025-03-17)
 -------------------
 * Add autoexposure region settings

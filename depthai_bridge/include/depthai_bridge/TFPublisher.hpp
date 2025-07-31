@@ -1,5 +1,5 @@
 #pragma once
-#include "depthai-shared/common/CameraFeatures.hpp"
+#include "depthai/common/CameraFeatures.hpp"
 #include "depthai/device/CalibrationHandler.hpp"
 #include "geometry_msgs/msg/quaternion.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -12,8 +12,7 @@ namespace rclcpp {
 class Node;
 }  // namespace rclcpp
 
-namespace dai {
-namespace ros {
+namespace depthai_bridge {
 class TFPublisher {
    public:
     explicit TFPublisher(std::shared_ptr<rclcpp::Node> node,
@@ -21,18 +20,18 @@ class TFPublisher {
                          const std::vector<dai::CameraFeatures>& camFeatures,
                          const std::string& camName,
                          const std::string& camModel,
-                         const std::string& baseFrame,
-                         const std::string& parentFrame,
-                         const std::string& camPosX,
-                         const std::string& camPosY,
-                         const std::string& camPosZ,
-                         const std::string& camRoll,
-                         const std::string& camPitch,
-                         const std::string& camYaw,
-                         const std::string& imuFromDescr,
-                         const std::string& customURDFLocation,
-                         const std::string& customXacroArgs,
-                         const bool rsCompatibilityMode);
+                         const std::string& baseFrame = "oak",
+                         const std::string& parentFrame = "oak-d-base-frame",
+                         const std::string& camPosX = "0.0",
+                         const std::string& camPosY = "0.0",
+                         const std::string& camPosZ = "0.0",
+                         const std::string& camRoll = "0.0",
+                         const std::string& camPitch = "0.0",
+                         const std::string& camYaw = "0.0",
+                         const std::string& imuFromDescr = "false",
+                         const std::string& customURDFLocation = "",
+                         const std::string& customXacroArgs = "",
+                         const bool rsCompatibilityMode = false);
     /**
      * @brief Obtain URDF description by running Xacro with provided arguments.
      */
@@ -69,7 +68,6 @@ class TFPublisher {
      * @brief Check if model STL file is available in depthai_descriptions package.
      */
     bool modelNameAvailable();
-    std::string getCamSocketName(int socketNum);
     std::unique_ptr<rclcpp::AsyncParametersClient> paramClient;
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> tfPub;
     std::string camName;
@@ -88,20 +86,5 @@ class TFPublisher {
     std::vector<dai::CameraFeatures> camFeatures;
     bool rsCompatibilityMode;
     rclcpp::Logger logger;
-    const std::unordered_map<dai::CameraBoardSocket, std::string> socketNameMap = {
-        {dai::CameraBoardSocket::AUTO, "rgb"},
-        {dai::CameraBoardSocket::CAM_A, "rgb"},
-        {dai::CameraBoardSocket::CAM_B, "left"},
-        {dai::CameraBoardSocket::CAM_C, "right"},
-        {dai::CameraBoardSocket::CAM_D, "left_back"},
-        {dai::CameraBoardSocket::CAM_E, "right_back"},
-    };
-    const std::unordered_map<dai::CameraBoardSocket, std::string> rsSocketNameMap = {
-        {dai::CameraBoardSocket::AUTO, "color"},
-        {dai::CameraBoardSocket::CAM_A, "color"},
-        {dai::CameraBoardSocket::CAM_B, "infra2"},
-        {dai::CameraBoardSocket::CAM_C, "infra1"},
-    };
 };
-}  // namespace ros
-}  // namespace dai
+}  // namespace depthai_bridge

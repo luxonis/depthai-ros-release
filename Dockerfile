@@ -1,10 +1,10 @@
-ARG ROS_DISTRO=jazzy
+ARG ROS_DISTRO=kilted
 FROM ros:${ROS_DISTRO}-ros-base
 ARG USE_RVIZ
 ARG BUILD_SEQUENTIAL=0
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-   && apt-get -y install --no-install-recommends software-properties-common git libusb-1.0-0-dev wget zsh python3-colcon-common-extensions
+   && apt-get -y install --no-install-recommends software-properties-common git libusb-1.0-0-dev wget zsh python3-colcon-common-extensions zip unzip tar
 
 
 ENV DEBIAN_FRONTEND=dialog
@@ -13,6 +13,7 @@ RUN sh -c "$(wget https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh
 ENV WS=/ws
 RUN mkdir -p $WS/src
 COPY ./ .$WS/src/depthai-ros
+RUN cd .${WS}/src && git clone --branch kilted https://github.com/luxonis/depthai-core.git && cd depthai-core && git submodule update --init --recursive
 RUN cd .$WS/ && rosdep install --from-paths src --ignore-src  -y
 
 RUN cd .$WS/ && . /opt/ros/${ROS_DISTRO}/setup.sh && ./src/depthai-ros/build.sh -s $BUILD_SEQUENTIAL -r 1 -m 1 

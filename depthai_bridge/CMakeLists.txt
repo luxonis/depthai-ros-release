@@ -1,32 +1,11 @@
 cmake_minimum_required(VERSION 3.10.2)  # CMake version in Ubuntu 18.04 LTS
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-project(depthai_bridge VERSION 2.11.2 LANGUAGES CXX C)
+project(depthai_bridge VERSION 3.0.0 LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# Update the policy setting to avoid an error when loading the ament_cmake package
-# at the current cmake version level
-if(POLICY CMP0057)
-    cmake_policy(SET CMP0057 NEW)
-endif()
-
-set(opencv_version 4)
-find_package(OpenCV ${opencv_version} QUIET COMPONENTS imgproc highgui calib3d)
-if(NOT OpenCV_FOUND)
-  message(STATUS "----------------Did not find OpenCV 4, trying OpenCV 3--------------")
-  set(opencv_version 3)
-  find_package(OpenCV ${opencv_version} REQUIRED COMPONENTS imgproc highgui calib3d)
-endif()
-
-
-message(STATUS "------------------------------------------")
-message(STATUS "Depthai Bridge is being built using AMENT.")
-message(STATUS "------------------------------------------")
-
-set(BUILD_TOOL_INCLUDE_DIRS ${ament_INCLUDE_DIRS})
 
 find_package(ament_index_cpp REQUIRED)
 find_package(camera_info_manager REQUIRED)
@@ -70,38 +49,44 @@ include_directories(
 )
 
 file(GLOB LIB_SRC
-"src/DisparityConverter.cpp"
-"src/ImageConverter.cpp"
-"src/ImgDetectionConverter.cpp"
-"src/SpatialDetectionConverter.cpp"
-"src/ImuConverter.cpp"
-"src/TFPublisher.cpp"
-"src/TrackedFeaturesConverter.cpp"
-"src/TrackDetectionConverter.cpp"
-"src/TrackSpatialDetectionConverter.cpp"
+    "src/BaseConverter.cpp"
+    "src/DisparityConverter.cpp"
+    "src/ImageConverter.cpp"
+    "src/ImgDetectionConverter.cpp"
+    "src/ImuConverter.cpp"
+    "src/PointCloudConverter.cpp"
+    "src/SpatialDetectionConverter.cpp"
+    "src/TFPublisher.cpp"
+    "src/TrackedFeaturesConverter.cpp"
+    "src/TrackDetectionConverter.cpp"
+    "src/TrackSpatialDetectionConverter.cpp"
 )
 
 add_library(${PROJECT_NAME} SHARED ${LIB_SRC})
 
-ament_target_dependencies(${PROJECT_NAME}
-  ${dependencies})
-target_compile_definitions(${PROJECT_NAME} PUBLIC IS_ROS2)
-message(STATUS "--------------------------$ENV{ROS_DISTRO} ---")
-message(STATUS $ENV{ROS_DISTRO})
+target_link_libraries(depthai_bridge PUBLIC
+      ${composition_interfaces_TARGETS}
+      ${depthai_ros_msgs_TARGETS}
+      ${ffmpeg_image_transport_msgs_TARGETS}
+      ${sensor_msgs_TARGETS}
+      ${std_msgs_TARGETS}
+      ${stereo_msgs_TARGETS}
+      ${vision_msgs_TARGETS}
+      ament_index_cpp::ament_index_cpp
+      camera_info_manager::camera_info_manager
+      cv_bridge::cv_bridge
+      image_transport::image_transport
+      rclcpp::rclcpp
+      sensor_msgs::sensor_msgs_library
+      tf2::tf2
+      tf2_geometry_msgs::tf2_geometry_msgs
+      tf2_ros::static_transform_broadcaster_node
+      tf2_ros::tf2_ros
+      depthai::core
+      opencv_imgproc
+      opencv_highgui
+      opencv_calib3d)
 
-if($ENV{ROS_DISTRO} STREQUAL "galactic" OR ($ENV{ROS_DISTRO} STREQUAL "rolling" AND "${ubuntu_version}" STREQUAL "20.04\n"))
-  target_compile_definitions(${PROJECT_NAME} PRIVATE IS_GALACTIC)
-endif()
-
-if($ENV{ROS_DISTRO} STREQUAL "humble")
-  target_compile_definitions(${PROJECT_NAME} PRIVATE IS_HUMBLE)
-endif()
-
-target_link_libraries(${PROJECT_NAME}
-                      depthai::core
-                      opencv_imgproc
-                      opencv_highgui
-                      opencv_calib3d)
 
 ament_export_targets(depthai_bridgeTargets HAS_LIBRARY_TARGET)
 
@@ -120,9 +105,31 @@ install(TARGETS depthai_bridge
 install(EXPORT depthai_bridgeTargets
       DESTINATION share/${PROJECT_NAME}/cmake)
 
+if(BUILD_TESTING)
+    find_package(ament_cmake_gtest REQUIRED)
+    macro(bridge_test test_name test_src)
+        ament_add_gtest("${PROJECT_NAME}_${test_name}" "test/${test_src}")
+        target_include_directories("${PROJECT_NAME}_${test_name}" PUBLIC
+          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+          $<INSTALL_INTERFACE:include>
+        )
+        target_link_libraries("${PROJECT_NAME}_${test_name}" depthai_bridge)
 
+    endmacro()
+    bridge_test(disparity_converter_test DisparityConverterTest.cpp)
+    bridge_test(image_converter_test ImageConverterTest.cpp)
+    bridge_test(img_det_converter_test ImgDetectionConverterTest.cpp)
+    bridge_test(imu_converter_test ImuConverterTest.cpp)
+    bridge_test(pointcloud_converter_test PointCloudConverterTest.cpp)
+    bridge_test(spatial_detection_converter_test SpatialDetectionConverterTest.cpp)
+    bridge_test(track_detection_converter_test TrackDetectionConverterTest.cpp)
+    bridge_test(track_spatial_detection_converter_test TrackSpatialDetectionConverterTest.cpp)
+    bridge_test(tracked_features_converter_test TrackedFeaturesConverterTest.cpp)
 
-install(DIRECTORY rviz DESTINATION share/${PROJECT_NAME})
+    #   # for calib.json
+    install(DIRECTORY resources DESTINATION share/${PROJECT_NAME})
+endif()
+
 
 ament_export_include_directories(include)
 ament_export_libraries(depthai_bridge)

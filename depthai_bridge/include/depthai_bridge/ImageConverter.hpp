@@ -3,25 +3,20 @@
 #include <deque>
 #include <memory>
 #include <string>
-#include <tuple>
 #include <unordered_map>
 
-#include "cv_bridge/cv_bridge.hpp"
-#include "depthai-shared/common/CameraBoardSocket.hpp"
-#include "depthai-shared/common/Point2f.hpp"
+#include "depthai/common/CameraBoardSocket.hpp"
+#include "depthai/common/Point2f.hpp"
 #include "depthai/device/CalibrationHandler.hpp"
 #include "depthai/pipeline/datatype/EncodedFrame.hpp"
 #include "depthai/pipeline/datatype/ImgFrame.hpp"
+#include "depthai_bridge/BaseConverter.hpp"
 #include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
-#include "rclcpp/time.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
 #include "sensor_msgs/msg/image.hpp"
-#include "std_msgs/msg/header.hpp"
 
-namespace dai {
-
-namespace ros {
+namespace depthai_bridge {
 
 namespace StdMsgs = std_msgs::msg;
 namespace ImageMsgs = sensor_msgs::msg;
@@ -32,35 +27,16 @@ using CompImagePtr = ImageMsgs::CompressedImage::SharedPtr;
 
 using TimePoint = std::chrono::time_point<std::chrono::steady_clock, std::chrono::steady_clock::duration>;
 
-class ImageConverter {
+class ImageConverter : public BaseConverter {
    public:
-    // ImageConverter() = default;
-    ImageConverter(const std::string frameName, bool interleaved, bool getBaseDeviceTimestamp = false);
+    ImageConverter(const std::string& frameName, bool interleaved, bool getBaseDeviceTimestamp = false);
     ~ImageConverter();
-    ImageConverter(bool interleaved, bool getBaseDeviceTimestamp = false);
-
-    /**
-     * @brief Handles cases in which the ROS time shifts forward or backward
-     *  Should be called at regular intervals or on-change of ROS time, depending
-     *  on monitoring.
-     *
-     */
-    void updateRosBaseTime();
-
-    /**
-     * @brief Commands the converter to automatically update the ROS base time on message conversion based on variable
-     *
-     * @param update: bool whether to automatically update the ROS base time on message conversion
-     */
-    void setUpdateRosBaseTimeOnToRosMsg(bool update = true) {
-        updateRosBaseTimeOnToRosMsg = update;
-    }
 
     /**
      * @brief Sets converter behavior to convert from bitstream to raw data.
      * @param srcType: The type of the bitstream data used for conversion.
      */
-    void convertFromBitstream(dai::RawImgFrame::Type srcType);
+    void convertFromBitstream(dai::ImgFrame::Type srcType);
 
     /**
      * @brief Sets exposure offset when getting timestamps from the message.
@@ -92,15 +68,18 @@ class ImageConverter {
      */
     void setFFMPEGEncoding(const std::string& encoding);
 
+    void toRosMsg(std::shared_ptr<dai::EncodedFrame> inData, std::deque<ImageMsgs::Image>& outImageMsgs);
     void toRosMsg(std::shared_ptr<dai::ImgFrame> inData, std::deque<ImageMsgs::Image>& outImageMsgs);
+    ImageMsgs::Image toRosMsgRawPtr(std::shared_ptr<dai::EncodedFrame> inData, const sensor_msgs::msg::CameraInfo& info = sensor_msgs::msg::CameraInfo());
     ImageMsgs::Image toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> inData, const sensor_msgs::msg::CameraInfo& info = sensor_msgs::msg::CameraInfo());
     ImagePtr toRosMsgPtr(std::shared_ptr<dai::ImgFrame> inData);
 
-    FFMPEGMsgs::FFMPEGPacket toRosFFMPEGPacket(std::shared_ptr<dai::EncodedFrame> inData);
+    void toRosFFMPEGPacket(std::shared_ptr<dai::EncodedFrame> inData, std::deque<FFMPEGMsgs::FFMPEGPacket>& outImageMsgs);
 
-    ImageMsgs::CompressedImage toRosCompressedMsg(std::shared_ptr<dai::ImgFrame> inData);
+    void toRosCompressedMsg(std::shared_ptr<dai::EncodedFrame> inData, std::deque<ImageMsgs::CompressedImage>& outImageMsgs);
 
     void toDaiMsg(const ImageMsgs::Image& inMsg, dai::ImgFrame& outData);
+    sensor_msgs::msg::CameraInfo generateCameraInfo(std::shared_ptr<dai::ImgFrame> imgFrame) const;
 
     /** TODO(sachin): Add support for ros msg to cv mat since we have some
      *  encodings which cv supports but ros doesn't
@@ -111,28 +90,52 @@ class ImageConverter {
                                                   dai::CameraBoardSocket cameraId,
                                                   int width = -1,
                                                   int height = -1,
-                                                  Point2f topLeftPixelId = Point2f(),
-                                                  Point2f bottomRightPixelId = Point2f());
+                                                  dai::Point2f topLeftPixelId = dai::Point2f(),
+                                                  dai::Point2f bottomRightPixelId = dai::Point2f());
 
-   private:
     void planarToInterleaved(const std::vector<uint8_t>& srcData, std::vector<uint8_t>& destData, int w, int h, int numPlanes, int bpp);
     void interleavedToPlanar(const std::vector<uint8_t>& srcData, std::vector<uint8_t>& destData, int w, int h, int numPlanes, int bpp);
-    static std::unordered_map<dai::RawImgFrame::Type, std::string> encodingEnumMap;
-    static std::unordered_map<dai::RawImgFrame::Type, std::string> planarEncodingEnumMap;
 
-    // dai::RawImgFrame::Type _srcType;
+    bool isDaiInterleaved() const {
+        return daiInterleaved;
+    }
+    bool isFromBitstream() const {
+        return fromBitstream;
+    }
+    dai::ImgFrame::Type getSrcType() const {
+        return srcType;
+    }
+    bool isDispToDepth() const {
+        return dispToDepth;
+    }
+    double getBaseline() const {
+        return baseline;
+    }
+    bool isAddExpOffset() const {
+        return addExpOffset;
+    }
+    dai::CameraExposureOffset getExpOffset() const {
+        return expOffset;
+    }
+    bool isReversedStereoSocketOrder() const {
+        return reversedStereoSocketOrder;
+    }
+    bool isAlphaScalingEnabled() const {
+        return alphaScalingEnabled;
+    }
+    double getAlphaScalingFactor() const {
+        return alphaScalingFactor;
+    }
+    std::string getFFMPEGEncoding() const {
+        return ffmpegEncoding;
+    }
+
+   private:
+    static std::unordered_map<dai::ImgFrame::Type, std::string> encodingEnumMap;
+    static std::unordered_map<dai::ImgFrame::Type, std::string> planarEncodingEnumMap;
+
     bool daiInterleaved;
-    // bool c
-    const std::string frameName = "";
-    std::chrono::time_point<std::chrono::steady_clock> steadyBaseTime;
-
-    rclcpp::Time rosBaseTime;
-    bool getBaseDeviceTimestamp;
-    // For handling ROS time shifts and debugging
-    int64_t totalNsChange{0};
-    // Whether to update the ROS base time on each message conversion
-    bool updateRosBaseTimeOnToRosMsg{false};
-    dai::RawImgFrame::Type srcType;
+    dai::ImgFrame::Type srcType;
     bool fromBitstream = false;
     bool dispToDepth = false;
     bool addExpOffset = false;
@@ -146,6 +149,4 @@ class ImageConverter {
     std::string ffmpegEncoding = "libx264";
 };
 
-}  // namespace ros
-
-}  // namespace dai
+}  // namespace depthai_bridge

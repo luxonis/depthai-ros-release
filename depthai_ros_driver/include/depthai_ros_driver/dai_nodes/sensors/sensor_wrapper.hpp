@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "depthai-shared/common/CameraBoardSocket.hpp"
+#include "depthai/common/CameraBoardSocket.hpp"
 #include "depthai/pipeline/Node.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
@@ -14,14 +14,14 @@
 namespace dai {
 class Pipeline;
 class Device;
-class DataInputQueue;
+class MessageQueue;
 namespace node {
-class XLinkIn;
-}
-namespace ros {
-class ImageConverter;
+class Camera;
 }
 }  // namespace dai
+namespace depthai_bridge {
+class ImageConverter;
+}
 
 namespace rclcpp {
 class Node;
@@ -34,12 +34,15 @@ class SensorParamHandler;
 }
 namespace dai_nodes {
 
+class Camera;
+
 class SensorWrapper : public BaseNode {
    public:
     explicit SensorWrapper(const std::string& daiNodeName,
                            std::shared_ptr<rclcpp::Node> node,
                            std::shared_ptr<dai::Pipeline> pipeline,
-                           std::shared_ptr<dai::Device> device,
+                           const std::string& deviceName,
+                           bool rsCompat,
                            dai::CameraBoardSocket socket,
                            bool publish = true);
     ~SensorWrapper();
@@ -47,22 +50,22 @@ class SensorWrapper : public BaseNode {
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input in, int linkType = 0) override;
     void setNames() override;
-    void setXinXout(std::shared_ptr<dai::Pipeline> pipeline) override;
+    void setInOut(std::shared_ptr<dai::Pipeline> pipeline) override;
     void closeQueues() override;
-    sensor_helpers::ImageSensor getSensorData();
     std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> getPublishers() override;
+    std::shared_ptr<dai::node::Camera> getUnderlyingNode();
+    dai::Node::Output* getDefaultOut();
 
    private:
     void subCB(const sensor_msgs::msg::Image& img);
-    std::unique_ptr<BaseNode> sensorNode, featureTrackerNode, nnNode;
+    std::unique_ptr<Camera> sensorNode;
+    std::unique_ptr<BaseNode> featureTrackerNode, nnNode;
     std::unique_ptr<param_handlers::SensorParamHandler> ph;
-    std::unique_ptr<dai::ros::ImageConverter> converter;
+    std::unique_ptr<depthai_bridge::ImageConverter> converter;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub;
-    std::shared_ptr<dai::node::XLinkIn> xIn;
-    std::shared_ptr<dai::DataInputQueue> inQ;
+    std::shared_ptr<dai::MessageQueue> inQ;
     std::string inQName;
     int socketID;
-    sensor_helpers::ImageSensor sensorData;
 };
 
 }  // namespace dai_nodes
