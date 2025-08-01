@@ -1,0 +1,11 @@
+/oak:
+  ros__parameters:
+    driver:
+      i_enable_ir: false
+    pipeline_gen:
+      i_enable_imu: true
+      i_nn_type: none
+      i_pipeline_type: rgbtof
+    left:
+      i_fps: 15.0
+      i_height: 480
