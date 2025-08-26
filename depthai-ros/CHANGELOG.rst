@@ -1,8 +1,14 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package depthai-ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+3.0.3 (2025-08-22)
+------------------
+* Various minor fixes
+* Adding rgbd for stereo left/right
+* Improved ToF performance
+* Improved stereo alignment
 
-3.0.1 (2025-08-01)
+3.0.2 (2025-08-01)
 ------------------
 * Add deprecated camera.launch.py
 * Minor fixes in CI
