@@ -122,7 +122,6 @@ jobs:
             USE_RVIZ=1
           platforms: |
             amd64
-            arm64
           push: ${{ env.PUSH }}
           no-cache: true
           tags: | 

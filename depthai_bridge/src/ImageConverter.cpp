@@ -190,7 +190,7 @@ ImageMsgs::Image ImageConverter::toRosMsgRawPtr(std::shared_ptr<dai::ImgFrame> i
             outImageMsg.encoding = temp_str;
             outImageMsg.height = inData->getHeight();
             outImageMsg.width = inData->getWidth();
-            outImageMsg.step = inData->getData().size() / inData->getHeight();
+            outImageMsg.step = inData->getStride();
             ;
             if(outImageMsg.encoding == "16UC1" || outImageMsg.encoding == "32FC1")
                 outImageMsg.is_bigendian = false;
@@ -376,6 +376,8 @@ sensor_msgs::msg::CameraInfo ImageConverter::generateCameraInfo(std::shared_ptr<
         for(int j = 0; j < 3; ++j) {
             cameraInfo.p[i * 4 + j] = intrinsicMatrix[i][j];
         }
+        // We take extrinsic projection params from initial calibration estimate here
+        cameraInfo.p[i * 4 + 3] = camInfo.p[i * 4 + 3];
     }
 
     // Set the rectification matrix (identity matrix)
@@ -500,6 +502,7 @@ ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(dai::CalibrationHa
     }
     cameraData.distortion_model = "rational_polynomial";
 
+    camInfo = cameraData;
     return cameraData;
 }
 }  // namespace depthai_bridge
