@@ -1,0 +1,13 @@
+/oak:
+  ros__parameters:
+    pipeline_gen:
+      i_nn_type: spatial
+      i_enable_rgbd: true
+    stereo:
+      i_subpixel: true
+    nn:
+      i_enable_passthrough: true
+/spatial_bb_node:
+  ros__parameters:
+    desqueeze: true
+
