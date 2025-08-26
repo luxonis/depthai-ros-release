@@ -63,15 +63,12 @@ void Segmentation::setupQueues(std::shared_ptr<dai::Device> device) {
     nnPub = image_transport::create_camera_publisher(getROSNode().get(), "~/" + getName() + "/image_raw");
     nnQ->addCallback(std::bind(&Segmentation::segmentationCB, this, std::placeholders::_1, std::placeholders::_2));
     if(ph->getParam<bool>("i_enable_passthrough")) {
-        auto tfPrefix = getOpticalFrameName(getSocketName(static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"))));
+        auto tfPrefix = getOpticalFrameName(getSocketName(ph->getSocketID()));
         ptQ = segNode->passthrough.createOutputQueue(ph->getParam<int>("i_max_q_size"), false);
         imageConverter = std::make_unique<depthai_bridge::ImageConverter>(tfPrefix, false);
         infoManager = std::make_shared<camera_info_manager::CameraInfoManager>(
             getROSNode()->create_sub_node(std::string(getROSNode()->get_name()) + "/" + getName()).get(), "/" + getName());
-        infoManager->setCameraInfo(sensor_helpers::getCalibInfo(getROSNode()->get_logger(),
-                                                                imageConverter,
-                                                                device->readCalibration(),
-                                                                static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"))));
+        infoManager->setCameraInfo(sensor_helpers::getCalibInfo(getROSNode()->get_logger(), imageConverter, device->readCalibration(), ph->getSocketID()));
 
         ptPub = image_transport::create_camera_publisher(getROSNode().get(), "~/" + getName() + "/passthrough/image_raw");
         ptQ->addCallback(std::bind(sensor_helpers::basicCameraPub, std::placeholders::_1, std::placeholders::_2, *imageConverter, ptPub, infoManager));
@@ -127,11 +124,11 @@ cv::Mat Segmentation::decodeDeeplab(cv::Mat mat, int classNum) {
     }
     return colors;
 }
-void Segmentation::link(dai::Node::Input in, int /*linkType*/) {
+void Segmentation::link(dai::Node::Input& in, int /*linkType*/) {
     segNode->out.link(in);
 }
 
-dai::Node::Input Segmentation::getInput(int /*linkType*/) {
+dai::Node::Input& Segmentation::getInput(int /*linkType*/) {
     if(ph->getParam<bool>("i_disable_resize")) {
         return segNode->input;
     }

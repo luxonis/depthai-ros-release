@@ -130,11 +130,14 @@ ImagePublisher::~ImagePublisher() {
 void ImagePublisher::closeQueue() {
     if(dataQ) dataQ->close();
 }
-void ImagePublisher::link(dai::Node::Input in) {
+void ImagePublisher::link(dai::Node::Input& in) {
     out->link(in);
 }
 std::shared_ptr<dai::MessageQueue> ImagePublisher::getQueue() {
     return dataQ;
+}
+bool ImagePublisher::isSynced() {
+    return synced;
 }
 void ImagePublisher::addQueueCB() {
     cbID = dataQ->addCallback([this](const std::shared_ptr<dai::ADatatype>& data) { publish(data); });
