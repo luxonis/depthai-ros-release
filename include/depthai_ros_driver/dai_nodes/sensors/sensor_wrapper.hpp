@@ -48,13 +48,14 @@ class SensorWrapper : public BaseNode {
     ~SensorWrapper();
     void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
-    void link(dai::Node::Input in, int linkType = 0) override;
+    void link(dai::Node::Input& in, int linkType = 0) override;
     void setNames() override;
     void setInOut(std::shared_ptr<dai::Pipeline> pipeline) override;
     void closeQueues() override;
     std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> getPublishers() override;
     std::shared_ptr<dai::node::Camera> getUnderlyingNode();
     dai::Node::Output* getDefaultOut();
+    dai::CameraBoardSocket getSocketID();
 
    private:
     void subCB(const sensor_msgs::msg::Image& img);
@@ -65,7 +66,7 @@ class SensorWrapper : public BaseNode {
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub;
     std::shared_ptr<dai::MessageQueue> inQ;
     std::string inQName;
-    int socketID;
+    dai::CameraBoardSocket socketID;
 };
 
 }  // namespace dai_nodes
