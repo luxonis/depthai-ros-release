@@ -79,8 +79,9 @@ class ImagePublisher {
     void createInfoManager(std::shared_ptr<dai::Device> device);
     void addQueueCB();
     void closeQueue();
+    bool isSynced();
     std::shared_ptr<dai::MessageQueue> getQueue();
-    void link(dai::Node::Input in);
+    void link(dai::Node::Input& in);
     std::string getQueueName();
     void publish(const std::shared_ptr<dai::ADatatype>& data);
     void publish(std::shared_ptr<Image> img);
