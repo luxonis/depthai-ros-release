@@ -39,7 +39,6 @@ class ToF : public BaseNode {
                  bool rsCompat,
                  dai::CameraBoardSocket boardSocket = dai::CameraBoardSocket::CAM_A);
     ~ToF();
-    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
     void link(dai::Node::Input& in, int linkType = 0) override;
     void setNames() override;
@@ -49,6 +48,7 @@ class ToF : public BaseNode {
     void closeQueues() override;
     std::shared_ptr<dai::node::ToF> getUnderlyingNode();
     dai::CameraBoardSocket getSocketID();
+    dai::CameraBoardSocket getAlignedSocketID();
     bool isAligned();
 
    private:
@@ -57,6 +57,7 @@ class ToF : public BaseNode {
     std::shared_ptr<dai::node::ImageAlign> alignNode;
     std::unique_ptr<param_handlers::ToFParamHandler> ph;
     dai::CameraBoardSocket boardSocket;
+    dai::CameraBoardSocket alignedSocket;
     std::string tofQName;
     bool aligned;
 };
