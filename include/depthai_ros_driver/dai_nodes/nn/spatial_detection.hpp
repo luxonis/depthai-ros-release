@@ -18,6 +18,7 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_wrapper.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/stereo.hpp"
+#include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
 #include "depthai_ros_driver/param_handlers/nn_param_handler.hpp"
 #include "rclcpp/node.hpp"
 
@@ -75,9 +76,8 @@ class SpatialDetection : public BaseNode {
 
         if(ph->getParam<bool>("i_enable_passthrough_depth")) {
             dai::CameraBoardSocket socket = static_cast<dai::CameraBoardSocket>(ph->getOtherNodeParam<int>("stereo", "i_board_socket_id"));
-            if(!ph->getOtherNodeParam<bool>("stereo", "i_align_depth")) {
-                tfPrefix = getFrameName("right");
-            };
+            tfPrefix = getOpticalFrameName(
+                ph->getOtherNodeParam<std::string>(sensor_helpers::getNodeName(getROSNode(), sensor_helpers::NodeNameEnum::Stereo), "i_socket_name"));
             utils::ImgConverterConfig convConf;
             convConf.tfPrefix = tfPrefix;
             convConf.getBaseDeviceTimestamp = ph->getParam<bool>("i_get_base_device_timestamp");
