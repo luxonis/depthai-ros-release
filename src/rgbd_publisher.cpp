@@ -15,7 +15,7 @@
 int main(int argc, char** argv) {
     std::string tfPrefix = "oak";
     rclcpp::init(argc, argv);
-    auto node = rclcpp::Node::make_shared("rgbd_publisher");
+    auto node = rclcpp::Node::make_shared(tfPrefix);
 
     auto device = std::make_shared<dai::Device>();
     dai::Pipeline pipeline(device);
@@ -35,13 +35,7 @@ int main(int argc, char** argv) {
 
     pclConverter->setDepthUnit(dai::StereoDepthConfig::AlgorithmControl::DepthUnit::METER);
     auto pclPub = std::make_unique<depthai_bridge::BridgePublisher<sensor_msgs::msg::PointCloud2, dai::PointCloudData>>(
-        pclQ,
-        node,
-        "points/color",
-        std::bind(&depthai_bridge::PointCloudConverter::toRosMsg, pclConverter, std::placeholders::_1, std::placeholders::_2),
-        30,
-        "",
-        "points");
+        pclQ, node, "points/color", std::bind(&depthai_bridge::PointCloudConverter::toRosMsg, pclConverter, std::placeholders::_1, std::placeholders::_2), 30);
 
     pclPub->addPublisherCallback();
 
