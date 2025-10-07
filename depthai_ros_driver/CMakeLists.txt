@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(depthai_ros_driver VERSION 3.0.5)
+project(depthai_ros_driver VERSION 3.0.7)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_BUILD_SHARED_LIBS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -40,8 +40,13 @@ ${camera_info_manager_TARGETS}
 depthai::core
 ${depthai_bridge_TARGETS}
 rclcpp::rclcpp
+${geometry_msgs_TARGETS}
+${depthai_ros_msgs_TARGETS}
+${nav_msgs_TARGETS}
 ${std_msgs_TARGETS}
 ${sensor_msgs_TARGETS}
+${std_srvs_TARGETS}
+tf2_ros::tf2_ros
 image_transport::image_transport
 )
 
@@ -77,6 +82,8 @@ add_library(
   src/param_handlers/sensor_param_handler.cpp
   src/param_handlers/feature_tracker_param_handler.cpp
   src/param_handlers/rgbd_param_handler.cpp
+  src/param_handlers/vio_param_handler.cpp
+  # src/param_handlers/slam_param_handler.cpp
   src/param_handlers/stereo_param_handler.cpp
   src/param_handlers/thermal_param_handler.cpp
   src/param_handlers/tof_param_handler.cpp
@@ -99,6 +106,8 @@ add_library(
   src/dai_nodes/sensors/stereo.cpp
   src/dai_nodes/sensors/thermal.cpp
   src/dai_nodes/sensors/rgbd.cpp
+  src/dai_nodes/sensors/vio.cpp
+  # src/dai_nodes/sensors/slam.cpp
   src/dai_nodes/sensors/tof.cpp
   src/dai_nodes/sensors/sync.cpp
 )
@@ -127,6 +136,7 @@ add_library(
   ${PROJECT_NAME} SHARED
   src/driver.cpp
   src/pipeline/pipeline_generator.cpp
+  src/pipeline/base_pipeline.cpp
   src/pipeline/base_types.cpp
 )
 
@@ -139,8 +149,8 @@ PUBLIC
   ${COMMON_LIB_NAME}
 )
 add_executable(
- driver_node
- src/driver_node.cpp)
+  driver_node
+  src/driver_node.cpp)
 target_link_libraries(driver_node
 PUBLIC
   ${PROJECT_NAME}
