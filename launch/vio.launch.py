@@ -42,7 +42,7 @@ def generate_launch_description():
     depthai_prefix = get_package_share_directory("depthai_ros_driver")
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),
-        DeclareLaunchArgument("camera_model", default_value="OAK-D"),
+        DeclareLaunchArgument("camera_model", default_value="OAK-D-S2"),
         DeclareLaunchArgument("parent_frame", default_value="oak_parent_frame"),
         DeclareLaunchArgument("cam_pos_x", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_y", default_value="0.0"),
@@ -52,12 +52,12 @@ def generate_launch_description():
         DeclareLaunchArgument("cam_yaw", default_value="0.0"),
         DeclareLaunchArgument(
             "params_file",
-            default_value=os.path.join(depthai_prefix, "config", "rgbd.yaml"),
+            default_value=os.path.join(depthai_prefix, "config", "vio.yaml"),
         ),
         DeclareLaunchArgument("use_rviz", default_value="False"),
         DeclareLaunchArgument(
             "rviz_config",
-            default_value=os.path.join(depthai_prefix, "config", "rviz", "rgbd.rviz"),
+            default_value=os.path.join(depthai_prefix, "config", "rviz", "vio.rviz"),
         ),
         DeclareLaunchArgument("rs_compat", default_value="False"),
     ]
