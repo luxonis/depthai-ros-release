@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10.2)  # CMake version in Ubuntu 18.04 LTS
 
-project(depthai_ros_msgs VERSION 3.0.5)
+project(depthai_ros_msgs VERSION 3.0.7)
 
 if(POLICY CMP0057)
     cmake_policy(SET CMP0057 NEW)
@@ -33,6 +33,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SpatialDetectionArray.msg"
   "msg/TrackDetection2D.msg"
   "msg/TrackDetection2DArray.msg"
+  "srv/SetLocalTransform.srv"
   "srv/TriggerNamed.srv"
   "srv/NormalizedImageCrop.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs vision_msgs sensor_msgs
