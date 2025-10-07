@@ -149,8 +149,8 @@ tracks:
     - git-bloom-generate -y rosrpm --prefix release/:{ros_distro} :{ros_distro} -i
       :{release_inc} --os-name rhel
     devel_branch: kilted
-    last_release: v3.0.5-kilted
-    last_version: 3.0.5
+    last_release: v3.0.7-kilted
+    last_version: 3.0.7
     name: depthai-ros
     patches: null
     release_inc: '1'
