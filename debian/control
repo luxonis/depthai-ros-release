@@ -1,0 +1,12 @@
+Source: ros-kilted-depthai-examples
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libopencv-dev, ros-kilted-ament-cmake, ros-kilted-backward-ros, ros-kilted-camera-info-manager, ros-kilted-cv-bridge, ros-kilted-depthai, ros-kilted-depthai-bridge, ros-kilted-depthai-descriptions, ros-kilted-depthai-ros-msgs, ros-kilted-foxglove-msgs, ros-kilted-image-transport, ros-kilted-nav-msgs, ros-kilted-rclcpp, ros-kilted-ros-environment, ros-kilted-rviz-imu-plugin, ros-kilted-sensor-msgs, ros-kilted-std-msgs, ros-kilted-stereo-msgs, ros-kilted-vision-msgs, ros-kilted-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-kilted-depthai-examples
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopencv-dev, ros-kilted-backward-ros, ros-kilted-camera-info-manager, ros-kilted-cv-bridge, ros-kilted-depth-image-proc, ros-kilted-depthai, ros-kilted-depthai-bridge, ros-kilted-depthai-descriptions, ros-kilted-depthai-ros-msgs, ros-kilted-foxglove-msgs, ros-kilted-image-transport, ros-kilted-nav-msgs, ros-kilted-rclcpp, ros-kilted-robot-state-publisher, ros-kilted-ros-environment, ros-kilted-rviz-imu-plugin, ros-kilted-sensor-msgs, ros-kilted-std-msgs, ros-kilted-stereo-msgs, ros-kilted-vision-msgs, ros-kilted-xacro, ros-kilted-ros-workspace
+Description: The depthai_examples package
