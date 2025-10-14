@@ -1,3 +1,33 @@
+## depthai-ros (kilted) - 3.0.8-1
+
+The packages in the `depthai-ros` repository were released into the `kilted` distro by running `/usr/bin/bloom-release depthai-ros --rosdistro kilted` on `Tue, 14 Oct 2025 11:36:47 -0000`
+
+These packages were released:
+- `depthai-ros`
+- `depthai_bridge`
+- `depthai_descriptions`
+- `depthai_examples`
+- `depthai_filters`
+- `depthai_ros_driver`
+- `depthai_ros_msgs`
+
+Version of package(s) in repository `depthai-ros`:
+
+- upstream repository: https://github.com/luxonis/depthai-ros.git
+- release repository: https://github.com/luxonis/depthai-ros-release.git
+- rosdistro version: `3.0.7-1`
+- old version: `3.0.7-1`
+- new version: `3.0.8-1`
+
+Versions of tools used:
+
+- bloom version: `0.12.0`
+- catkin_pkg version: `1.0.0`
+- rosdep version: `0.25.1`
+- rosdistro version: `1.0.1`
+- vcstools version: `0.1.42`
+
+
 ## depthai-ros (kilted) - 3.0.7-1
 
 The packages in the `depthai-ros` repository were released into the `kilted` distro by running `/usr/bin/bloom-release depthai-ros --rosdistro kilted` on `Tue, 07 Oct 2025 17:05:40 -0000`
