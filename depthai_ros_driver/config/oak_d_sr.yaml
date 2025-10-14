@@ -1,6 +1,0 @@
-/oak:
-  ros__parameters:
-    pipeline_gen:
-      i_pipeline_type: 'Depth'
-    right:
-      i_publish_topic: true
