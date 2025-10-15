@@ -1,0 +1,322 @@
+ros-kilted-depthai-ros (3.0.9-1bookworm) bookworm; urgency=high
+
+  * Fix backward_ros dependency
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 14 Oct 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.8-1bookworm) bookworm; urgency=high
+
+  * Fix nav_msgs dependency
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Mon, 13 Oct 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.7-1bookworm) bookworm; urgency=high
+
+  * Disabled VSLAM until deb generation issues for depthai-core are resolved
+  * Added new parameters for VIO
+  * Updated TF frame naming in TFPublisher (node name is prepended instead of base frame)
+  * Updated examples
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Mon, 06 Oct 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.6-1bookworm) bookworm; urgency=high
+
+  * Added TransformData and GridMap converters
+  * Updated BridgePublisher to also publish transforms
+  * SLAM and VIO support
+  * Added slam and odometry publishing examples
+  * Added VIO and VSLAM nodes to depthai_ros_driver
+  * Removed i_enable_default_output from camera parameters
+  * Stereo node has a separate FPS parameter
+  * Disabled default NN in depthai_ros_driver
+  * Publishing of full resolution available for camera sensors in depthai_ros_driver
+  * Fixed issues in Stereo linking in depthai_ros_driver
+  * Added more Rviz configs
+  * Fixed Spatial BB example in depthai_filters
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 30 Sep 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.5-1bookworm) bookworm; urgency=high
+
+  * Update IMU rotation vector
+  * Update ToF example
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Mon, 01 Sep 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.4-1bookworm) bookworm; urgency=high
+
+  * Update IR param names
+  * Update ToF alignment
+  * Update launch files
+  * Update thermal parameters
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 28 Aug 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.3-1bookworm) bookworm; urgency=high
+
+  * Various minor fixes
+  * Adding rgbd for stereo left/right
+  * Improved ToF performance
+  * Improved stereo alignment
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 21 Aug 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.2-1bookworm) bookworm; urgency=high
+
+  * Add deprecated camera.launch.py
+  * Minor fixes in CI
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 31 Jul 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (3.0.0-1bookworm) bookworm; urgency=high
+
+  * Updating to DepthAI V3
+  * Switching to Camera nodes instead of Mono/Color cams
+  * Updated socket/frame naming
+  * IMU publishing now in RDF frame across the board
+  * Using TFPublisher instead of URDF description by default for more accurate results
+  * Undistorted streams can now be requested
+  * depthai_examples have been largely modified to remove deprecated examples and simplify code
+  * Tests added for converters in depthai_bridge
+  * NN creation simplified both in depthai_examples and depthai_ros_driver
+  * RGBD Node and Pointcloud converter have been added
+  * Thermal node added
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Wed, 30 Jul 2025 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.11.2-1bookworm) bookworm; urgency=high
+
+  * Add autoexposure region settings
+  * Add additional IMU parameters
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Sun, 16 Mar 2025 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.11.1-1bookworm) bookworm; urgency=high
+
+  * Add color order parameter for color sensors
+  * (ROS2) Fix low bandwidth issue
+  * (ROS1) Joint state remapping fix
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 11 Mar 2025 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.11.0-1bookworm) bookworm; urgency=high
+
+  * Add Thermal support
+  * Fix issues in TF Publisher
+  * (ROS2) Separate callback groups for services
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 18 Feb 2025 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.10.5-1bookworm) bookworm; urgency=high
+
+  * Fix low bandwidth issues
+  * New stereo filters
+  * Diagnostics update
+  * Fix IR calculation
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Wed, 08 Jan 2025 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.10.4-1bookworm) bookworm; urgency=high
+
+  * Fix rectified topic names
+  * Fix pointcloud launch
+  * Add sensor parameters for max autoexposure, sharpness, luma and chroma denoise
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Wed, 06 Nov 2024 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.10.3-1bookworm) bookworm; urgency=high
+
+  * Allow setting USB speed without specifying device information
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Sun, 13 Oct 2024 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.10.2-1bookworm) bookworm; urgency=high
+
+  * Fix Stereo K matrix publishing
+  * Fix socket ID for NN detections
+  * Remove catching errors when starting the device since it introduced undefined behavior
+  * Add desqueeze to NN node
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Wed, 25 Sep 2024 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.10.1-1bookworm) bookworm; urgency=high
+
+  * Fix ToF synced publishing
+  * Add camera_info publishing when publishing compressed images
+  * Catch errors when starting the device
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 17 Sep 2024 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.10.0-1bookworm) bookworm; urgency=high
+
+  * Adding stl files for SR and LR models by @danilo-pejovic in https://github.com/luxonis/depthai-ros/pull/491
+  * No imu fix Humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/500
+  * Tracking converter for ROS2 Humble by @daniqsilva25 in https://github.com/luxonis/depthai-ros/pull/505
+  * Added Env Hooks so that depthai xacro can be used with gazebo sim by @r4hul77 in https://github.com/luxonis/depthai-ros/pull/507
+  * Fix resource paths for Ignition Gazebo by @Nibanovic in https://github.com/luxonis/depthai-ros/pull/511
+  * Use simulation flag to decide how to load meshes. by @destogl in https://github.com/luxonis/depthai-ros/pull/524
+  * Add new launch file for starting multiple rgbd cameras on robots. by @destogl in https://github.com/luxonis/depthai-ros/pull/532
+  * Missing fields in detection messages Humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/574
+  * Ip autodiscovery fix Humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/561
+  * RS Mode & Sync - Humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/578
+  * Compressed image publishers by @Serafadam in https://github.com/luxonis/depthai-ros/pull/580
+  * ToF Support Humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/581
+  * WLS fix humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/582
+  * Syncing & RS updates Humble by @Serafadam in https://github.com/luxonis/depthai-ros/pull/586
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Wed, 28 Aug 2024 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.9.0-1bookworm) bookworm; urgency=high
+
+  * New documentation homepage
+  * Updated support for LR and SR cameras
+  * Added parameter to toggle restart on logging error
+  * Changed argument for camera.launch file from pass_tf_args_as_params to publish_tf_from_calibration to be more explicit
+  * Added the option to run NN as part of sensor node
+  * Added option to run Spatial NN as part of stereo node
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 23 Jan 2024 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.8.2-1bookworm) bookworm; urgency=high
+
+  * Fixed default resolution for Stereo cameras
+  * Added CameraInfo update based on alpha scaling
+  * Logger restart bugfix
+  * URDF parameters fix
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Mon, 16 Oct 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.8.1-1bookworm) bookworm; urgency=high
+
+  * Added support for OpenCV Stereo order convention
+  * Added disparity to depth use spec translation parameter
+  * Updated sensor socket logic
+  * Fixed issues when running robot_state_publisher as component
+  * Added missing tf2 dependencies
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Mon, 11 Sep 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.8.0-1bookworm) bookworm; urgency=high
+
+  * Add camera image orientation param
+  * Performance update
+  * Feature tracker
+  * Handle USB speed when usb id is specified
+  * Change misleading error to a clearer message
+  * Watchdog
+  * Depth alignment update
+  * Synced stereo streams
+  * Lazy Publishing
+  * Urdf loader
+  * Add exposure offset
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 31 Aug 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.7.5-1bookworm) bookworm; urgency=high
+
+  * IMU sync fix
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Sun, 06 Aug 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.7.4-1bookworm) bookworm; urgency=high
+
+  * ROS time update
+  * Minor bugfixes
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Sun, 25 Jun 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.7.3-1bookworm) bookworm; urgency=high
+
+  * Pipeline generation as a plugin
+  * Fixed bounding box generation issue
+  * Stereo rectified streams publishing
+  * Camera trigger mechanisms
+  * Brightness filter
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 15 Jun 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.7.2-1bookworm) bookworm; urgency=high
+
+  * IMU improvements
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Sun, 07 May 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.7.1-1bookworm) bookworm; urgency=high
+
+  * Add custom output size option for streams
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 28 Mar 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.7.0-1bookworm) bookworm; urgency=high
+
+  * Added depthai_descriptions package
+  * Added depthai_filters package
+  * XLinkIn option for image subscription
+  * Additional debugging options
+  * Bugfixes
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Mon, 27 Mar 2023 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.6.4-1bookworm) bookworm; urgency=high
+
+  * Fix sensor name detection
+  * Enable subpixel mode
+  * Update camera start/stop services
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Wed, 22 Feb 2023 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.6.3-1bookworm) bookworm; urgency=high
+
+  * Camera calibration updates
+  * Option to connect to the device via USB port id
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 09 Feb 2023 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.6.2-1bookworm) bookworm; urgency=high
+
+  * Fixed timestamp in SpatialDetector
+  * Updated topic names in stereo_inertial_node
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 31 Jan 2023 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.6.1-1bookworm) bookworm; urgency=high
+
+  * Update docker image building
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 10 Jan 2023 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.6.0-1bookworm) bookworm; urgency=high
+
+  * Added depthai_ros_driver package
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 10 Jan 2023 23:00:00 -0000
+
+ros-kilted-depthai-ros (2.5.3-1bookworm) bookworm; urgency=high
+
+  * Updated release version
+  * Contributors: Sachin
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Sat, 20 Aug 2022 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.5.2-1bookworm) bookworm; urgency=high
+
+  * Upgraded examples
+  * Fixed bugs for Noetic
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Tue, 31 May 2022 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.5.1-1bookworm) bookworm; urgency=high
+
+  * Fix Build farm issues
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 19 May 2022 22:00:00 -0000
+
+ros-kilted-depthai-ros (2.5.0-1bookworm) bookworm; urgency=high
+
+  * Release 2.5.0
+  * add ament package:
+  * created Bridge and Coverters to handle images, IMU and camera Info
+
+ -- Adam Serafin <adam.serafin@luxonis.com>  Thu, 19 May 2022 22:00:00 -0000
+
+
