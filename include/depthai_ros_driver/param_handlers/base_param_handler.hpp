@@ -164,7 +164,7 @@ class BaseParamHandler {
                 auto param = rclcpp::Parameter(fullName, value);
                 baseNode->set_parameter(param);
             }
-            return getParam<T>(fullName);
+            return getParam<T>(paramName);
         } else {
             auto val = baseNode->declare_parameter<T>(fullName, value, descriptor);
             logParam(fullName, val);

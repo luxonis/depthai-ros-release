@@ -22,7 +22,6 @@ void VioParamHandler::declareParams(std::shared_ptr<dai::node::BasaltVIO> vio) {
     declareAndLogParam<int>(ParamNames::WIDTH, 640);
     declareAndLogParam<int>(ParamNames::HEIGHT, 400);
     declareAndLogParam<double>(ParamNames::FPS, 60.0);
-    declareAndLogParam<std::string>("i_vio_config_path", "");
     if(declareAndLogParam<bool>("i_override_local_transform", false)) {
         float x = declareAndLogParam<float>("i_local_transform_x", 0.0);
         float y = declareAndLogParam<float>("i_local_transform_y", 0.0);
