@@ -55,7 +55,9 @@ class Detection : public BaseNode {
         RCLCPP_DEBUG(getLogger(), "Node %s created", daiNodeName.c_str());
         setInOut(pipeline);
     }
-    ~Detection() = default;
+    ~Detection() {
+        closeQueues();
+    };
     /**
      * @brief      Sets up the queues for the DetectionNetwork node and the ImageManip node. Also sets up the publishers for the DetectionNetwork node and the
      * ImageManip node.
