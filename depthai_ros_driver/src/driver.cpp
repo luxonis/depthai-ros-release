@@ -12,11 +12,30 @@ namespace depthai_ros_driver {
 
 Driver::Driver(const rclcpp::NodeOptions& options) : rclcpp::Node("driver", options) {
     //  Since we cannot use shared_from this before the object is initialized, we need to use a timer to start the device.
-    startTimer = this->create_wall_timer(std::chrono::seconds(1), [this]() {
-        start();
-        startTimer->cancel();
-    });
-    rclcpp::on_shutdown([this]() { stop(); });
+    rclcpp::on_shutdown([this]() { stop(); }, options.context());
+    // to prevent starting multiple times when not using static executor
+    if(!starting) {
+        startTimer = this->create_wall_timer(std::chrono::seconds(1), [this]() {
+            starting = true;
+            start();
+            srvGroup = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+
+            paramCBHandle = this->add_on_set_parameters_callback(std::bind(&Driver::parameterCB, this, std::placeholders::_1));
+            startSrv = this->create_service<Trigger>(
+                "~/start_driver", std::bind(&Driver::startCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
+            stopSrv = this->create_service<Trigger>(
+                "~/stop_driver", std::bind(&Driver::stopCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
+            savePipelineSrv = this->create_service<Trigger>(
+                "~/save_pipeline", std::bind(&Driver::savePipelineCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
+            saveCalibSrv = this->create_service<Trigger>(
+                "~/save_calibration", std::bind(&Driver::saveCalibCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
+
+            diagSub =
+                this->create_subscription<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10, std::bind(&Driver::diagCB, this, std::placeholders::_1));
+            RCLCPP_INFO(get_logger(), "Driver ready!");
+            startTimer->cancel();
+        });
+    }
 }
 void Driver::onConfigure() {
     ph = std::make_unique<param_handlers::DriverParamHandler>(shared_from_this(), "driver");
@@ -25,7 +44,6 @@ void Driver::onConfigure() {
     createPipeline();
     setupQueues();
     setIR();
-    paramCBHandle = this->add_on_set_parameters_callback(std::bind(&Driver::parameterCB, this, std::placeholders::_1));
     // If model name not set get one from the device
     std::string camModel = ph->getParam<std::string>("i_tf_device_model");
     if(camModel.empty()) {
@@ -51,23 +69,10 @@ void Driver::onConfigure() {
                                                               ph->getParam<std::string>("i_tf_custom_xacro_args"),
                                                               ph->getParam<bool>("i_rs_compat"));
     }
-    srvGroup = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
-
-    startSrv = this->create_service<Trigger>(
-        "~/start_driver", std::bind(&Driver::startCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
-    stopSrv = this->create_service<Trigger>(
-        "~/stop_driver", std::bind(&Driver::stopCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
-    savePipelineSrv = this->create_service<Trigger>(
-        "~/save_pipeline", std::bind(&Driver::savePipelineCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
-    saveCalibSrv = this->create_service<Trigger>(
-        "~/save_calibration", std::bind(&Driver::saveCalibCB, this, std::placeholders::_1, std::placeholders::_2), rclcpp::ServicesQoS(), srvGroup);
-
-    diagSub = this->create_subscription<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10, std::bind(&Driver::diagCB, this, std::placeholders::_1));
     pipeline->start();
     RCLCPP_WARN(get_logger(),
                 "If you detect any issues with Kilted release, please report "
                 "issues to GH: https://github.com/luxonis/depthai-ros/issues/719");
-    RCLCPP_INFO(get_logger(), "Driver ready!");
 }
 
 void Driver::diagCB(const diagnostic_msgs::msg::DiagnosticArray::SharedPtr msg) {
@@ -97,18 +102,16 @@ void Driver::stop() {
         RCLCPP_INFO(get_logger(), "Stopping driver.");
     }
     if(camRunning) {
-        for(const auto& node : daiNodes) {
-            node->closeQueues();
-        }
-        daiNodes.clear();
-        device.reset();
-        pipeline.reset();
+        pipeline->stop();
+        generator.reset();
         camRunning = false;
         if(rclcpp::ok()) {
             RCLCPP_INFO(get_logger(), "Driver stopped!");
         }
     } else {
-        RCLCPP_INFO(get_logger(), "Driver already stopped!");
+        if(rclcpp::ok()) {
+            RCLCPP_INFO(get_logger(), "Driver already stopped!");
+        }
     }
 }
 
@@ -187,11 +190,11 @@ void Driver::getDeviceType() {
 }
 
 void Driver::createPipeline() {
-    auto generator = std::make_unique<pipeline_gen::PipelineGenerator>();
+    generator = std::make_unique<pipeline_gen::PipelineGenerator>();
     if(!ph->getParam<std::string>("i_external_calibration_path").empty()) {
         loadCalib(ph->getParam<std::string>("i_external_calibration_path"));
     }
-    daiNodes = generator->createPipeline(shared_from_this(), device, pipeline, ph->getParam<bool>("i_rs_compat"));
+    generator->createPipeline(shared_from_this(), device, pipeline, ph->getParam<bool>("i_rs_compat"));
     if(ph->getParam<bool>("i_pipeline_dump")) {
         savePipeline();
     }
@@ -200,11 +203,7 @@ void Driver::createPipeline() {
     }
 }
 
-void Driver::setupQueues() {
-    for(const auto& node : daiNodes) {
-        node->setupQueues(device);
-    }
-}
+void Driver::setupQueues() {}
 
 void Driver::startDevice() {
     rclcpp::Rate r(1.0);
@@ -310,9 +309,7 @@ rcl_interfaces::msg::SetParametersResult Driver::parameterCB(const std::vector<r
             }
         }
     }
-    for(const auto& node : daiNodes) {
-        node->updateParams(params);
-    }
+    generator->updateParams(params);
     rcl_interfaces::msg::SetParametersResult res;
     res.successful = true;
     return res;

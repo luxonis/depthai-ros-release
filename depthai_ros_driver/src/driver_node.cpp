@@ -4,7 +4,7 @@
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
-    auto cam = std::make_shared<depthai_ros_driver::Driver>();
+    auto cam = std::make_shared<depthai_ros_driver::Driver>(rclcpp::NodeOptions());
 
     rclcpp::spin(cam);
     rclcpp::shutdown();
