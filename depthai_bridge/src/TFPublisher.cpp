@@ -184,21 +184,16 @@ geometry_msgs::msg::Quaternion TFPublisher::quatFromRotM(std::vector<std::vector
 }
 
 bool TFPublisher::modelNameAvailable() {
-    std::string path = ament_index_cpp::get_package_share_directory("depthai_descriptions") + "/urdf/models/";
-    DIR* dir;
-    struct dirent* ent;
+    std::filesystem::path path = std::filesystem::path(ament_index_cpp::get_package_share_directory("depthai_descriptions")) / "urdf" / "models";
     convertModelName();
-    if((dir = opendir(path.c_str())) != NULL) {
-        while((ent = readdir(dir)) != NULL) {
-            auto name = std::string(ent->d_name);
-            RCLCPP_DEBUG(logger, "Found model: %s", name.c_str());
-            if(name == camModel + ".stl") {
+    try {
+        for(const auto& entry : std::filesystem::directory_iterator(path)) {
+            if(entry.is_regular_file() && entry.path().filename() == camModel + ".stl") {
                 return true;
             }
         }
-        closedir(dir);
-    } else {
-        throw std::runtime_error("Could not open depthai_descriptions package directory");
+    } catch(const std::filesystem::filesystem_error& e) {
+        throw std::runtime_error("Could not open depthai_descriptions package directory: " + std::string(e.what()));
     }
     return false;
 }
