@@ -126,10 +126,11 @@ void RGBD::setupQueues(std::shared_ptr<dai::Device> /* device */) {
     pclConv->setDepthUnit(dai::StereoDepthConfig::AlgorithmControl::DepthUnit::METER);
 
     pclPub = getROSNode()->create_publisher<sensor_msgs::msg::PointCloud2>("~/" + getName() + "/points", ph->getParam<int>(ParamNames::MAX_Q_SIZE), options);
-    pclQ->addCallback(std::bind(&RGBD::pclCB, this, std::placeholders::_1, std::placeholders::_2));
+    cbID = pclQ->addCallback(std::bind(&RGBD::pclCB, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 void RGBD::closeQueues() {
+    pclQ->removeCallback(cbID);
     pclQ->close();
 }
 
