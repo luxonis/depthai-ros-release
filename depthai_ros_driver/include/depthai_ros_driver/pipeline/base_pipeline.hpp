@@ -29,8 +29,6 @@ namespace pipeline_gen {
 enum class NNType { None, RGB, Spatial };
 class BasePipeline {
    public:
-    ~BasePipeline() = default;
-
     virtual std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                              std::shared_ptr<dai::Device> device,
                                                                              std::shared_ptr<dai::Pipeline> pipeline,
@@ -38,6 +36,7 @@ class BasePipeline {
                                                                              const std::string& deviceName,
                                                                              bool rsCompat,
                                                                              const std::string& nnType) = 0;
+    virtual ~BasePipeline() = default;
 
    protected:
     bool checkForImu(std::shared_ptr<param_handlers::PipelineGenParamHandler> ph, std::shared_ptr<dai::Device> device, rclcpp::Logger logger);

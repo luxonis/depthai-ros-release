@@ -80,6 +80,7 @@ class ImageConverter : public BaseConverter {
 
     void toDaiMsg(const ImageMsgs::Image& inMsg, dai::ImgFrame& outData);
     sensor_msgs::msg::CameraInfo generateCameraInfo(std::shared_ptr<dai::ImgFrame> imgFrame) const;
+    sensor_msgs::msg::CameraInfo generateCameraInfo(std::shared_ptr<dai::EncodedFrame> imgFrame) const;
 
     /** TODO(sachin): Add support for ros msg to cv mat since we have some
      *  encodings which cv supports but ros doesn't
