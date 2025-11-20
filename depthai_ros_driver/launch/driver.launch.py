@@ -12,6 +12,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer, LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode
+from launch.events import Shutdown
 
 
 def is_launch_config_true(context, name):
@@ -21,6 +22,10 @@ def is_launch_config_true(context, name):
 def setup_launch_prefix(context, *args, **kwargs):
     use_gdb = LaunchConfiguration("use_gdb", default="false")
     use_valgrind = LaunchConfiguration("use_valgrind", default="false")
+    valgrind_args = LaunchConfiguration(
+        "valgrind_args",
+        default="--leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=memcheck.log",
+    )
     use_perf = LaunchConfiguration("use_perf", default="false")
 
     launch_prefix = ""
@@ -28,7 +33,8 @@ def setup_launch_prefix(context, *args, **kwargs):
     if use_gdb.perform(context) == "true":
         launch_prefix += "xterm -e gdb -ex run --args"
     if use_valgrind.perform(context) == "true":
-        launch_prefix += "valgrind --tool=callgrind"
+        launch_prefix += f"valgrind {valgrind_args.perform(context)}"
+        print(launch_prefix)
     if use_perf.perform(context) == "true":
         launch_prefix += (
             "perf record -g --call-graph dwarf --output=perf.out.node_name.data --"
@@ -58,7 +64,7 @@ def launch_setup(context, *args, **kwargs):
     use_composition = LaunchConfiguration("rsp_use_composition", default="true")
     imu_from_descr = LaunchConfiguration("imu_from_descr", default="false")
     publish_tf_from_calibration = LaunchConfiguration(
-        "publish_tf_from_calibration", default="false"
+        "publish_tf_from_calibration", default="true"
     )
     override_cam_model = LaunchConfiguration("override_cam_model", default="false")
     params_file = LaunchConfiguration("params_file")
@@ -118,8 +124,12 @@ def launch_setup(context, *args, **kwargs):
                 "i_width": int(depth_profile[0]),
                 "i_height": int(depth_profile[1]),
                 "i_fps": float(depth_profile[2]),
-                "i_left_rect_publish_topic": is_launch_config_true(context, "enable_infra1"),
-                "i_right_rect_publish_topic": is_launch_config_true(context, "enable_infra2"),
+                "i_left_rect_publish_topic": is_launch_config_true(
+                    context, "enable_infra1"
+                ),
+                "i_right_rect_publish_topic": is_launch_config_true(
+                    context, "enable_infra2"
+                ),
             },
             "infra1": {
                 "i_width": int(infra_profile[0]),
@@ -156,8 +166,10 @@ def launch_setup(context, *args, **kwargs):
                 "i_tf_imu_from_descr": imu_from_descr.perform(context),
             }
         }
+    else:
+        params = {"driver": {"i_publish_tf_from_calibration": False}}
     if pointcloud_enable.perform(context) == "true":
-        params["pipeline_gen"] = {"i_enable_rgbd" : True}
+        params["pipeline_gen"] = {"i_enable_rgbd": True}
 
     launch_prefix = setup_launch_prefix(context)
 
@@ -207,11 +219,7 @@ def launch_setup(context, *args, **kwargs):
                         params,
                         parameter_overrides,
                     ],
-                    remappings=[
-                        (
-                            f"{name}/rgbd/points", points_topic_name
-                        )
-                    ]
+                    remappings=[(f"{name}/rgbd/points", points_topic_name)],
                 )
             ],
             arguments=["--ros-args", "--log-level", log_level],
@@ -262,13 +270,16 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("use_gdb", default_value="false"),
         DeclareLaunchArgument("use_valgrind", default_value="false"),
+        DeclareLaunchArgument(
+            "valgrind_args",
+            default_value="--leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=memcheck.log",
+        ),
         DeclareLaunchArgument("use_perf", default_value="false"),
         DeclareLaunchArgument(
             "rs_compat",
             default_value="false",
             description="Enables compatibility with RealSense nodes.",
         ),
-        DeclareLaunchArgument("rectify_rgb", default_value="true"),
         DeclareLaunchArgument("pointcloud.enable", default_value="false"),
         DeclareLaunchArgument("enable_color", default_value="true"),
         DeclareLaunchArgument("enable_depth", default_value="true"),
