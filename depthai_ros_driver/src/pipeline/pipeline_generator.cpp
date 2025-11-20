@@ -1,5 +1,7 @@
 #include "depthai_ros_driver/pipeline/pipeline_generator.hpp"
 
+#include <stdexcept>
+
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
@@ -13,7 +15,8 @@
 
 namespace depthai_ros_driver {
 namespace pipeline_gen {
-PipelineGenerator::PipelineGenerator() {
+PipelineGenerator::PipelineGenerator()
+    : pipelineLoader(std::make_shared<pluginlib::ClassLoader<BasePipeline>>("depthai_ros_driver", "depthai_ros_driver::pipeline_gen::BasePipeline")) {
     pluginTypeMap = {{"RGB", "depthai_ros_driver::pipeline_gen::RGB"},
                      {"RGBD", "depthai_ros_driver::pipeline_gen::RGBD"},
                      {"RGBSTEREO", "depthai_ros_driver::pipeline_gen::RGBStereo"},
@@ -39,10 +42,10 @@ PipelineGenerator::PipelineGenerator() {
 }
 
 PipelineGenerator::~PipelineGenerator() = default;
-std::vector<std::unique_ptr<dai_nodes::BaseNode>> PipelineGenerator::createPipeline(std::shared_ptr<rclcpp::Node> node,
-                                                                                    std::shared_ptr<dai::Device> device,
-                                                                                    std::shared_ptr<dai::Pipeline> pipeline,
-                                                                                    bool rsCompat) {
+void PipelineGenerator::createPipeline(std::shared_ptr<rclcpp::Node> node,
+                                       std::shared_ptr<dai::Device> device,
+                                       std::shared_ptr<dai::Pipeline> pipeline,
+                                       bool rsCompat) {
     auto deviceName = device->getDeviceName();
     RCLCPP_INFO(node->get_logger(), "Creating pipeline for device: %s", deviceName.c_str());
     ph = std::make_shared<param_handlers::PipelineGenParamHandler>(node, "pipeline_gen", deviceName, rsCompat);
@@ -51,7 +54,6 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> PipelineGenerator::createPipel
     auto nnType = ph->getParam<std::string>("i_nn_type");
     RCLCPP_INFO(node->get_logger(), "Pipeline type: %s", pipelineType.c_str());
     std::string pluginType = pipelineType;
-    std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
     // Check if one of the default types.
     try {
         std::string pTypeUpCase = utils::getUpperCaseStr(pipelineType);
@@ -60,11 +62,13 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> PipelineGenerator::createPipel
     } catch(std::out_of_range& e) {
         RCLCPP_DEBUG(node->get_logger(), "Pipeline type [%s] not found in base types, trying to load as a plugin.", pipelineType.c_str());
     }
-    pluginlib::ClassLoader<BasePipeline> pipelineLoader("depthai_ros_driver", "depthai_ros_driver::pipeline_gen::BasePipeline");
 
     try {
-        std::shared_ptr<BasePipeline> pipelinePlugin = pipelineLoader.createSharedInstance(pluginType);
+        auto pipelinePlugin = pipelineLoader->createSharedInstance(pluginType);
         daiNodes = pipelinePlugin->createPipeline(node, device, pipeline, ph, deviceName, rsCompat, nnType);
+        if(daiNodes.empty()) {
+            throw std::runtime_error("No nodes created in this pipeline");
+        }
     } catch(pluginlib::PluginlibException& ex) {
         RCLCPP_ERROR(node->get_logger(), "The plugin failed to load for some reason. Error: %s\n", ex.what());
         throw std::runtime_error("Plugin loading failed.");
@@ -97,10 +101,17 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> PipelineGenerator::createPipel
     if(enableSync) {
         daiNodes.push_back(std::move(sync));
     }
+    for(const auto& node : daiNodes) {
+        node->setupQueues(device);
+    }
     RCLCPP_INFO(node->get_logger(), "Finished setting up pipeline.");
-    return daiNodes;
 }
 
+void PipelineGenerator::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    for(const auto& node : daiNodes) {
+        node->updateParams(params);
+    }
+}
 std::string PipelineGenerator::validatePipeline(std::shared_ptr<rclcpp::Node> node, const std::string& typeStr, int sensorNum, const std::string& deviceName) {
     auto pType = utils::getValFromMap(typeStr, pipelineTypeMap);
     if(deviceName == "OAK-D-SR-POE") {

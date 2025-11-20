@@ -56,6 +56,7 @@ class Imu : public BaseNode {
     std::unique_ptr<param_handlers::ImuParamHandler> ph;
     std::shared_ptr<dai::MessageQueue> imuQ;
     std::string imuQName;
+    int cbID;
 };
 
 }  // namespace dai_nodes

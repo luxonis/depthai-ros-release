@@ -389,6 +389,52 @@ sensor_msgs::msg::CameraInfo ImageConverter::generateCameraInfo(std::shared_ptr<
 
     return cameraInfo;
 }
+sensor_msgs::msg::CameraInfo ImageConverter::generateCameraInfo(std::shared_ptr<dai::EncodedFrame> imgFrame) const {
+    sensor_msgs::msg::CameraInfo cameraInfo;
+
+    // Get the ImgTransformation from the ImgFrame
+    const auto& transformation = imgFrame->transformation;
+
+    // Set the width and height
+    cameraInfo.width = transformation.getSize().first;
+    cameraInfo.height = transformation.getSize().second;
+
+    // Set the intrinsic matrix
+    const auto& intrinsicMatrix = transformation.getIntrinsicMatrix();
+    for(int i = 0; i < 3; ++i) {
+        for(int j = 0; j < 3; ++j) {
+            cameraInfo.k[i * 3 + j] = intrinsicMatrix[i][j];
+        }
+    }
+
+    // Set the distortion model
+    cameraInfo.distortion_model = "rational_polynomial";
+
+    // Set the distortion coefficients
+    const auto& distortionCoeffs = transformation.getDistortionCoefficients();
+    cameraInfo.d.resize(distortionCoeffs.size());
+    for(size_t i = 0; i < distortionCoeffs.size(); ++i) {
+        cameraInfo.d[i] = distortionCoeffs[i];
+    }
+
+    // Set the projection matrix
+    for(int i = 0; i < 3; ++i) {
+        for(int j = 0; j < 3; ++j) {
+            cameraInfo.p[i * 4 + j] = intrinsicMatrix[i][j];
+        }
+        // We take extrinsic projection params from initial calibration estimate here
+        cameraInfo.p[i * 4 + 3] = camInfo.p[i * 4 + 3];
+    }
+
+    // Set the rectification matrix (identity matrix)
+    for(int i = 0; i < 3; ++i) {
+        for(int j = 0; j < 3; ++j) {
+            cameraInfo.r[i * 3 + j] = (i == j) ? 1.0 : 0.0;
+        }
+    }
+
+    return cameraInfo;
+}
 
 ImageMsgs::CameraInfo ImageConverter::calibrationToCameraInfo(dai::CalibrationHandler calibHandler,
                                                               dai::CameraBoardSocket cameraId,
