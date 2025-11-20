@@ -7,6 +7,7 @@
 #include "depthai_bridge/TFPublisher.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/param_handlers/driver_param_handler.hpp"
+#include "depthai_ros_driver/pipeline/pipeline_generator.hpp"
 #include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "rclcpp/callback_group.hpp"
 #include "rclcpp/node.hpp"
@@ -22,7 +23,10 @@ namespace depthai_ros_driver {
 using Trigger = std_srvs::srv::Trigger;
 class Driver : public rclcpp::Node {
    public:
-    explicit Driver(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
+    explicit Driver(const rclcpp::NodeOptions& options);
+    ~Driver() {
+        stop();
+    };
     /**
      * @brief Creates the pipeline and starts the device. Also sets up parameter callback and services.
      */
@@ -75,10 +79,6 @@ class Driver : public rclcpp::Node {
      * Runs onConfigure();
      */
     void start();
-    /*
-     * Since we cannot use shared_from this before the object is initialized, we need to use a timer to start the device.
-     */
-    void indirectStart();
     void restart();
     void diagCB(const diagnostic_msgs::msg::DiagnosticArray::SharedPtr msg);
 
@@ -89,11 +89,11 @@ class Driver : public rclcpp::Node {
     std::vector<std::string> usbStrings = {"UNKNOWN", "LOW", "FULL", "HIGH", "SUPER", "SUPER_PLUS"};
     std::shared_ptr<dai::Pipeline> pipeline;
     std::shared_ptr<dai::Device> device;
-    std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
     std::string deviceName;
+    std::unique_ptr<pipeline_gen::PipelineGenerator> generator;
     dai::Platform platform;
     std::atomic<bool> camRunning = false;
-    bool initialized = false;
+    std::atomic<bool> starting = false;
     std::unique_ptr<depthai_bridge::TFPublisher> tfPub;
     rclcpp::TimerBase::SharedPtr startTimer;
     rclcpp::CallbackGroup::SharedPtr srvGroup;
