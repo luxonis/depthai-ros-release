@@ -54,7 +54,11 @@ void ImagePublisher::setup(std::shared_ptr<dai::Device> device, const utils::Img
         imgPubIT = image_transport::create_camera_publisher(node.get(), pubConfig.topicName + pubConfig.topicSuffix);
     }
     if(!synced) {
-        dataQ = out->createOutputQueue(pubConf.maxQSize, pubConf.qBlocking);
+        if(encConfig.enabled) {
+            dataQ = encoder->out.createOutputQueue(pubConf.maxQSize, pubConf.qBlocking);
+        } else {
+            dataQ = out->createOutputQueue(pubConf.maxQSize, pubConf.qBlocking);
+        }
         addQueueCB();
     }
 }
@@ -128,7 +132,10 @@ ImagePublisher::~ImagePublisher() {
 };
 
 void ImagePublisher::closeQueue() {
-    if(dataQ) dataQ->close();
+    if(dataQ && !dataQ->isClosed()) {
+        dataQ->removeCallback(cbID);
+        dataQ->close();
+    }
 }
 void ImagePublisher::link(dai::Node::Input& in) {
     out->link(in);
@@ -147,33 +154,41 @@ std::string ImagePublisher::getQueueName() {
     return qName;
 }
 std::shared_ptr<Image> ImagePublisher::convertData(const std::shared_ptr<dai::ADatatype>& data) {
-    auto daiImg = std::dynamic_pointer_cast<dai::ImgFrame>(data);
-    auto info = converter->generateCameraInfo(daiImg);
+    sensor_msgs::msg::CameraInfo info;
+    auto img = std::make_shared<Image>();
+    if(encConfig.enabled) {
+        auto daiImg = std::dynamic_pointer_cast<dai::EncodedFrame>(data);
+        if(pubConfig.publishCompressed) {
+            info = converter->generateCameraInfo(daiImg);
+            auto rawMsg = converter->toRosMsgRawPtr(daiImg, info);
+            info.header = rawMsg.header;
+            if(encConfig.profile == dai::VideoEncoderProperties::Profile::MJPEG) {
+                std::deque<sensor_msgs::msg::CompressedImage> deq;
+                converter->toRosCompressedMsg(daiImg, deq);
+                img->compressedImg = std::make_unique<sensor_msgs::msg::CompressedImage>(deq.front());
+            } else {
+                std::deque<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> deq;
+                converter->toRosFFMPEGPacket(daiImg, deq);
+                img->ffmpegPacket = std::make_unique<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>(deq.front());
+            }
+        } else {
+            auto rawMsg = converter->toRosMsgRawPtr(daiImg, info);
+            sensor_msgs::msg::Image::UniquePtr msg = std::make_unique<sensor_msgs::msg::Image>(rawMsg);
+            img->image = std::move(msg);
+        }
+    } else {
+        auto daiImg = std::dynamic_pointer_cast<dai::ImgFrame>(data);
+        info = converter->generateCameraInfo(daiImg);
+        auto rawMsg = converter->toRosMsgRawPtr(daiImg, info);
+        info.header = rawMsg.header;
+        sensor_msgs::msg::Image::UniquePtr msg = std::make_unique<sensor_msgs::msg::Image>(rawMsg);
+        img->image = std::move(msg);
+    }
     if(pubConfig.rectified) {
         info.r[0] = info.r[4] = info.r[8] = 1.0;
     }
     if(pubConfig.undistorted) {
         std::fill(info.d.begin(), info.d.end(), 0.0);
-    }
-    auto img = std::make_shared<Image>();
-    if(pubConfig.publishCompressed) {
-        if(encConfig.profile == dai::VideoEncoderProperties::Profile::MJPEG) {
-            auto daiImg = std::dynamic_pointer_cast<dai::EncodedFrame>(data);
-            std::deque<sensor_msgs::msg::CompressedImage> deq;
-            converter->toRosCompressedMsg(daiImg, deq);
-            img->compressedImg = std::make_unique<sensor_msgs::msg::CompressedImage>(deq.front());
-        } else {
-            auto daiImg = std::dynamic_pointer_cast<dai::EncodedFrame>(data);
-            std::deque<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> deq;
-            converter->toRosFFMPEGPacket(daiImg, deq);
-            img->ffmpegPacket = std::make_unique<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>(deq.front());
-        }
-    } else {
-        auto daiImg = std::dynamic_pointer_cast<dai::ImgFrame>(data);
-        auto rawMsg = converter->toRosMsgRawPtr(daiImg, info);
-        info.header = rawMsg.header;
-        sensor_msgs::msg::Image::UniquePtr msg = std::make_unique<sensor_msgs::msg::Image>(rawMsg);
-        img->image = std::move(msg);
     }
     sensor_msgs::msg::CameraInfo::UniquePtr infoMsg = std::make_unique<sensor_msgs::msg::CameraInfo>(info);
     img->info = std::move(infoMsg);
