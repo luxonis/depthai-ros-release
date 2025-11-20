@@ -118,6 +118,7 @@ class SpatialDetection : public BaseNode {
         }
     };
     void closeQueues() override {
+        nnQ->removeCallback(nnQCBID);
         nnQ->close();
         if(ph->getParam<bool>("i_enable_passthrough")) {
             ptQ->close();
@@ -129,13 +130,15 @@ class SpatialDetection : public BaseNode {
 
    private:
     void spatialCB(const std::string& /*name*/, const std::shared_ptr<dai::ADatatype>& data) {
-        auto inDet = std::dynamic_pointer_cast<dai::SpatialImgDetections>(data);
-        std::deque<vision_msgs::msg::Detection3DArray> deq;
-        detConverter->toRosVisionMsg(inDet, deq);
-        while(deq.size() > 0) {
-            auto currMsg = deq.front();
-            detPub->publish(currMsg);
-            deq.pop_front();
+        if(rclcpp::ok()) {
+            auto inDet = std::dynamic_pointer_cast<dai::SpatialImgDetections>(data);
+            std::deque<vision_msgs::msg::Detection3DArray> deq;
+            detConverter->toRosVisionMsg(inDet, deq);
+            while(deq.size() > 0) {
+                auto currMsg = deq.front();
+                detPub->publish(currMsg);
+                deq.pop_front();
+            }
         }
     };
     std::unique_ptr<depthai_bridge::SpatialDetectionConverter> detConverter;
@@ -150,6 +153,7 @@ class SpatialDetection : public BaseNode {
     std::shared_ptr<dai::MessageQueue> nnQ, ptQ, ptDepthQ;
     std::shared_ptr<dai::node::XLinkOut> xoutNN, xoutPT, xoutPTDepth;
     std::string nnQName, ptQName, ptDepthQName;
+    int nnQCBID;
 };
 
 }  // namespace nn
