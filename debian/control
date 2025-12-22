@@ -1,0 +1,12 @@
+Source: ros-jazzy-depthai-filters
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libopencv-dev, ros-jazzy-ament-cmake-auto, ros-jazzy-cv-bridge, ros-jazzy-depthai-ros-msgs, ros-jazzy-image-transport, ros-jazzy-message-filters, ros-jazzy-rclcpp, ros-jazzy-rclcpp-components, ros-jazzy-sensor-msgs, ros-jazzy-vision-msgs, ros-jazzy-visualization-msgs, ros-jazzy-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-jazzy-depthai-filters
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopencv-dev, ros-jazzy-cv-bridge, ros-jazzy-depthai-ros-msgs, ros-jazzy-image-transport, ros-jazzy-message-filters, ros-jazzy-rclcpp, ros-jazzy-rclcpp-components, ros-jazzy-sensor-msgs, ros-jazzy-vision-msgs, ros-jazzy-visualization-msgs, ros-jazzy-ros-workspace
+Description: Depthai filters package
