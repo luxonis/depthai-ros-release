@@ -1,16 +1,36 @@
 #include "depthai_bridge/TrackedFeaturesConverter.hpp"
 
-namespace depthai_bridge {
+#include "depthai_bridge/depthaiUtility.hpp"
+
+namespace dai {
+
+namespace ros {
 
 TrackedFeaturesConverter::TrackedFeaturesConverter(std::string frameName, bool getBaseDeviceTimestamp)
-    : BaseConverter(std::move(frameName), getBaseDeviceTimestamp) {}
+    : _frameName(frameName), _steadyBaseTime(std::chrono::steady_clock::now()), _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
+    _rosBaseTime = rclcpp::Clock().now();
+}
 
 TrackedFeaturesConverter::~TrackedFeaturesConverter() = default;
 
+void TrackedFeaturesConverter::updateRosBaseTime() {
+    updateBaseTime(_steadyBaseTime, _rosBaseTime, _totalNsChange);
+}
+
 void TrackedFeaturesConverter::toRosMsg(std::shared_ptr<dai::TrackedFeatures> inFeatures, std::deque<depthai_ros_msgs::msg::TrackedFeatures>& featureMsgs) {
+    if(_updateRosBaseTimeOnToRosMsg) {
+        updateRosBaseTime();
+    }
+    std::chrono::_V2::steady_clock::time_point tstamp;
+    if(_getBaseDeviceTimestamp)
+        tstamp = inFeatures->getTimestampDevice();
+    else
+        tstamp = inFeatures->getTimestamp();
+
     depthai_ros_msgs::msg::TrackedFeatures msg;
 
-    msg.header = getRosHeader(inFeatures);
+    msg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
+    msg.header.frame_id = _frameName;
     msg.features.reserve(inFeatures->trackedFeatures.size());
 
     for(const auto& feature : inFeatures->trackedFeatures) {
@@ -27,4 +47,5 @@ void TrackedFeaturesConverter::toRosMsg(std::shared_ptr<dai::TrackedFeatures> in
     featureMsgs.push_back(msg);
 }
 
-}  // namespace depthai_bridge
+}  // namespace ros
+}  // namespace dai

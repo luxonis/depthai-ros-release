@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "depthai/properties/IMUProperties.hpp"
+#include "depthai-shared/properties/IMUProperties.hpp"
+#include "depthai/pipeline/datatype/CameraControl.hpp"
 #include "depthai_bridge/ImuConverter.hpp"
 #include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
 
@@ -26,17 +27,18 @@ enum class ImuMsgType { IMU, IMU_WITH_MAG, IMU_WITH_MAG_SPLIT };
 }
 class ImuParamHandler : public BaseParamHandler {
    public:
-    explicit ImuParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name, const std::string& deviceName, bool rsCompat);
+    explicit ImuParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name);
     ~ImuParamHandler();
     void declareParams(std::shared_ptr<dai::node::IMU> imu, const std::string& imuType);
-    std::unordered_map<std::string, depthai_bridge::ImuSyncMethod> syncMethodMap;
+    dai::CameraControl setRuntimeParams(const std::vector<rclcpp::Parameter>& params) override;
+    std::unordered_map<std::string, dai::ros::ImuSyncMethod> syncMethodMap;
     std::unordered_map<std::string, imu::ImuMsgType> messagetTypeMap;
     std::unordered_map<std::string, dai::IMUSensor> rotationVectorTypeMap;
     std::unordered_map<std::string, dai::IMUSensor> accelerometerModeMap;
     std::unordered_map<std::string, dai::IMUSensor> gyroscopeModeMap;
     std::unordered_map<std::string, dai::IMUSensor> magnetometerModeMap;
     imu::ImuMsgType getMsgType();
-    depthai_bridge::ImuSyncMethod getSyncMethod();
+    dai::ros::ImuSyncMethod getSyncMethod();
 };
 }  // namespace param_handlers
 }  // namespace depthai_ros_driver

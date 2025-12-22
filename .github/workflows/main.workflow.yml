@@ -11,7 +11,6 @@ on:
       - foxy
       - iron
       - jazzy
-      - kilted
     tags:
       - 'v*'
   pull_request:
@@ -22,16 +21,15 @@ on:
       - foxy
       - iron
       - jazzy
-      - kilted
 env:
-  ROS_DISTRO: kilted
+  ROS_DISTRO: humble
 
 jobs:
   clang-format-lint:
     name: ament_clang_format
     runs-on: ubuntu-24.04
     container:
-      image: ubuntu:noble
+      image: ubuntu:jammy
     strategy:
       fail-fast: false
     steps:
@@ -54,7 +52,7 @@ jobs:
     name: ament_${{ matrix.linter }}
     runs-on: ubuntu-24.04
     container:
-      image: ubuntu:noble
+      image: ubuntu:jammy
     strategy:
       fail-fast: false 
       matrix:
@@ -74,9 +72,9 @@ jobs:
           depthai_ros_msgs
           depthai_ros
 
-  docker-build-amd:
+  docker-build:
     name: Build and Upload to Docker Hub
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
     env: 
@@ -85,6 +83,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          image: tonistiigi/binfmt:master
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to DockerHub
         uses: docker/login-action@v1
@@ -104,7 +109,9 @@ jobs:
           build-args: |
             ROS_DISTRO=${{ env.ROS_DISTRO }}
             USE_RVIZ=1
-            BUILD_SEQUENTIAL=1
+          platforms: |
+            amd64
+            arm64
           no-cache: true
 
       - name: Build and Push
@@ -114,54 +121,11 @@ jobs:
           build-args: |
             ROS_DISTRO=${{ env.ROS_DISTRO }}
             USE_RVIZ=1
+          platforms: |
+            amd64
+            arm64
           push: ${{ env.PUSH }}
           no-cache: true
           tags: | 
             luxonis/depthai-ros:${{ steps.vars.outputs.short_ref }}
             luxonis/depthai-ros:${{ env.ROS_DISTRO }}-latest
-  docker-build-arm:
-    name: Build and Upload to Docker Hub (ARM-64)
-    runs-on: ubuntu-24.04-arm
-    strategy:
-      fail-fast: false
-    env: 
-      PUSH: ${{ (github.event_name != 'pull_request') && (github.repository == 'luxonis/depthai-ros') && startsWith(github.ref, 'refs/tags/v') }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        if: env.PUSH == 'true'
-        with:
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASS }}
-      - name: Get Version
-        if: env.PUSH == 'true'
-        id: vars
-        run: echo ::set-output name=short_ref::${GITHUB_REF#refs/*/}
-
-      - name: Build
-        uses: docker/build-push-action@v3
-        if: env.PUSH == 'false'
-        with:
-          build-args: |
-            ROS_DISTRO=${{ env.ROS_DISTRO }}
-            USE_RVIZ=1
-            BUILD_SEQUENTIAL=1
-          no-cache: true
-
-      - name: Build and Push
-        uses: docker/build-push-action@v3
-        if: env.PUSH == 'true'
-        with:
-          build-args: |
-            ROS_DISTRO=${{ env.ROS_DISTRO }}
-            USE_RVIZ=1
-          push: ${{ env.PUSH }}
-          no-cache: true
-          tags: | 
-            luxonis/depthai-ros:${{ steps.vars.outputs.short_ref }}-arm64
-            luxonis/depthai-ros:${{ env.ROS_DISTRO }}-arm64-latest

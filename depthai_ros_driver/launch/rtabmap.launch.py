@@ -21,37 +21,51 @@ def launch_setup(context, *args, **kwargs):
     params_file = LaunchConfiguration("params_file")
     parameters = [
         {
-            "frame_id": "oak_parent_frame",
+            "frame_id": name,
             "subscribe_rgb": True,
             "subscribe_depth": True,
-            "subscribe_odom_info": False,
+            "subscribe_odom_info": True,
             "approx_sync": True,
-            # RTAB-Map's parameters should be strings:
-            'Mem/NotLinkedNodesKept':'false',
-            "Rtabmap/DetectionRate": "1.0",
+            "Rtabmap/DetectionRate": "3.5",
         }
     ]
 
     remappings = [
-        ("rgb/image", name + "/rgb/image_raw"),
+        ("rgb/image", name + "/rgb/image_rect"),
         ("rgb/camera_info", name + "/rgb/camera_info"),
         ("depth/image", name + "/stereo/image_raw"),
-        ("odom", name + "/vio/odometry")
     ]
 
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, "launch", "driver.launch.py")
+                os.path.join(depthai_prefix, "launch", "camera.launch.py")
             ),
             launch_arguments={"name": name, "params_file": params_file}.items(),
         ),
-        Node(
+        LoadComposableNodes(
+            target_container=name + "_container",
+            composable_node_descriptions=[
+                ComposableNode(
+                    package="rtabmap_odom",
+                    plugin="rtabmap_odom::RGBDOdometry",
+                    name="rgbd_odometry",
+                    parameters=parameters,
+                    remappings=remappings,
+                ),
+            ],
+        ),
+        LoadComposableNodes(
+            target_container=name + "_container",
+            composable_node_descriptions=[
+                ComposableNode(
                     package="rtabmap_slam",
-                    executable="rtabmap",
+                    plugin="rtabmap_slam::CoreWrapper",
                     name="rtabmap",
                     parameters=parameters,
                     remappings=remappings,
+                ),
+            ],
         ),
         Node(
             package="rtabmap_viz",
@@ -69,7 +83,7 @@ def generate_launch_description():
         DeclareLaunchArgument("name", default_value="oak"),
         DeclareLaunchArgument(
             "params_file",
-            default_value=os.path.join(depthai_prefix, "config", "rtabmap.yaml"),
+            default_value=os.path.join(depthai_prefix, "config", "rgbd.yaml"),
         ),
     ]
 

@@ -19,7 +19,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, 'launch', 'driver.launch.py')),
+                os.path.join(depthai_prefix, 'launch', 'camera.launch.py')),
             launch_arguments={"name": name,
                               "params_file": params_file,
                               "parent_frame": LaunchConfiguration("parent_frame"),
@@ -40,7 +40,7 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),
         DeclareLaunchArgument("camera_model", default_value="OAK-T"),
-        DeclareLaunchArgument("parent_frame", default_value="oak_parent_frame"),
+        DeclareLaunchArgument("parent_frame", default_value="oak-d-base-frame"),
         DeclareLaunchArgument("cam_pos_x", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_y", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_z", default_value="0.0"),
@@ -49,10 +49,6 @@ def generate_launch_description():
         DeclareLaunchArgument("cam_yaw", default_value="0.0"),
         DeclareLaunchArgument("params_file", default_value=os.path.join(depthai_prefix, 'config', 'oak_t.yaml')),
         DeclareLaunchArgument("use_rviz", default_value="False"),
-        DeclareLaunchArgument(
-            "rviz_config",
-            default_value=os.path.join(depthai_prefix, "config", "rviz", "rgbd.rviz"),
-        ),
     ]
 
     return LaunchDescription(

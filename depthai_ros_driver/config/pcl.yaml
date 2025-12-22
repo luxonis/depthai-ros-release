@@ -1,8 +1,10 @@
 /oak:
   ros__parameters:
-    pipeline_gen:
-      i_pipeline_type: depth
+    camera:
       i_nn_type: none
     stereo:
-      i_depth_preset: DEFAULT
-      i_aligned: false
+      i_align_depth: true
+      i_board_socket_id: 2
+      i_subpixel: true
+      i_right_rect_publish_topic: true
+      i_right_rect_synced: false

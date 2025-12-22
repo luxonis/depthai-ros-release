@@ -2,79 +2,12 @@
 Changelog for package depthai-ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-3.0.10 (2025-11-16)
+2.12.0 (2025-12-12)
 -------------------
-* Add functional tests
-* Update launch files
-* Fix external pipelines
-
-3.0.9 (2025-10-15)
-------------------
-* Fix backward_ros dependency
-
-3.0.8 (2025-10-14)
-------------------
-* Fix nav_msgs dependency
-
-3.0.7 (2025-10-07)
-------------------
-* Disabled VSLAM until deb generation issues for depthai-core are resolved
-* Added new parameters for VIO
-* Updated TF frame naming in TFPublisher (node name is prepended instead of base frame)
-* Updated examples
-
-3.0.6 (2025-10-01)
-------------------
-* Added TransformData and GridMap converters
-* Updated BridgePublisher to also publish transforms
-* SLAM and VIO support
-* Added slam and odometry publishing examples
-* Added VIO and VSLAM nodes to depthai_ros_driver
-* Removed i_enable_default_output from camera parameters
-* Stereo node has a separate FPS parameter
-* Disabled default NN in depthai_ros_driver
-* Publishing of full resolution available for camera sensors in depthai_ros_driver
-* Fixed issues in Stereo linking in depthai_ros_driver
-* Added more Rviz configs
-* Fixed Spatial BB example in depthai_filters
-
-3.0.5 (2025-09-02)
-------------------
-* Update IMU rotation vector
-* Update ToF example
-
-3.0.4 (2025-08-29)
-------------------
-* Update IR param names
-* Update ToF alignment
-* Update launch files
-* Update thermal parameters
-
-3.0.3 (2025-08-22)
-------------------
-* Various minor fixes
-* Adding rgbd for stereo left/right
-* Improved ToF performance
-* Improved stereo alignment
-
-3.0.2 (2025-08-01)
-------------------
-* Add deprecated camera.launch.py
-* Minor fixes in CI
-
-3.0.0 (2025-07-31)
-------------------
-* Updating to DepthAI V3
-* Switching to Camera nodes instead of Mono/Color cams
-* Updated socket/frame naming
-* IMU publishing now in RDF frame across the board
-* Using TFPublisher instead of URDF description by default for more accurate results
-* Undistorted streams can now be requested
-* `depthai_examples` have been largely modified to remove deprecated examples and simplify code
-* Tests added for converters in `depthai_bridge`
-* NN creation simplified both in `depthai_examples` and `depthai_ros_driver`
-* RGBD Node and Pointcloud converter have been added
-* Thermal node added
+* Fix timeshift bug
+* Update launch file
+* Add rotatet img publishing
+* Update base frame naming
 
 2.11.2 (2025-03-17)
 -------------------
@@ -254,4 +187,5 @@ Changelog for package depthai-ros
 * Release 2.5.0
 * add ament package:
 * created Bridge and Coverters to handle images, IMU and camera Info
+
 

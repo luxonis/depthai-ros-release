@@ -7,33 +7,52 @@
 #include <string>
 #include <unordered_map>
 
+#include "depthai-shared/datatype/RawIMUData.hpp"
 #include "depthai/pipeline/datatype/IMUData.hpp"
-#include "depthai_bridge/BaseConverter.hpp"
 #include "depthai_bridge/depthaiUtility.hpp"
 #include "depthai_ros_msgs/msg/imu_with_magnetic_field.hpp"
 #include "rclcpp/time.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/magnetic_field.hpp"
 
-namespace depthai_bridge {
+namespace dai {
+
+namespace ros {
 
 namespace ImuMsgs = sensor_msgs::msg;
 using ImuPtr = ImuMsgs::Imu::SharedPtr;
 
 enum class ImuSyncMethod { COPY, LINEAR_INTERPOLATE_GYRO, LINEAR_INTERPOLATE_ACCEL };
 
-class ImuConverter : public BaseConverter {
+class ImuConverter {
    public:
-    explicit ImuConverter(const std::string& frameName,
-                          ImuSyncMethod syncMode = ImuSyncMethod::COPY,
-                          double linear_accel_cov = 0.0,
-                          double angular_velocity_cov = 0.0,
-                          double rotation_cov = 0.0,
-                          double magnetic_field_cov = 0.0,
-                          bool enable_rotation = false,
-                          bool enable_magn = false,
-                          bool getBaseDeviceTimestamp = false);
+    ImuConverter(const std::string& frameName,
+                 ImuSyncMethod syncMode = ImuSyncMethod::LINEAR_INTERPOLATE_ACCEL,
+                 double linear_accel_cov = 0.0,
+                 double angular_velocity_cov = 0.0,
+                 double rotation_cov = 0.0,
+                 double magnetic_field_cov = 0.0,
+                 bool enable_rotation = false,
+                 bool enable_magn = false,
+                 bool getBaseDeviceTimestamp = false);
     ~ImuConverter();
+
+    /**
+     * @brief Handles cases in which the ROS time shifts forward or backward
+     *  Should be called at regular intervals or on-change of ROS time, depending
+     *  on monitoring.
+     *
+     */
+    void updateRosBaseTime();
+
+    /**
+     * @brief Commands the converter to automatically update the ROS base time on message conversion based on variable
+     *
+     * @param update: bool whether to automatically update the ROS base time on message conversion
+     */
+    void setUpdateRosBaseTimeOnToRosMsg(bool update = true) {
+        _updateRosBaseTimeOnToRosMsg = update;
+    }
 
     void toRosMsg(std::shared_ptr<dai::IMUData> inData, std::deque<ImuMsgs::Imu>& outImuMsgs);
     void toRosDaiMsg(std::shared_ptr<dai::IMUData> inData, std::deque<depthai_ros_msgs::msg::ImuWithMagneticField>& outImuMsgs);
@@ -53,12 +72,13 @@ class ImuConverter : public BaseConverter {
     }
 
    private:
-    std::deque<dai::IMUReportAccelerometer> accelHist;
-    std::deque<dai::IMUReportGyroscope> gyroHist;
-    std::deque<dai::IMUReportRotationVectorWAcc> rotationHist;
-    std::deque<dai::IMUReportMagneticField> magnHist;
     template <typename T>
-    void FillImuData_LinearInterpolation(std::vector<dai::IMUPacket>& imuPackets, std::deque<T>& imuMsgs) {
+    void FillImuData_LinearInterpolation(std::vector<IMUPacket>& imuPackets, std::deque<T>& imuMsgs) {
+        static std::deque<dai::IMUReportAccelerometer> accelHist;
+        static std::deque<dai::IMUReportGyroscope> gyroHist;
+        static std::deque<dai::IMUReportRotationVectorWAcc> rotationHist;
+        static std::deque<dai::IMUReportMagneticField> magnHist;
+
         for(int i = 0; i < imuPackets.size(); ++i) {
             if(accelHist.size() == 0) {
                 accelHist.push_back(imuPackets[i].acceleroMeter);
@@ -72,28 +92,28 @@ class ImuConverter : public BaseConverter {
                 gyroHist.push_back(imuPackets[i].gyroscope);
             }
 
-            if(enable_rotation && rotationHist.size() == 0) {
+            if(_enable_rotation && rotationHist.size() == 0) {
                 rotationHist.push_back(imuPackets[i].rotationVector);
-            } else if(enable_rotation && rotationHist.back().sequence != imuPackets[i].rotationVector.sequence) {
+            } else if(_enable_rotation && rotationHist.back().sequence != imuPackets[i].rotationVector.sequence) {
                 rotationHist.push_back(imuPackets[i].rotationVector);
             } else {
                 rotationHist.resize(accelHist.size());
             }
 
-            if(enable_magn && magnHist.size() == 0) {
+            if(_enable_magn && magnHist.size() == 0) {
                 magnHist.push_back(imuPackets[i].magneticField);
-            } else if(enable_magn && magnHist.back().sequence != imuPackets[i].magneticField.sequence) {
+            } else if(_enable_magn && magnHist.back().sequence != imuPackets[i].magneticField.sequence) {
                 magnHist.push_back(imuPackets[i].magneticField);
             } else {
                 magnHist.resize(accelHist.size());
             }
 
-            if(syncMode == ImuSyncMethod::LINEAR_INTERPOLATE_ACCEL) {
+            if(_syncMode == ImuSyncMethod::LINEAR_INTERPOLATE_ACCEL) {
                 if(accelHist.size() < 3 && gyroHist.size() && rotationHist.size() && magnHist.size()) {
                     continue;
                 } else {
-                    if(enable_rotation) {
-                        if(enable_magn) {
+                    if(_enable_rotation) {
+                        if(_enable_magn) {
                             interpolate(accelHist, gyroHist, rotationHist, magnHist, imuMsgs);
                         } else {
                             interpolate(accelHist, gyroHist, rotationHist, imuMsgs);
@@ -103,12 +123,12 @@ class ImuConverter : public BaseConverter {
                     }
                 }
 
-            } else if(syncMode == ImuSyncMethod::LINEAR_INTERPOLATE_GYRO) {
+            } else if(_syncMode == ImuSyncMethod::LINEAR_INTERPOLATE_GYRO) {
                 if(gyroHist.size() < 3 && accelHist.size() && rotationHist.size() && magnHist.size()) {
                     continue;
                 } else {
-                    if(enable_rotation) {
-                        if(enable_magn) {
+                    if(_enable_rotation) {
+                        if(_enable_magn) {
                             interpolate(gyroHist, accelHist, rotationHist, magnHist, imuMsgs);
                         } else {
                             interpolate(gyroHist, accelHist, rotationHist, imuMsgs);
@@ -121,11 +141,20 @@ class ImuConverter : public BaseConverter {
         }
     }
 
-    uint32_t sequenceNum;
-    double linear_accel_cov, angular_velocity_cov, rotation_cov, magnetic_field_cov;
-    bool enable_rotation;
-    bool enable_magn;
-    ImuSyncMethod syncMode;
+    uint32_t _sequenceNum;
+    double _linear_accel_cov, _angular_velocity_cov, _rotation_cov, _magnetic_field_cov;
+    bool _enable_rotation;
+    bool _enable_magn;
+    const std::string _frameName = "";
+    ImuSyncMethod _syncMode;
+    std::chrono::time_point<std::chrono::steady_clock> _steadyBaseTime;
+    rclcpp::Time _rosBaseTime;
+    bool _getBaseDeviceTimestamp;
+    // For handling ROS time shifts and debugging
+    int64_t _totalNsChange{0};
+    // Whether to update the ROS base time on each message conversion
+    bool _updateRosBaseTimeOnToRosMsg{false};
+
     void fillImuMsg(ImuMsgs::Imu& msg, dai::IMUReportAccelerometer report);
     void fillImuMsg(ImuMsgs::Imu& msg, dai::IMUReportGyroscope report);
     void fillImuMsg(ImuMsgs::Imu& msg, dai::IMUReportRotationVectorWAcc report);
@@ -143,9 +172,9 @@ class ImuConverter : public BaseConverter {
         fillImuMsg(msg, third);
         fillImuMsg(msg, fourth);
 
-        msg.header.frame_id = frameName;
+        msg.header.frame_id = _frameName;
 
-        msg.header.stamp = getFrameTime(rosBaseTime, steadyBaseTime, timestamp);
+        msg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, timestamp);
     }
 
     template <typename I, typename S, typename T, typename M>
@@ -154,9 +183,9 @@ class ImuConverter : public BaseConverter {
         fillImuMsg(msg, second);
         fillImuMsg(msg, third);
 
-        msg.header.frame_id = frameName;
+        msg.header.frame_id = _frameName;
 
-        msg.header.stamp = getFrameTime(rosBaseTime, steadyBaseTime, timestamp);
+        msg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, timestamp);
     }
 
     template <typename I, typename S, typename M>
@@ -164,9 +193,9 @@ class ImuConverter : public BaseConverter {
         fillImuMsg(msg, first);
         fillImuMsg(msg, second);
 
-        msg.header.frame_id = frameName;
+        msg.header.frame_id = _frameName;
 
-        msg.header.stamp = getFrameTime(rosBaseTime, steadyBaseTime, timestamp);
+        msg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, timestamp);
     }
 
     template <typename I, typename S, typename M>
@@ -193,7 +222,7 @@ class ImuConverter : public BaseConverter {
                         I interp = lerpImu(interp0, interp1, alpha);
                         M msg;
                         std::chrono::_V2::steady_clock::time_point tstamp;
-                        if(getBaseDeviceTimestamp)
+                        if(_getBaseDeviceTimestamp)
                             tstamp = currSecond.getTimestampDevice();
                         else
                             tstamp = currSecond.getTimestamp();
@@ -246,7 +275,7 @@ class ImuConverter : public BaseConverter {
                         I interp = lerpImu(interp0, interp1, alpha);
                         M msg;
                         std::chrono::_V2::steady_clock::time_point tstamp;
-                        if(getBaseDeviceTimestamp)
+                        if(_getBaseDeviceTimestamp)
                             tstamp = currSecond.getTimestampDevice();
                         else
                             tstamp = currSecond.getTimestamp();
@@ -303,7 +332,7 @@ class ImuConverter : public BaseConverter {
                         I interp = lerpImu(interp0, interp1, alpha);
                         M msg;
                         std::chrono::_V2::steady_clock::time_point tstamp;
-                        if(getBaseDeviceTimestamp)
+                        if(_getBaseDeviceTimestamp)
                             tstamp = currSecond.getTimestampDevice();
                         else
                             tstamp = currSecond.getTimestamp();
@@ -335,4 +364,8 @@ class ImuConverter : public BaseConverter {
     }
 };
 
-}  // namespace depthai_bridge
+}  // namespace ros
+
+namespace rosBridge = ros;
+
+}  // namespace dai

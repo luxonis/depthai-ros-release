@@ -1,6 +1,6 @@
 /oak:
   ros__parameters:
-    pipeline_gen:
+    camera:
       i_nn_type: none
     left:
       i_publish_topic: true

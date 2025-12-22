@@ -23,7 +23,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, "launch", "driver.launch.py")
+                os.path.join(depthai_prefix, "launch", "camera.launch.py")
             ),
             launch_arguments={
                 "name": name,
@@ -37,8 +37,6 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    print("This functionality is still under development!")
-    return LaunchDescription()
     depthai_prefix = get_package_share_directory("depthai_ros_driver")
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),

@@ -1,21 +1,24 @@
 /oak_d_lite:
   ros__parameters:
-    driver:
-      i_device_id: 18443010C1038C1200
-    pipeline_gen:
+    camera:
+      i_mx_id: 18443010C1038C1200
       i_nn_type: rgb
+    left:
+      i_resolution: '480'
+    right:
+      i_resolution: '480'
     nn:
-      i_nn_model: depthai_ros_driver/yolo
+      i_nn_config_path: depthai_ros_driver/yolo
 /oak_d_w:
   ros__parameters:
-    driver:
-      i_device_id: 19443010D1BFF51200
-    pipeline_gen:
-      i_nn_type: none
+    camera:
+      i_mx_id: 19443010D1BFF51200
+      i_nn_type: rgb
+    nn:
+      i_nn_config_path: depthai_ros_driver/segmentation
 /oak_d_pro:
   ros__parameters:
-    driver:
-      i_device_id: 1944301051FB4D1300
-    pipeline_gen:
-      i_pipeline_type: stereo
-
+    camera:
+      i_mx_id: 1944301051FB4D1300
+    nn:
+      i_nn_config_path: depthai_ros_driver/mobilenet

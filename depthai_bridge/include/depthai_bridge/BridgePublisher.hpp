@@ -1,71 +1,43 @@
 #pragma once
 #include <deque>
-#include <rclcpp/clock.hpp>
-#include <tf2_ros/transform_broadcaster.hpp>
 #include <thread>
 #include <type_traits>
 #include <typeinfo>
 
 #include "camera_info_manager/camera_info_manager.hpp"
-#include "depthai/pipeline/MessageQueue.hpp"
-#include "depthai_bridge/depthaiUtility.hpp"
-#include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "depthai/device/DataQueue.hpp"
 #include "image_transport/image_transport.hpp"
-#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/node.hpp"
 #include "rclcpp/qos.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
-#include "sensor_msgs/msg/compressed_image.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include "std_msgs/msg/header.hpp"
 
-namespace depthai_bridge {
+namespace dai {
 
+namespace ros {
+
+namespace StdMsgs = std_msgs::msg;
 namespace ImageMsgs = sensor_msgs::msg;
-namespace FFMPEGMsgs = ffmpeg_image_transport_msgs::msg;
 using ImagePtr = ImageMsgs::Image::SharedPtr;
-using FFMPEGImagePtr = FFMPEGMsgs::FFMPEGPacket::SharedPtr;
+namespace rosOrigin = ::rclcpp;
 
-template <class RosMsg, class DaiMsg>
+template <class RosMsg, class SimMsg>
 class BridgePublisher {
    public:
-    using ConvertFunc = std::function<void(std::shared_ptr<DaiMsg>, std::deque<RosMsg>&)>;
-    using CustomPublisher = std::conditional_t<std::is_same_v<RosMsg, ImageMsgs::Image>,
-                                               std::shared_ptr<image_transport::CameraPublisher>,
-                                               std::conditional_t<std::is_same_v<RosMsg, geometry_msgs::msg::TransformStamped>,
-                                                                  std::shared_ptr<tf2_ros::TransformBroadcaster>,
-                                                                  typename rclcpp::Publisher<RosMsg>::SharedPtr>>;
+    using ConvertFunc = std::function<void(std::shared_ptr<SimMsg>, std::deque<RosMsg>&)>;
+    using CustomPublisher = typename std::conditional<std::is_same<RosMsg, ImageMsgs::Image>::value,
+                                                      std::shared_ptr<image_transport::Publisher>,
+                                                      typename rclcpp::Publisher<RosMsg>::SharedPtr>::type;
 
-    /**
-     * @brief Constructor for BridgePublisher with default QoS settings.
-     *
-     * @param daiMessageQueue Shared pointer to the DepthAI message queue.
-     * @param node Shared pointer to the ROS 2 node.
-     * @param rosTopic The ROS topic to publish messages to.
-     * @param converter Function to convert DepthAI messages to ROS messages.
-     * @param qosSetting QoS settings for the ROS publisher.
-     * @param lazyPublisher Flag to enable lazy publishing.
-     */
-    BridgePublisher(std::shared_ptr<dai::MessageQueue> daiMessageQueue,
+    BridgePublisher(std::shared_ptr<dai::DataOutputQueue> daiMessageQueue,
                     std::shared_ptr<rclcpp::Node> node,
                     std::string rosTopic,
                     ConvertFunc converter,
                     rclcpp::QoS qosSetting = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable(),
                     bool lazyPublisher = true);
 
-    /**
-     * @brief Constructor for BridgePublisher with custom QoS history depth.
-     *
-     * @param daiMessageQueue Shared pointer to the DepthAI message queue.
-     * @param node Shared pointer to the ROS 2 node.
-     * @param rosTopic The ROS topic to publish messages to.
-     * @param converter Function to convert DepthAI messages to ROS messages.
-     * @param qosHistoryDepth History depth for the QoS settings.
-     * @param cameraParamUri URI for the camera parameters.
-     * @param cameraName Name of the camera.
-     * @param lazyPublisher Flag to enable lazy publishing.
-     */
-    BridgePublisher(std::shared_ptr<dai::MessageQueue> daiMessageQueue,
+    BridgePublisher(std::shared_ptr<dai::DataOutputQueue> daiMessageQueue,
                     std::shared_ptr<rclcpp::Node> node,
                     std::string rosTopic,
                     ConvertFunc converter,
@@ -74,19 +46,7 @@ class BridgePublisher {
                     std::string cameraName = "",
                     bool lazyPublisher = true);
 
-    /**
-     * @brief Constructor for BridgePublisher with custom camera info data.
-     *
-     * @param daiMessageQueue Shared pointer to the DepthAI message queue.
-     * @param node Shared pointer to the ROS 2 node.
-     * @param rosTopic The ROS topic to publish messages to.
-     * @param converter Function to convert DepthAI messages to ROS messages.
-     * @param qosHistoryDepth History depth for the QoS settings.
-     * @param cameraInfoData Camera info data for the ROS messages.
-     * @param cameraName Name of the camera.
-     * @param lazyPublisher Flag to enable lazy publishing.
-     */
-    BridgePublisher(std::shared_ptr<dai::MessageQueue> daiMessageQueue,
+    BridgePublisher(std::shared_ptr<dai::DataOutputQueue> daiMessageQueue,
                     std::shared_ptr<rclcpp::Node> node,
                     std::string rosTopic,
                     ConvertFunc converter,
@@ -98,7 +58,7 @@ class BridgePublisher {
     /**
      * Tag Dispacher function to to overload the Publisher to ImageTransport Publisher
      */
-    std::shared_ptr<image_transport::CameraPublisher> advertise(int queueSize, std::true_type);
+    std::shared_ptr<image_transport::Publisher> advertise(int queueSize, std::true_type);
 
     /**
      * Tag Dispacher function to to overload the Publisher to use Default ros::Publisher
@@ -109,12 +69,7 @@ class BridgePublisher {
 
     void addPublisherCallback();
 
-    void enableTransformPub() {
-        pubTransform = true;
-        tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(node);
-    }
-
-    void publishHelper(std::shared_ptr<DaiMsg> inData);
+    void publishHelper(std::shared_ptr<SimMsg> inData);
 
     void startPublisherThread();
 
@@ -125,51 +80,43 @@ class BridgePublisher {
      * adding this callback will allow you to still be able to consume
      * the data for other processing using get() function .
      */
-    void daiCallback(const std::string& name, std::shared_ptr<dai::ADatatype> data);
+    void daiCallback(std::string name, std::shared_ptr<ADatatype> data);
 
-    void publishTransform(std::shared_ptr<tf2_ros::TransformBroadcaster> tfPub, const geometry_msgs::msg::TransformStamped& transform);
     static const std::string LOG_TAG;
-    std::shared_ptr<dai::MessageQueue> daiMessageQueue;
-    ConvertFunc converter;
+    std::shared_ptr<dai::DataOutputQueue> _daiMessageQueue;
+    ConvertFunc _converter;
 
-    std::shared_ptr<rclcpp::Node> node;
-    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr cameraInfoPublisher;
+    std::shared_ptr<rclcpp::Node> _node;
+    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr _cameraInfoPublisher;
 
-    image_transport::ImageTransport it;
-    ImageMsgs::CameraInfo cameraInfoData;
-    CustomPublisher rosPublisher;
-    std::shared_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
-    bool pubTransform = false;
+    image_transport::ImageTransport _it;
+    ImageMsgs::CameraInfo _cameraInfoData;
+    CustomPublisher _rosPublisher;
 
-    std::thread readingThread;
-    std::string rosTopic, camInfoFrameId, cameraName, cameraParamUri;
-    std::unique_ptr<camera_info_manager::CameraInfoManager> camInfoManager;
-    bool isCallbackAdded = false;
-    bool isImageMessage = false;  // used to enable camera info manager
-    bool lazyPublisher = true;
+    std::thread _readingThread;
+    std::string _rosTopic, _camInfoFrameId, _cameraName, _cameraParamUri;
+    std::unique_ptr<camera_info_manager::CameraInfoManager> _camInfoManager;
+    bool _isCallbackAdded = false;
+    bool _isImageMessage = false;  // used to enable camera info manager
+    bool _lazyPublisher = true;
 };
 
-template <class RosMsg, class DaiMsg>
-const std::string BridgePublisher<RosMsg, DaiMsg>::LOG_TAG = "BridgePublisher";
+template <class RosMsg, class SimMsg>
+const std::string BridgePublisher<RosMsg, SimMsg>::LOG_TAG = "BridgePublisher";
 
-template <class RosMsg, class DaiMsg>
-BridgePublisher<RosMsg, DaiMsg>::BridgePublisher(std::shared_ptr<dai::MessageQueue> daiMessageQueue,
+template <class RosMsg, class SimMsg>
+BridgePublisher<RosMsg, SimMsg>::BridgePublisher(std::shared_ptr<dai::DataOutputQueue> daiMessageQueue,
                                                  std::shared_ptr<rclcpp::Node> node,
                                                  std::string rosTopic,
                                                  ConvertFunc converter,
                                                  rclcpp::QoS qosSetting,
                                                  bool lazyPublisher)
-    : daiMessageQueue(daiMessageQueue), node(node), converter(converter), it(node), rosTopic(rosTopic), lazyPublisher(lazyPublisher) {
-    if constexpr(std::is_same_v<RosMsg, geometry_msgs::msg::TransformStamped>) {
-        this->lazyPublisher = false;
-        rosPublisher = std::make_shared<tf2_ros::TransformBroadcaster>(node);
-    } else {
-        rosPublisher = node->create_publisher<RosMsg>(rosTopic, qosSetting);
-    }
+    : _daiMessageQueue(daiMessageQueue), _node(node), _converter(converter), _it(node), _rosTopic(rosTopic), _lazyPublisher(lazyPublisher) {
+    _rosPublisher = _node->create_publisher<RosMsg>(_rosTopic, qosSetting);
 }
 
-template <class RosMsg, class DaiMsg>
-BridgePublisher<RosMsg, DaiMsg>::BridgePublisher(std::shared_ptr<dai::MessageQueue> daiMessageQueue,
+template <class RosMsg, class SimMsg>
+BridgePublisher<RosMsg, SimMsg>::BridgePublisher(std::shared_ptr<dai::DataOutputQueue> daiMessageQueue,
                                                  std::shared_ptr<rclcpp::Node> node,
                                                  std::string rosTopic,
                                                  ConvertFunc converter,
@@ -177,19 +124,19 @@ BridgePublisher<RosMsg, DaiMsg>::BridgePublisher(std::shared_ptr<dai::MessageQue
                                                  std::string cameraParamUri,
                                                  std::string cameraName,
                                                  bool lazyPublisher)
-    : daiMessageQueue(daiMessageQueue),
-      node(node),
-      converter(converter),
-      it(node),
-      rosTopic(rosTopic),
-      cameraParamUri(cameraParamUri),
-      cameraName(cameraName),
-      lazyPublisher(lazyPublisher) {
-    rosPublisher = advertise(qosHistoryDepth, std::is_same<RosMsg, ImageMsgs::Image>{});
+    : _daiMessageQueue(daiMessageQueue),
+      _node(node),
+      _converter(converter),
+      _it(node),
+      _rosTopic(rosTopic),
+      _cameraParamUri(cameraParamUri),
+      _cameraName(cameraName),
+      _lazyPublisher(lazyPublisher) {
+    _rosPublisher = advertise(qosHistoryDepth, std::is_same<RosMsg, ImageMsgs::Image>{});
 }
 
-template <class RosMsg, class DaiMsg>
-BridgePublisher<RosMsg, DaiMsg>::BridgePublisher(std::shared_ptr<dai::MessageQueue> daiMessageQueue,
+template <class RosMsg, class SimMsg>
+BridgePublisher<RosMsg, SimMsg>::BridgePublisher(std::shared_ptr<dai::DataOutputQueue> daiMessageQueue,
                                                  std::shared_ptr<rclcpp::Node> node,
                                                  std::string rosTopic,
                                                  ConvertFunc converter,
@@ -197,148 +144,120 @@ BridgePublisher<RosMsg, DaiMsg>::BridgePublisher(std::shared_ptr<dai::MessageQue
                                                  ImageMsgs::CameraInfo cameraInfoData,
                                                  std::string cameraName,
                                                  bool lazyPublisher)
-    : daiMessageQueue(daiMessageQueue),
-      node(node),
-      converter(converter),
-      it(node),
-      rosTopic(rosTopic),
-      cameraInfoData(cameraInfoData),
-      cameraName(cameraName),
-      lazyPublisher(lazyPublisher) {
-    rosPublisher = advertise(qosHistoryDepth, std::is_same<RosMsg, ImageMsgs::Image>{});
+    : _daiMessageQueue(daiMessageQueue),
+      _node(node),
+      _converter(converter),
+      _it(node),
+      _rosTopic(rosTopic),
+      _cameraInfoData(cameraInfoData),
+      _cameraName(cameraName),
+      _lazyPublisher(lazyPublisher) {
+    _rosPublisher = advertise(qosHistoryDepth, std::is_same<RosMsg, ImageMsgs::Image>{});
 }
 
-template <class RosMsg, class DaiMsg>
-typename rclcpp::Publisher<RosMsg>::SharedPtr BridgePublisher<RosMsg, DaiMsg>::advertise(int queueSize, std::false_type) {
+template <class RosMsg, class SimMsg>
+typename rclcpp::Publisher<RosMsg>::SharedPtr BridgePublisher<RosMsg, SimMsg>::advertise(int queueSize, std::false_type) {
     rclcpp::PublisherOptions options;
     options.qos_overriding_options = rclcpp::QosOverridingOptions();
-    if(!cameraName.empty()) {
-        isImageMessage = true;
-        camInfoManager = std::make_unique<camera_info_manager::CameraInfoManager>(node.get(), cameraName, cameraParamUri);
-        if(cameraParamUri.empty()) {
-            camInfoManager->setCameraInfo(cameraInfoData);
-        }
-        cameraInfoPublisher = node->create_publisher<ImageMsgs::CameraInfo>(cameraName + "/camera_info", queueSize, options);
-    }
-    return node->create_publisher<RosMsg>(rosTopic, queueSize, options);
+    return _node->create_publisher<RosMsg>(_rosTopic, queueSize, options);
 }
 
-template <class RosMsg, class DaiMsg>
-std::shared_ptr<image_transport::CameraPublisher> BridgePublisher<RosMsg, DaiMsg>::advertise(int queueSize, std::true_type) {
-    if(!cameraName.empty()) {
-        isImageMessage = true;
-        camInfoManager = std::make_unique<camera_info_manager::CameraInfoManager>(node.get(), cameraName, cameraParamUri);
-        if(cameraParamUri.empty()) {
-            camInfoManager->setCameraInfo(cameraInfoData);
+template <class RosMsg, class SimMsg>
+std::shared_ptr<image_transport::Publisher> BridgePublisher<RosMsg, SimMsg>::advertise(int queueSize, std::true_type) {
+    if(!_cameraName.empty()) {
+        _isImageMessage = true;
+        _camInfoManager = std::make_unique<camera_info_manager::CameraInfoManager>(_node.get(), _cameraName, _cameraParamUri);
+        if(_cameraParamUri.empty()) {
+            _camInfoManager->setCameraInfo(_cameraInfoData);
         }
         rclcpp::PublisherOptions options;
         options.qos_overriding_options = rclcpp::QosOverridingOptions();
-        cameraInfoPublisher = node->create_publisher<ImageMsgs::CameraInfo>(cameraName + "/camera_info", queueSize, options);
+        _cameraInfoPublisher = _node->create_publisher<ImageMsgs::CameraInfo>(_cameraName + "/camera_info", queueSize, options);
     }
-    return std::make_shared<image_transport::CameraPublisher>(it.advertiseCamera(rosTopic, queueSize));
+    return std::make_shared<image_transport::Publisher>(_it.advertise(_rosTopic, queueSize));
 }
 
-template <class RosMsg, class DaiMsg>
-void BridgePublisher<RosMsg, DaiMsg>::daiCallback(const std::string& name, std::shared_ptr<dai::ADatatype> data) {
-    auto daiDataPtr = std::dynamic_pointer_cast<DaiMsg>(data);
+template <class RosMsg, class SimMsg>
+void BridgePublisher<RosMsg, SimMsg>::daiCallback(std::string name, std::shared_ptr<ADatatype> data) {
+    // std::cout << "In callback " << name << std::endl;
+    auto daiDataPtr = std::dynamic_pointer_cast<SimMsg>(data);
     publishHelper(daiDataPtr);
 }
 
-template <class RosMsg, class DaiMsg>
-void BridgePublisher<RosMsg, DaiMsg>::startPublisherThread() {
-    if(isCallbackAdded) {
-        throw std::runtime_error(
+template <class RosMsg, class SimMsg>
+void BridgePublisher<RosMsg, SimMsg>::startPublisherThread() {
+    if(_isCallbackAdded) {
+        std::runtime_error(
             "addPublisherCallback() function adds a callback to the"
             "depthai which handles the publishing so no need to start"
             "the thread using startPublisherThread() ");
     }
 
-    readingThread = std::thread([&]() {
-        while(rclcpp::ok()) {
-            auto daiDataPtr = daiMessageQueue->tryGet<DaiMsg>();
+    _readingThread = std::thread([&]() {
+        int messageCounter = 0;
+        while(rosOrigin::ok()) {
+            // auto daiDataPtr = _daiMessageQueue->get<SimMsg>();
+            auto daiDataPtr = _daiMessageQueue->tryGet<SimMsg>();
             if(daiDataPtr == nullptr) {
+                messageCounter++;
+                if(messageCounter > 2000000) {
+                    messageCounter = 0;
+                }
                 continue;
             }
 
+            if(messageCounter != 0) {
+                messageCounter = 0;
+            }
             publishHelper(daiDataPtr);
         }
     });
 }
 
-template <class RosMsg, class DaiMsg>
-void BridgePublisher<RosMsg, DaiMsg>::addPublisherCallback() {
-    daiMessageQueue->addCallback(std::bind(&BridgePublisher<RosMsg, DaiMsg>::daiCallback, this, std::placeholders::_1, std::placeholders::_2));
-    isCallbackAdded = true;
+template <class RosMsg, class SimMsg>
+void BridgePublisher<RosMsg, SimMsg>::addPublisherCallback() {
+    _daiMessageQueue->addCallback(std::bind(&BridgePublisher<RosMsg, SimMsg>::daiCallback, this, std::placeholders::_1, std::placeholders::_2));
+    _isCallbackAdded = true;
 }
 
-// Add this method to the BridgePublisher class
-template <class RosMsg, class DaiMsg>
-void BridgePublisher<RosMsg, DaiMsg>::publishTransform(std::shared_ptr<tf2_ros::TransformBroadcaster> tfPub,
-                                                       const geometry_msgs::msg::TransformStamped& transform) {
-    tfPub->sendTransform(transform);
-}
-template <class RosMsg, class DaiMsg>
-void BridgePublisher<RosMsg, DaiMsg>::publishHelper(std::shared_ptr<DaiMsg> inDataPtr) {
+template <class RosMsg, class SimMsg>
+void BridgePublisher<RosMsg, SimMsg>::publishHelper(std::shared_ptr<SimMsg> inDataPtr) {
     std::deque<RosMsg> opMsgs;
 
-    int mainSubCount = 0;
-    int infoSubCount = 0;
+    int infoSubCount = 0, mainSubCount = 0;
 
-    if(isImageMessage) {
-        infoSubCount = node->count_subscribers(cameraName + "/camera_info");
+    if(_isImageMessage) {
+        infoSubCount = _node->count_subscribers(_cameraName + "/camera_info");
     }
-    mainSubCount = node->count_subscribers(rosTopic);
+    mainSubCount = _node->count_subscribers(_rosTopic);
 
-    if(!lazyPublisher || mainSubCount > 0 || infoSubCount > 0) {
-        converter(inDataPtr, opMsgs);
+    if(!_lazyPublisher || (mainSubCount > 0 || infoSubCount > 0)) {
+        _converter(inDataPtr, opMsgs);
 
         while(opMsgs.size()) {
             RosMsg currMsg = opMsgs.front();
-            if(!lazyPublisher || mainSubCount > 0) {
-                if constexpr(std::is_same_v<RosMsg, ImageMsgs::Image>) {
-                    auto localCameraInfo = camInfoManager->getCameraInfo();
-                    localCameraInfo.header.stamp = currMsg.header.stamp;
-                    localCameraInfo.header.frame_id = currMsg.header.frame_id;
-                    std::dynamic_pointer_cast<image_transport::CameraPublisher>(rosPublisher)->publish(currMsg, localCameraInfo);
-                } else if constexpr(std::is_same_v<RosMsg, geometry_msgs::msg::TransformStamped>) {
-                    // message stamp might be too late by the time of publishing
-                    currMsg.header.stamp = node->get_clock()->now();
-                    publishTransform(rosPublisher, currMsg);
-                }
-
-                else if constexpr(std::is_same_v<RosMsg, nav_msgs::msg::Odometry>) {
-                    if(pubTransform) {
-                        geometry_msgs::msg::TransformStamped transform;
-                        // message stamp might be too late by the time of publishing
-                        transform.header.stamp = node->get_clock()->now();
-                        transform.header.frame_id = currMsg.header.frame_id;
-                        transform.child_frame_id = currMsg.child_frame_id;
-                        transform.transform.translation.x = currMsg.pose.pose.position.x;
-                        transform.transform.translation.y = currMsg.pose.pose.position.y;
-                        transform.transform.translation.z = currMsg.pose.pose.position.z;
-                        transform.transform.rotation = currMsg.pose.pose.orientation;
-                        publishTransform(tfBroadcaster, transform);
-                    }
-                    rosPublisher->publish(currMsg);
-                } else {
-                    rosPublisher->publish(currMsg);
-                }
+            if(mainSubCount > 0) {
+                _rosPublisher->publish(currMsg);
             }
 
-            if(infoSubCount > 0 && (std::is_same_v<RosMsg, ImageMsgs::CompressedImage> || std::is_same_v<RosMsg, FFMPEGMsgs::FFMPEGPacket>)) {
-                auto localCameraInfo = camInfoManager->getCameraInfo();
+            if(infoSubCount > 0) {
+                auto localCameraInfo = _camInfoManager->getCameraInfo();
                 localCameraInfo.header.stamp = currMsg.header.stamp;
                 localCameraInfo.header.frame_id = currMsg.header.frame_id;
-                cameraInfoPublisher->publish(localCameraInfo);
+                _cameraInfoPublisher->publish(localCameraInfo);
             }
             opMsgs.pop_front();
         }
     }
 }
 
-template <class RosMsg, class DaiMsg>
-BridgePublisher<RosMsg, DaiMsg>::~BridgePublisher() {
-    if(readingThread.joinable()) readingThread.join();
+template <class RosMsg, class SimMsg>
+BridgePublisher<RosMsg, SimMsg>::~BridgePublisher() {
+    if(_readingThread.joinable()) _readingThread.join();
 }
 
-}  // namespace depthai_bridge
+}  // namespace ros
+
+namespace rosBridge = ros;
+
+}  // namespace dai

@@ -1,136 +1,110 @@
 #include "depthai_ros_driver/dai_nodes/sensors/tof.hpp"
 
-#include <depthai/common/CameraBoardSocket.hpp>
-#include <stdexcept>
-
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
+#include "depthai/pipeline/node/Camera.hpp"
 #include "depthai/pipeline/node/ImageAlign.hpp"
 #include "depthai/pipeline/node/ToF.hpp"
+#include "depthai/pipeline/node/XLinkIn.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
-#include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
 #include "depthai_ros_driver/param_handlers/tof_param_handler.hpp"
 #include "depthai_ros_driver/utils.hpp"
 #include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
-ToF::ToF(const std::string& daiNodeName,
-         std::shared_ptr<rclcpp::Node> node,
-         std::shared_ptr<dai::Pipeline> pipeline,
-         const std::string& deviceName,
-         bool rsCompat,
-         dai::CameraBoardSocket socket)
-    : BaseNode(daiNodeName, node, pipeline, deviceName, rsCompat) {
+ToF::ToF(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline, dai::CameraBoardSocket socket)
+    : BaseNode(daiNodeName, node, pipeline) {
     RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
     setNames();
+    camNode = pipeline->create<dai::node::Camera>();
     tofNode = pipeline->create<dai::node::ToF>();
     boardSocket = socket;
-    ph = std::make_unique<param_handlers::ToFParamHandler>(node, daiNodeName, deviceName, rsCompat);
-    ph->declareParams(tofNode, socket);
-    setInOut(pipeline);
-    aligned = ph->getParam<bool>(param_handlers::ParamNames::ALIGNED);
-    if(aligned) {
-        alignNode = pipeline->create<dai::node::ImageAlign>();
-        alignNode->setRunOnHost(ph->getParam<bool>("i_run_align_on_host"));
-        alignNode->input.setBlocking(false);
-        alignNode->inputAlignTo.setBlocking(false);
-        RCLCPP_DEBUG(getLogger(), "ToF is aligned, make sure to connect inputs/outputs in pipeline creation");
-    }
+    ph = std::make_unique<param_handlers::ToFParamHandler>(node, daiNodeName);
+    ph->declareParams(camNode, tofNode);
+    setXinXout(pipeline);
     RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
 }
 ToF::~ToF() = default;
 void ToF::setNames() {
     tofQName = getName() + "_tof";
 }
-std::shared_ptr<dai::node::ToF> ToF::getUnderlyingNode() {
-    return tofNode;
-}
 
-void ToF::setInOut(std::shared_ptr<dai::Pipeline> pipeline) {
-    using param_handlers::ParamNames;
-    if(ph->getParam<bool>(ParamNames::PUBLISH_TOPIC)) {
+void ToF::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
+    if(ph->getParam<bool>("i_publish_topic")) {
+        camNode->raw.link(tofNode->input);
+        bool align = boardSocket == dai::CameraBoardSocket::CAM_A;
+        std::function<void(dai::Node::Input)> tofLinkChoice;
+        if(align) {
+            tofLinkChoice = [&](auto input) { tofNode->depth.link(input); };
+        } else {
+            alignNode = pipeline->create<dai::node::ImageAlign>();
+            tofNode->depth.link(alignNode->input);
+            tofLinkChoice = [&](auto input) { alignNode->outputAligned.link(input); };
+        }
         utils::VideoEncoderConfig encConfig;
-        encConfig.profile = static_cast<dai::VideoEncoderProperties::Profile>(ph->getParam<int>(ParamNames::LOW_BANDWIDTH_PROFILE));
-        encConfig.bitrate = ph->getParam<int>(ParamNames::LOW_BANDWIDTH_BITRATE);
-        encConfig.frameFreq = ph->getParam<int>(ParamNames::LOW_BANDWIDTH_FRAME_FREQ);
-        encConfig.quality = ph->getParam<int>(ParamNames::LOW_BANDWIDTH_QUALITY);
-        encConfig.enabled = ph->getParam<bool>(ParamNames::LOW_BANDWIDTH);
+        encConfig.profile = static_cast<dai::VideoEncoderProperties::Profile>(ph->getParam<int>("i_low_bandwidth_profile"));
+        encConfig.bitrate = ph->getParam<int>("i_low_bandwidth_bitrate");
+        encConfig.frameFreq = ph->getParam<int>("i_low_bandwidth_frame_freq");
+        encConfig.quality = ph->getParam<int>("i_low_bandwidth_quality");
+        encConfig.enabled = ph->getParam<bool>("i_low_bandwidth");
 
-        tofPub = setupOutput(pipeline, tofQName, &tofNode->depth, ph->getParam<bool>(ParamNames::SYNCED), encConfig);
+        tofPub = setupOutput(pipeline, tofQName, tofLinkChoice, ph->getParam<bool>("i_synced"), encConfig);
     }
 }
 
 void ToF::setupQueues(std::shared_ptr<dai::Device> device) {
-    using param_handlers::ParamNames;
-    if(ph->getParam<bool>(ParamNames::PUBLISH_TOPIC)) {
-        auto tfPrefix = getOpticalFrameName(getSocketName(boardSocket));
+    if(ph->getParam<bool>("i_publish_topic")) {
+        auto tfPrefix = getOpticalTFPrefix(getSocketName(boardSocket));
 
         utils::ImgConverterConfig convConfig;
         convConfig.tfPrefix = tfPrefix;
-        convConfig.getBaseDeviceTimestamp = ph->getParam<bool>(ParamNames::GET_BASE_DEVICE_TIMESTAMP);
-        convConfig.updateROSBaseTimeOnRosMsg = ph->getParam<bool>(ParamNames::UPDATE_ROS_BASE_TIME_ON_ROS_MSG);
-        convConfig.lowBandwidth = ph->getParam<bool>(ParamNames::LOW_BANDWIDTH);
-        convConfig.encoding = dai::ImgFrame::Type::RAW8;
-        convConfig.addExposureOffset = ph->getParam<bool>(ParamNames::ADD_EXPOSURE_OFFSET);
-        convConfig.expOffset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>(ParamNames::EXPOSURE_OFFSET));
-        convConfig.reverseSocketOrder = ph->getParam<bool>(ParamNames::REVERSE_STEREO_SOCKET_ORDER);
+        convConfig.getBaseDeviceTimestamp = ph->getParam<bool>("i_get_base_device_timestamp");
+        convConfig.updateROSBaseTimeOnRosMsg = ph->getParam<bool>("i_update_ros_base_time_on_ros_msg");
+        convConfig.lowBandwidth = ph->getParam<bool>("i_low_bandwidth");
+        convConfig.encoding = dai::RawImgFrame::Type::RAW8;
+        convConfig.addExposureOffset = ph->getParam<bool>("i_add_exposure_offset");
+        convConfig.expOffset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>("i_exposure_offset"));
+        convConfig.reverseSocketOrder = ph->getParam<bool>("i_reverse_stereo_socket_order");
 
         utils::ImgPublisherConfig pubConfig;
         pubConfig.daiNodeName = getName();
         pubConfig.topicName = "~/" + getName();
-        pubConfig.lazyPub = ph->getParam<bool>(ParamNames::ENABLE_LAZY_PUBLISHER);
-        pubConfig.socket = ph->getSocketID();
-        pubConfig.calibrationFile = ph->getParam<std::string>(ParamNames::CALIBRATION_FILE);
+        pubConfig.lazyPub = ph->getParam<bool>("i_enable_lazy_publisher");
+        pubConfig.socket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"));
+        pubConfig.calibrationFile = ph->getParam<std::string>("i_calibration_file");
         pubConfig.rectified = false;
-        pubConfig.width = ph->getParam<int>(ParamNames::WIDTH);
-        pubConfig.height = ph->getParam<int>(ParamNames::HEIGHT);
-        pubConfig.maxQSize = ph->getParam<int>(ParamNames::MAX_Q_SIZE);
+        pubConfig.width = ph->getParam<int>("i_width");
+        pubConfig.height = ph->getParam<int>("i_height");
+        pubConfig.maxQSize = ph->getParam<int>("i_max_q_size");
 
         tofPub->setup(device, convConfig, pubConfig);
     }
 }
 void ToF::closeQueues() {
-    if(ph->getParam<bool>(param_handlers::ParamNames::PUBLISH_TOPIC)) {
+    if(ph->getParam<bool>("i_publish_topic")) {
         tofPub->closeQueue();
     }
 }
 
-void ToF::link(dai::Node::Input& in, int /*linkType*/) {
-    if(aligned) {
-        alignNode->outputAligned.link(in);
-    } else {
-        tofNode->depth.link(in);
-    }
+dai::Node::Input ToF::getInput(int /*linkType*/) {
+    return alignNode->inputAlignTo;
 }
 
-dai::Node::Input& ToF::getInput(int /* linkType */) {
-    if(!aligned) {
-        throw std::runtime_error("ToF node is not aligned! Please make sure to enable i_aligned parameter");
-    } else {
-        return alignNode->inputAlignTo;
-    }
-}
-
-dai::CameraBoardSocket ToF::getSocketID() {
-    return ph->getSocketID();
-}
-dai::CameraBoardSocket ToF::getAlignedSocketID() {
-    alignedSocket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_aligned_socket_id"));
-    return alignedSocket;
-}
-
-bool ToF::isAligned() {
-    return aligned;
+void ToF::link(dai::Node::Input in, int /*linkType*/) {
+    tofNode->depth.link(in);
 }
 
 std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> ToF::getPublishers() {
     std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> pubs;
-    using param_handlers::ParamNames;
-    if(ph->getParam<bool>(ParamNames::PUBLISH_TOPIC) && ph->getParam<bool>(ParamNames::SYNCED)) {
+    if(ph->getParam<bool>("i_publish_topic") && ph->getParam<bool>("i_synced")) {
         pubs.push_back(tofPub);
     }
     return pubs;
+}
+
+void ToF::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    ph->setRuntimeParams(params);
 }
 
 }  // namespace dai_nodes

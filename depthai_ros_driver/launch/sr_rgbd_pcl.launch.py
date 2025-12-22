@@ -19,10 +19,13 @@ def launch_setup(context, *args, **kwargs):
     depthai_prefix = get_package_share_directory("depthai_ros_driver")
 
     name = LaunchConfiguration("name").perform(context)
+    rgb_topic_name = name + "/right/image_raw"
+    if LaunchConfiguration("rectify_rgb").perform(context) == "true":
+        rgb_topic_name = name + "/right/image_rect"
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, "launch", "driver.launch.py")
+                os.path.join(depthai_prefix, "launch", "camera.launch.py")
             ),
             launch_arguments={
                 "name": name,
@@ -37,6 +40,47 @@ def launch_setup(context, *args, **kwargs):
                 "use_rviz": LaunchConfiguration("use_rviz"),
             }.items(),
         ),
+        LoadComposableNodes(
+            condition=IfCondition(LaunchConfiguration("rectify_rgb")),
+            target_container=name + "_container",
+            composable_node_descriptions=[
+                ComposableNode(
+                    package="image_proc",
+                    plugin="image_proc::RectifyNode",
+                    name="rectify_color_node",
+                    remappings=[
+                        ("image", name + "/right/image_raw"),
+                        ("camera_info", name + "/right/camera_info"),
+                        ("image_rect", name + "/right/image_rect"),
+                        (
+                            "image_rect/compressed",
+                            name + "/right/image_rect/compressed",
+                        ),
+                        (
+                            "image_rect/compressedDepth",
+                            name + "/right/image_rect/compressedDepth",
+                        ),
+                        ("image_rect/theora", name + "/right/image_rect/theora"),
+                    ],
+                )
+            ],
+        ),
+        LoadComposableNodes(
+            target_container=name + "_container",
+            composable_node_descriptions=[
+                ComposableNode(
+                    package="depth_image_proc",
+                    plugin="depth_image_proc::PointCloudXyzrgbNode",
+                    name="point_cloud_xyzrgb_node",
+                    remappings=[
+                        ("depth_registered/image_rect", name + "/stereo/image_raw"),
+                        ("rgb/image_rect_color", rgb_topic_name),
+                        ("rgb/camera_info", name + "/right/camera_info"),
+                        ("points", name + "/points"),
+                    ],
+                ),
+            ],
+        ),
     ]
 
 
@@ -45,7 +89,7 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),
         DeclareLaunchArgument("camera_model", default_value="OAK-D-SR"),
-        DeclareLaunchArgument("parent_frame", default_value="oak_parent_frame"),
+        DeclareLaunchArgument("parent_frame", default_value="oak-d-base-frame"),
         DeclareLaunchArgument("cam_pos_x", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_y", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_z", default_value="0.0"),
@@ -57,6 +101,7 @@ def generate_launch_description():
             default_value=os.path.join(depthai_prefix, "config", "sr_rgbd.yaml"),
         ),
         DeclareLaunchArgument("use_rviz", default_value="False"),
+        DeclareLaunchArgument("rectify_rgb", default_value="False"),
     ]
 
     return LaunchDescription(

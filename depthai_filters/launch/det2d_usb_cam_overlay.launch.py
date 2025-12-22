@@ -24,16 +24,13 @@ def launch_setup(context, *args, **kwargs):
         package="usb_cam",
         executable="usb_cam_node_exe",
         parameters=[{'image_width': 320,
-                     'image_height': 240,
-                     "pixel_format": "yuyv2rgb"}]
+                     'image_height': 240}]
         )
 
     ]
 
 
 def generate_launch_description():
-    print("This functionality is still under development!")
-    return LaunchDescription()
     depthai_filters_prefix = get_package_share_directory("depthai_filters")
 
     declared_arguments = [

@@ -1,8 +1,11 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sync.hpp"
 
+#include <chrono>
+
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/datatype/MessageGroup.hpp"
 #include "depthai/pipeline/node/Sync.hpp"
+#include "depthai/pipeline/node/XLinkOut.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/param_handlers/sync_param_handler.hpp"
@@ -10,14 +13,13 @@
 namespace depthai_ros_driver {
 namespace dai_nodes {
 
-Sync::Sync(
-    const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline, const std::string& deviceName, bool rsCompat)
-    : BaseNode(daiNodeName, node, pipeline, deviceName, rsCompat) {
+Sync::Sync(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline)
+    : BaseNode(daiNodeName, node, pipeline) {
     syncNode = pipeline->create<dai::node::Sync>();
-    paramHandler = std::make_unique<param_handlers::SyncParamHandler>(node, daiNodeName, deviceName, rsCompat);
+    paramHandler = std::make_unique<param_handlers::SyncParamHandler>(node, daiNodeName);
     paramHandler->declareParams(syncNode);
     setNames();
-    setInOut(pipeline);
+    setXinXout(pipeline);
 }
 
 Sync::~Sync() = default;
@@ -25,10 +27,15 @@ Sync::~Sync() = default;
 void Sync::setNames() {
     syncOutputName = getName() + "_out";
 }
-void Sync::setInOut(std::shared_ptr<dai::Pipeline> /* pipeline */) {}
+void Sync::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
+    xoutFrame = pipeline->create<dai::node::XLinkOut>();
+    xoutFrame->setStreamName(syncOutputName);
+    xoutFrame->input.setBlocking(false);
+    syncNode->out.link(xoutFrame->input);
+}
 
-void Sync::setupQueues(std::shared_ptr<dai::Device> /* device */) {
-    outQueue = syncNode->out.createOutputQueue(8, false);
+void Sync::setupQueues(std::shared_ptr<dai::Device> device) {
+    outQueue = device->getOutputQueue(syncOutputName, 8, false);
     outQueue->addCallback([this](const std::shared_ptr<dai::ADatatype>& in) {
         auto group = std::dynamic_pointer_cast<dai::MessageGroup>(in);
         if(group) {
@@ -51,11 +58,11 @@ void Sync::setupQueues(std::shared_ptr<dai::Device> /* device */) {
     });
 }
 
-void Sync::link(dai::Node::Input& in, int /* linkType */) {
+void Sync::link(dai::Node::Input in, int /* linkType */) {
     syncNode->out.link(in);
 }
 
-dai::Node::Input& Sync::getInputByName(const std::string& name) {
+dai::Node::Input Sync::getInputByName(const std::string& name) {
     syncNode->inputs[name].setBlocking(false);
     return syncNode->inputs[name];
 }

@@ -1,6 +1,6 @@
 #include "depthai_filters/thermal_temp.hpp"
 
-#include "cv_bridge/cv_bridge.hpp"
+#include "cv_bridge/cv_bridge.h"
 #include "depthai_filters/utils.hpp"
 #include "opencv2/highgui/highgui.hpp"
 
@@ -14,7 +14,7 @@ void ThermalTemp::onInit() {
     colorPub = this->create_publisher<sensor_msgs::msg::Image>("color", 10);
 }
 
-void ThermalTemp::mouseCallback(int /* event */, int x, int y, int /* flags */, void* /* userdata */) {
+void ThermalTemp::mouseCallback(int /*event*/, int x, int y, int /*flags*/, void* /*userdata*/) {
     mouseX = x;
     mouseY = y;
 }

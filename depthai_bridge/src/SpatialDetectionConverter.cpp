@@ -2,33 +2,55 @@
 
 #include "depthai_bridge/depthaiUtility.hpp"
 
-namespace depthai_bridge {
+namespace dai {
+namespace ros {
 
-SpatialDetectionConverter::SpatialDetectionConverter(std::string frameName, bool normalized, bool getBaseDeviceTimestamp)
-    : BaseConverter(std::move(frameName), getBaseDeviceTimestamp), normalized(normalized) {}
+SpatialDetectionConverter::SpatialDetectionConverter(std::string frameName, int width, int height, bool normalized, bool getBaseDeviceTimestamp)
+    : _frameName(frameName),
+      _width(width),
+      _height(height),
+      _normalized(normalized),
+      _steadyBaseTime(std::chrono::steady_clock::now()),
+      _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
+    _rosBaseTime = rclcpp::Clock().now();
+}
 
 SpatialDetectionConverter::~SpatialDetectionConverter() = default;
 
+void SpatialDetectionConverter::updateRosBaseTime() {
+    updateBaseTime(_steadyBaseTime, _rosBaseTime, _totalNsChange);
+}
+
 void SpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData,
                                          std::deque<SpatialMessages::SpatialDetectionArray>& opDetectionMsgs) {
+    if(_updateRosBaseTimeOnToRosMsg) {
+        updateRosBaseTime();
+    }
+    std::chrono::_V2::steady_clock::time_point tstamp;
+    if(_getBaseDeviceTimestamp)
+        tstamp = inNetData->getTimestampDevice();
+    else
+        tstamp = inNetData->getTimestamp();
     SpatialMessages::SpatialDetectionArray opDetectionMsg;
 
-    opDetectionMsg.header = getRosHeader(inNetData);
+    opDetectionMsg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
+    opDetectionMsg.header.frame_id = _frameName;
     opDetectionMsg.detections.resize(inNetData->detections.size());
 
-    auto [width, height] = inNetData->transformation->getSize();
+    // TODO(Sachin): check if this works fine for normalized detection
+    // publishing
     for(int i = 0; i < inNetData->detections.size(); ++i) {
         int xMin, yMin, xMax, yMax;
-        if(normalized) {
+        if(_normalized) {
             xMin = inNetData->detections[i].xmin;
             yMin = inNetData->detections[i].ymin;
             xMax = inNetData->detections[i].xmax;
             yMax = inNetData->detections[i].ymax;
         } else {
-            xMin = inNetData->detections[i].xmin * width;
-            yMin = inNetData->detections[i].ymin * height;
-            xMax = inNetData->detections[i].xmax * width;
-            yMax = inNetData->detections[i].ymax * height;
+            xMin = inNetData->detections[i].xmin * _width;
+            yMin = inNetData->detections[i].ymin * _height;
+            xMax = inNetData->detections[i].xmax * _width;
+            yMax = inNetData->detections[i].ymax * _height;
         }
 
         float xSize = xMax - xMin;
@@ -37,7 +59,7 @@ void SpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::SpatialImgDetectio
         float yCenter = yMin + ySize / 2;
         opDetectionMsg.detections[i].results.resize(1);
 
-        opDetectionMsg.detections[i].results[0].class_id = inNetData->detections[i].labelName;
+        opDetectionMsg.detections[i].results[0].class_id = std::to_string(inNetData->detections[i].label);
         opDetectionMsg.detections[i].results[0].score = inNetData->detections[i].confidence;
 
         opDetectionMsg.detections[i].bbox.center.position.x = xCenter;
@@ -64,24 +86,34 @@ SpatialDetectionArrayPtr SpatialDetectionConverter::toRosMsgPtr(std::shared_ptr<
 
 void SpatialDetectionConverter::toRosVisionMsg(std::shared_ptr<dai::SpatialImgDetections> inNetData,
                                                std::deque<vision_msgs::msg::Detection3DArray>& opDetectionMsgs) {
+    if(_updateRosBaseTimeOnToRosMsg) {
+        updateRosBaseTime();
+    }
+    std::chrono::_V2::steady_clock::time_point tstamp;
+    if(_getBaseDeviceTimestamp)
+        tstamp = inNetData->getTimestampDevice();
+    else
+        tstamp = inNetData->getTimestamp();
     vision_msgs::msg::Detection3DArray opDetectionMsg;
 
-    opDetectionMsg.header = getRosHeader(inNetData);
+    opDetectionMsg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
+    opDetectionMsg.header.frame_id = _frameName;
     opDetectionMsg.detections.resize(inNetData->detections.size());
 
-    auto [width, height] = inNetData->transformation->getSize();
+    // TODO(Sachin): check if this works fine for normalized detection
+    // publishing
     for(int i = 0; i < inNetData->detections.size(); ++i) {
         int xMin, yMin, xMax, yMax;
-        if(normalized) {
+        if(_normalized) {
             xMin = inNetData->detections[i].xmin;
             yMin = inNetData->detections[i].ymin;
             xMax = inNetData->detections[i].xmax;
             yMax = inNetData->detections[i].ymax;
         } else {
-            xMin = inNetData->detections[i].xmin * width;
-            yMin = inNetData->detections[i].ymin * height;
-            xMax = inNetData->detections[i].xmax * width;
-            yMax = inNetData->detections[i].ymax * height;
+            xMin = inNetData->detections[i].xmin * _width;
+            yMin = inNetData->detections[i].ymin * _height;
+            xMax = inNetData->detections[i].xmax * _width;
+            yMax = inNetData->detections[i].ymax * _height;
         }
 
         float xSize = xMax - xMin;
@@ -90,8 +122,7 @@ void SpatialDetectionConverter::toRosVisionMsg(std::shared_ptr<dai::SpatialImgDe
         float yCenter = yMin + ySize / 2;
         opDetectionMsg.detections[i].results.resize(1);
 
-        opDetectionMsg.detections[i].id = std::to_string(inNetData->detections[i].label);
-        opDetectionMsg.detections[i].results[0].hypothesis.class_id = inNetData->detections[i].labelName;
+        opDetectionMsg.detections[i].results[0].hypothesis.class_id = std::to_string(inNetData->detections[i].label);
         opDetectionMsg.detections[i].results[0].hypothesis.score = inNetData->detections[i].confidence;
         opDetectionMsg.detections[i].bbox.center.position.x = xCenter;
         opDetectionMsg.detections[i].bbox.center.position.y = yCenter;
@@ -108,4 +139,5 @@ void SpatialDetectionConverter::toRosVisionMsg(std::shared_ptr<dai::SpatialImgDe
     opDetectionMsgs.push_back(opDetectionMsg);
 }
 
-}  // namespace depthai_bridge
+}  // namespace ros
+}  // namespace dai
