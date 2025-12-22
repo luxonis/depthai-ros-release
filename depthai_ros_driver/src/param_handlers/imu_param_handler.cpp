@@ -39,11 +39,14 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
     auto messageType = declareAndLogParam<std::string>("i_message_type", "IMU");
     declareAndLogParam<std::string>("i_sync_method", "LINEAR_INTERPOLATE_ACCEL");
     declareAndLogParam<bool>("i_update_ros_base_time_on_ros_msg", false);
+    declareAndLogParam<float>("i_mag_cov", 0.0);
+    declareAndLogParam<float>("i_rot_cov", 0.0);
+    declareAndLogParam<float>("i_gyro_cov", 0.0);
+    declareAndLogParam<float>("i_acc_cov", 0.0);
     if(declareAndLogParam<bool>("i_enable_acc", true)) {
         const std::string accelerometerModeName = utils::getUpperCaseStr(declareAndLogParam<std::string>("i_acc_mode", "ACCELEROMETER_RAW"));
         const dai::IMUSensor accelerometerMode = utils::getValFromMap(accelerometerModeName, accelerometerModeMap);
         const int accelerometerFreq = declareAndLogParam<int>("i_acc_freq", 400);
-        declareAndLogParam<float>("i_acc_cov", 0.0);
 
         imu->enableIMUSensor(accelerometerMode, accelerometerFreq);
     }
@@ -52,7 +55,6 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
         const std::string gyroscopeModeName = utils::getUpperCaseStr(declareAndLogParam<std::string>("i_gyro_mode", "GYROSCOPE_RAW"));
         const dai::IMUSensor gyroscopeMode = utils::getValFromMap(gyroscopeModeName, gyroscopeModeMap);
         const int gyroscopeFreq = declareAndLogParam<int>("i_gyro_freq", 400);
-        declareAndLogParam<float>("i_gyro_cov", 0.0);
 
         imu->enableIMUSensor(gyroscopeMode, gyroscopeFreq);
     }
@@ -63,7 +65,6 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
             const std::string magnetometerModeName = utils::getUpperCaseStr(declareAndLogParam<std::string>("i_mag_mode", "MAGNETOMETER_RAW"));
             const dai::IMUSensor magnetometerMode = utils::getValFromMap(magnetometerModeName, magnetometerModeMap);
             const int magnetometerFreq = declareAndLogParam<int>("i_mag_freq", 100);
-            declareAndLogParam<float>("i_mag_cov", 0.0);
 
             imu->enableIMUSensor(magnetometerMode, magnetometerFreq);
         } else {
@@ -78,7 +79,6 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
             const std::string rotationModeName = utils::getUpperCaseStr(declareAndLogParam<std::string>("i_rot_mode", "ROTATION_VECTOR"));
             const dai::IMUSensor rotationMode = utils::getValFromMap(rotationModeName, rotationVectorTypeMap);
             const int rotationFreq = declareAndLogParam<int>("i_rot_freq", 400);
-            declareAndLogParam<float>("i_rot_cov", -1.0);
 
             imu->enableIMUSensor(rotationMode, rotationFreq);
         } else {
