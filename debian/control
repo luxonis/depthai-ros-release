@@ -1,0 +1,12 @@
+Source: ros-jazzy-depthai-examples
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libopencv-dev, ros-jazzy-ament-cmake, ros-jazzy-camera-info-manager, ros-jazzy-cv-bridge, ros-jazzy-depthai, ros-jazzy-depthai-bridge, ros-jazzy-depthai-descriptions, ros-jazzy-depthai-ros-msgs, ros-jazzy-foxglove-msgs, ros-jazzy-image-transport, ros-jazzy-rclcpp, ros-jazzy-ros-environment, ros-jazzy-rviz-imu-plugin, ros-jazzy-sensor-msgs, ros-jazzy-std-msgs, ros-jazzy-stereo-msgs, ros-jazzy-vision-msgs, ros-jazzy-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-jazzy-depthai-examples
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopencv-dev, ros-jazzy-camera-info-manager, ros-jazzy-cv-bridge, ros-jazzy-depth-image-proc, ros-jazzy-depthai, ros-jazzy-depthai-bridge, ros-jazzy-depthai-descriptions, ros-jazzy-depthai-ros-msgs, ros-jazzy-foxglove-msgs, ros-jazzy-image-transport, ros-jazzy-rclcpp, ros-jazzy-robot-state-publisher, ros-jazzy-ros-environment, ros-jazzy-rviz-imu-plugin, ros-jazzy-sensor-msgs, ros-jazzy-std-msgs, ros-jazzy-stereo-msgs, ros-jazzy-vision-msgs, ros-jazzy-xacro, ros-jazzy-ros-workspace
+Description: The depthai_examples package
