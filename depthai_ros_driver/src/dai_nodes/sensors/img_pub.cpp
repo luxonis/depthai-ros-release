@@ -1,6 +1,7 @@
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
 
 #include "camera_info_manager/camera_info_manager.hpp"
+#include "cv_bridge/cv_bridge.h"
 #include "depthai-shared/properties/VideoEncoderProperties.hpp"
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
@@ -10,6 +11,8 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/utils.hpp"
 #include "image_transport/image_transport.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/imgproc.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
@@ -193,6 +196,26 @@ std::shared_ptr<Image> ImagePublisher::convertData(const std::shared_ptr<dai::AD
     return img;
 }
 void ImagePublisher::publish(std::shared_ptr<Image> img) {
+    // Rotate only uncompressed images - compressed image rotation is too costly
+    if(pubConfig.flipImage && !pubConfig.publishCompressed) {
+        try {
+            if(img->image) {
+                auto imgPtr = std::make_shared<sensor_msgs::msg::Image>(*img->image);
+                cv_bridge::CvImagePtr cvPtr = cv_bridge::toCvCopy(imgPtr, imgPtr->encoding);
+                cv::Mat rotated;
+                cv::flip(cvPtr->image, rotated, -1);
+                cv_bridge::CvImage outCv;
+                outCv.header = imgPtr->header;
+                outCv.encoding = imgPtr->encoding;
+                outCv.image = rotated;
+                sensor_msgs::msg::Image newMsg;
+                outCv.toImageMsg(newMsg);
+                img->image = std::make_unique<sensor_msgs::msg::Image>(newMsg);
+            }
+        } catch(const std::exception& e) {
+            RCLCPP_WARN(node->get_logger(), "Failed to rotate image before publish: %s", e.what());
+        }
+    }
     if(pubConfig.publishCompressed) {
         if(encConfig.profile == dai::VideoEncoderProperties::Profile::MJPEG) {
             compressedImgPub->publish(std::move(img->compressedImg));
