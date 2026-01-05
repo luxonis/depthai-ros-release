@@ -129,7 +129,7 @@ void TFPublisher::publishImuTransform(nlohmann::json json, std::shared_ptr<rclcp
             {extrMat[0][0], extrMat[0][1], extrMat[0][2]}, {extrMat[1][0], extrMat[1][1], extrMat[1][2]}, {extrMat[2][0], extrMat[2][1], extrMat[2][2]}};
         ts.transform.rotation = quatFromRotM(rotMat);
     } else {
-        ts.header.frame_id = nodeName + "_" + baseFrame;
+        ts.header.frame_id = baseFrame;
         RCLCPP_WARN(logger, "IMU extrinsics are not set. Publishing IMU frame with zero translation and rotation.");
         ts.transform.rotation.w = 1.0;
         ts.transform.rotation.x = 0.0;
@@ -219,28 +219,27 @@ std::string TFPublisher::prepareXacroArgs() {
     xacroArgs += " cam_pitch:=" + camPitch;
     xacroArgs += " cam_yaw:=" + camYaw;
     xacroArgs += " has_imu:=" + imuFromDescr;
-    RCLCPP_INFO(logger, "Xacro args: %s", xacroArgs.c_str());
     return xacroArgs;
 }
 
 void TFPublisher::convertModelName() {
-    std::map<std::string, std::string> modelMappings = {{"OAK-D-SR-POE", "OAK-D-SR-POE"},
-                                                        {"OAK-D-PRO-W-POE", "OAK-D-S2-POE"},
-                                                        {"OAK-D-PRO-POE", "OAK-D-S2-POE"},
-                                                        {"OAK-D-S2-POE", "OAK-D-S2-POE"},
-                                                        {"OAK-D-POE", "OAK-D-POE"},
-                                                        {"OAK-D-LITE", "OAK-D-PRO"},
-                                                        {"OAK-D-S2", "OAK-D-PRO"},
-                                                        {"OAK-D-PRO-W", "OAK-D-PRO"},
-                                                        {"OAK-D-PRO", "OAK-D-PRO"},
-                                                        {"OAK-D", "OAK-D"},
-                                                        {"OAK-T", "OAK-T"}};
-
-    for(const auto& [key, value] : modelMappings) {
-        if(camModel == key) {
-            camModel = value;
-            return;
-        }
+    if(camModel.find("OAK-D-PRO-POE") != std::string::npos || camModel.find("OAK-D-PRO-W-POE") != std::string::npos
+       || camModel.find("OAK-D-S2-POE") != std::string::npos) {
+        camModel = "OAK-D-POE";
+    } else if(camModel.find("OAK-D-LITE") != std::string::npos) {
+        camModel = "OAK-D-PRO";
+    } else if(camModel.find("OAK-D-S2") != std::string::npos) {
+        camModel = "OAK-D-PRO";
+    } else if(camModel.find("OAK-D-PRO-W") != std::string::npos) {
+        camModel = "OAK-D-PRO";
+    } else if(camModel.find("OAK-D-PRO") != std::string::npos) {
+        camModel = "OAK-D-PRO";
+    } else if(camModel.find("OAK-D-POE")) {
+        camModel = "OAK-D-POE";
+    } else if(camModel.find("OAK-D") != std::string::npos) {
+        camModel = "OAK-D";
+    } else {
+        RCLCPP_WARN(logger, "Unable to match model name: %s to available model family.", camModel.c_str());
     }
 }
 

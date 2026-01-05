@@ -39,10 +39,10 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
     auto messageType = declareAndLogParam<std::string>("i_message_type", "IMU");
     declareAndLogParam<std::string>("i_sync_method", "LINEAR_INTERPOLATE_ACCEL");
     declareAndLogParam<bool>("i_update_ros_base_time_on_ros_msg", false);
+    declareAndLogParam<float>("i_acc_cov", 0.0);
+    declareAndLogParam<float>("i_gyro_cov", 0.0);
     declareAndLogParam<float>("i_mag_cov", 0.0);
     declareAndLogParam<float>("i_rot_cov", 0.0);
-    declareAndLogParam<float>("i_gyro_cov", 0.0);
-    declareAndLogParam<float>("i_acc_cov", 0.0);
     if(declareAndLogParam<bool>("i_enable_acc", true)) {
         const std::string accelerometerModeName = utils::getUpperCaseStr(declareAndLogParam<std::string>("i_acc_mode", "ACCELEROMETER_RAW"));
         const dai::IMUSensor accelerometerMode = utils::getValFromMap(accelerometerModeName, accelerometerModeMap);
