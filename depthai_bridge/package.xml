@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>depthai_bridge</name>
-  <version>2.12.0</version>
+  <version>2.12.2</version>
   <description>The depthai_bridge package</description>
 
   <maintainer email="adam.serafin@luxonis.com">Adam Serafin</maintainer>
@@ -11,7 +11,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>libboost-dev</depend>
+  <build_depend>ros_environment</build_depend>
   <depend>rclcpp</depend>
 
   <depend>cv_bridge</depend>
@@ -20,7 +20,6 @@
   <depend>depthai_ros_msgs</depend>
   <depend>image_transport</depend>
   <depend>libopencv-dev</depend>
-  <depend>ros_environment</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>stereo_msgs</depend>
