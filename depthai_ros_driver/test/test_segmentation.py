@@ -12,12 +12,15 @@ import rclpy.node
 import rclpy.parameter
 from sensor_msgs.msg import Image
 
-from sensor_msgs.msg import Imu
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from depthai_ros_driver.test_helper import TestHelper
+
+IS_RVC2 = os.getenv("DEPTHAI_PLATFORM") == "rvc2"
 
 
 @pytest.mark.rostest
+@unittest.skipUnless(IS_RVC2, reason="Test not supported on RVC4")
 def generate_test_description():
     depthai_prefix = get_package_share_directory("depthai_ros_driver")
     params_file = os.path.join(depthai_prefix, "config", "segmentation.yaml")
@@ -81,6 +84,7 @@ class TestDriverLaunch(unittest.TestCase):
 
     def setUp(self):
         self.node = rclpy.create_node("test")
+        self.testHelper = TestHelper(self.node)
 
     def tearDown(self):
         self.node.destroy_node()
@@ -88,36 +92,15 @@ class TestDriverLaunch(unittest.TestCase):
     def test_driver_output(self, proc_output):
         proc_output.assertWaitFor("Driver ready!", timeout=10.0, stream="stderr")
 
-    def test_published_imu_messages(self, proc_output):
-        imu_received = []
-        sub = self.node.create_subscription(
-            Imu, "/oak/imu/data", lambda msg: imu_received.append(msg), 10
+    @unittest.skipUnless(IS_RVC2, reason="Test not supported on RVC4")
+    def test_published_segmentation_image(self, proc_output):
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(Image, "/oak/nn/image_raw")
         )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(imu_received) > 30:
-                    break
-            self.assertGreater(len(imu_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
 
-    def test_published_rgb_image(self, proc_output):
-        images_received = []
-        sub = self.node.create_subscription(
-            Image, "/oak/nn/image_raw", lambda msg: images_received.append(msg), 10
-        )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(images_received) > 30:
-                    break
-            self.assertGreater(len(images_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
+
 @launch_testing.post_shutdown_test()
 class TestShutdown(unittest.TestCase):
+    @unittest.skipUnless(IS_RVC2, reason="Test not supported on RVC4")
     def test_exit_codes(self, proc_info):
         launch_testing.asserts.assertExitCodes(proc_info)
