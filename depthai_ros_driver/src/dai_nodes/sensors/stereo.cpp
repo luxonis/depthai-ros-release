@@ -1,12 +1,14 @@
 #include "depthai_ros_driver/dai_nodes/sensors/stereo.hpp"
 
-#include <depthai/capabilities/ImgFrameCapability.hpp>
 #include <optional>
+#include <stdexcept>
 
+#include "depthai/capabilities/ImgFrameCapability.hpp"
 #include "depthai/device/DeviceBase.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/datatype/ADatatype.hpp"
 #include "depthai/pipeline/datatype/ImgFrame.hpp"
+#include "depthai/pipeline/node/NeuralDepth.hpp"
 #include "depthai/pipeline/node/StereoDepth.hpp"
 #include "depthai_ros_driver/dai_nodes/nn/nn_helpers.hpp"
 #include "depthai_ros_driver/dai_nodes/nn/spatial_nn_wrapper.hpp"
@@ -33,7 +35,11 @@ Stereo::Stereo(const std::string& daiNodeName,
     using ParamNames = param_handlers::ParamNames;
     RCLCPP_DEBUG(getLogger(), "Creating node %s", daiNodeName.c_str());
     setNames();
+    platform = device->getPlatform();
     ph = std::make_unique<param_handlers::StereoParamHandler>(node, daiNodeName, device->getDeviceName(), rsCompat);
+    if(ph->getParam<bool>("i_use_neural_depth") && (platform == dai::Platform::RVC2)) {
+        throw std::runtime_error("Neural depth is not supported on RVC2");
+    }
     auto alignSocket = dai::CameraBoardSocket::CAM_A;
     if(device->getDeviceName() == "OAK-D-SR" || device->getDeviceName() == "OAK-D-SR-POE") {
         alignSocket = dai::CameraBoardSocket::CAM_C;
@@ -58,18 +64,28 @@ Stereo::Stereo(const std::string& daiNodeName,
     left = std::make_shared<SensorWrapper>(getSocketName(leftSensInfo.socket), node, pipeline, device->getDeviceName(), rsCompat, leftSensInfo.socket, false);
     right =
         std::make_shared<SensorWrapper>(getSocketName(rightSensInfo.socket), node, pipeline, device->getDeviceName(), rsCompat, rightSensInfo.socket, false);
-    stereoCamNode = pipeline->create<dai::node::StereoDepth>();
-    ph->declareParams(stereoCamNode);
-    leftOut = left->getUnderlyingNode()->requestOutput(std::make_pair<int, int>(ph->getParam<int>(ParamNames::WIDTH), ph->getParam<int>(ParamNames::HEIGHT)),
-                                                       std::nullopt,
-                                                       dai::ImgResizeMode::CROP,
-                                                       ph->getParam<float>(ParamNames::FPS));
-    rightOut = right->getUnderlyingNode()->requestOutput(std::make_pair<int, int>(ph->getParam<int>(ParamNames::WIDTH), ph->getParam<int>(ParamNames::HEIGHT)),
-                                                         std::nullopt,
-                                                         dai::ImgResizeMode::CROP,
-                                                         ph->getParam<float>(ParamNames::FPS));
-    leftOut->link(stereoCamNode->left);
-    rightOut->link(stereoCamNode->right);
+    if(ph->getParam<bool>("i_use_neural_depth")) {
+        neuralDepthNode = pipeline->create<dai::node::NeuralDepth>();
+        ph->declareParams(neuralDepthNode);
+        leftOut = left->getUnderlyingNode()->requestFullResolutionOutput();
+        rightOut = right->getUnderlyingNode()->requestFullResolutionOutput();
+        neuralDepthNode->build(*leftOut, *rightOut, ph->getModel());
+    } else {
+        stereoCamNode = pipeline->create<dai::node::StereoDepth>();
+        ph->declareParams(stereoCamNode);
+        leftOut =
+            left->getUnderlyingNode()->requestOutput(std::make_pair<int, int>(ph->getParam<int>(ParamNames::WIDTH), ph->getParam<int>(ParamNames::HEIGHT)),
+                                                     std::nullopt,
+                                                     dai::ImgResizeMode::CROP,
+                                                     ph->getParam<float>(ParamNames::FPS));
+        rightOut =
+            right->getUnderlyingNode()->requestOutput(std::make_pair<int, int>(ph->getParam<int>(ParamNames::WIDTH), ph->getParam<int>(ParamNames::HEIGHT)),
+                                                      std::nullopt,
+                                                      dai::ImgResizeMode::CROP,
+                                                      ph->getParam<float>(ParamNames::FPS));
+        leftOut->link(stereoCamNode->left);
+        rightOut->link(stereoCamNode->right);
+    }
 
     aligned = ph->getParam<bool>(param_handlers::ParamNames::ALIGNED);
     if(ph->getParam<bool>("i_enable_left_spatial_nn")) {
@@ -92,12 +108,15 @@ Stereo::Stereo(const std::string& daiNodeName,
     // Check alignment, if board socket is one of the pairs, align.
     // if not it should be aligned externally by calling align method in pipeline creation
     auto socketID = ph->getSocketID();
-    platform = device->getPlatform();
     if(aligned) {
         if(platform == dai::Platform::RVC4) {
             alignNode = pipeline->create<dai::node::ImageAlign>();
             alignNode->setRunOnHost(ph->getParam<bool>("i_run_align_on_host"));
-            stereoCamNode->depth.link(alignNode->input);
+            if(ph->getParam<bool>("i_use_neural_depth")) {
+                neuralDepthNode->depth.link(alignNode->input);
+            } else {
+                stereoCamNode->depth.link(alignNode->input);
+            }
             alignNode->input.setBlocking(false);
             alignNode->inputAlignTo.setBlocking(false);
         }
@@ -120,7 +139,17 @@ void Stereo::setNames() {
 }
 
 std::shared_ptr<dai::node::StereoDepth> Stereo::getUnderlyingNode() {
+    if(ph->getParam<bool>("i_use_neural_depth")) {
+        return nullptr;
+    }
     return stereoCamNode;
+}
+
+std::shared_ptr<dai::node::NeuralDepth> Stereo::getNeuralDepthNode() {
+    if(!ph->getParam<bool>("i_use_neural_depth")) {
+        return nullptr;
+    }
+    return neuralDepthNode;
 }
 
 bool Stereo::isAligned() {
@@ -139,12 +168,20 @@ void Stereo::setInOut(std::shared_ptr<dai::Pipeline> pipeline) {
         encConf.enabled = lowBandwidth;
 
         if(outputDisparity || lowBandwidth) {
-            stereoPub = setupOutput(pipeline, stereoQName, &stereoCamNode->disparity, ph->getParam<bool>("i_synced"), encConf);
+            if(ph->getParam<bool>("i_use_neural_depth")) {
+                stereoPub = setupOutput(pipeline, stereoQName, &neuralDepthNode->disparity, ph->getParam<bool>("i_synced"), encConf);
+            } else {
+                stereoPub = setupOutput(pipeline, stereoQName, &stereoCamNode->disparity, ph->getParam<bool>("i_synced"), encConf);
+            }
         } else {
             if(aligned && platform == dai::Platform::RVC4) {
                 stereoPub = setupOutput(pipeline, stereoQName, &alignNode->outputAligned, ph->getParam<bool>("i_synced"), encConf);
             } else {
-                stereoPub = setupOutput(pipeline, stereoQName, &stereoCamNode->depth, ph->getParam<bool>("i_synced"), encConf);
+                if(ph->getParam<bool>("i_use_neural_depth")) {
+                    stereoPub = setupOutput(pipeline, stereoQName, &neuralDepthNode->depth, ph->getParam<bool>("i_synced"), encConf);
+                } else {
+                    stereoPub = setupOutput(pipeline, stereoQName, &stereoCamNode->depth, ph->getParam<bool>("i_synced"), encConf);
+                }
             }
         }
     }
@@ -157,7 +194,11 @@ void Stereo::setInOut(std::shared_ptr<dai::Pipeline> pipeline) {
         encConf.quality = ph->getParam<int>("i_left_rect_low_bandwidth_quality");
         encConf.enabled = ph->getParam<bool>("i_left_rect_low_bandwidth");
 
-        leftRectPub = setupOutput(pipeline, leftRectQName, &stereoCamNode->rectifiedLeft, ph->getParam<bool>("i_left_rect_synced"), encConf);
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            leftRectPub = setupOutput(pipeline, leftRectQName, &neuralDepthNode->rectifiedLeft, ph->getParam<bool>("i_left_rect_synced"), encConf);
+        } else {
+            leftRectPub = setupOutput(pipeline, leftRectQName, &stereoCamNode->rectifiedLeft, ph->getParam<bool>("i_left_rect_synced"), encConf);
+        }
     }
 
     if(ph->getParam<bool>("i_right_rect_publish_topic")) {
@@ -167,21 +208,33 @@ void Stereo::setInOut(std::shared_ptr<dai::Pipeline> pipeline) {
         encConf.frameFreq = ph->getParam<int>("i_right_rect_low_bandwidth_frame_freq");
         encConf.quality = ph->getParam<int>("i_right_rect_low_bandwidth_quality");
         encConf.enabled = ph->getParam<bool>("i_right_rect_low_bandwidth");
-        rightRectPub = setupOutput(pipeline, rightRectQName, &stereoCamNode->rectifiedRight, ph->getParam<bool>("i_right_rect_synced"), encConf);
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            rightRectPub = setupOutput(pipeline, rightRectQName, &neuralDepthNode->rectifiedRight, ph->getParam<bool>("i_right_rect_synced"), encConf);
+        } else {
+            rightRectPub = setupOutput(pipeline, rightRectQName, &stereoCamNode->rectifiedRight, ph->getParam<bool>("i_right_rect_synced"), encConf);
+        }
     }
 
     if(ph->getParam<bool>("i_left_rect_enable_feature_tracker")) {
         featureTrackerLeftR = std::make_unique<FeatureTracker>(
             leftSensInfo.name + std::string("_rect_feature_tracker"), getROSNode(), pipeline, getDeviceName(), rsCompatibilityMode());
         auto in = featureTrackerLeftR->getInput();
-        stereoCamNode->rectifiedLeft.link(in);
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            neuralDepthNode->rectifiedLeft.link(in);
+        } else {
+            stereoCamNode->rectifiedLeft.link(in);
+        }
     }
 
     if(ph->getParam<bool>("i_right_rect_enable_feature_tracker")) {
         featureTrackerRightR = std::make_unique<FeatureTracker>(
             rightSensInfo.name + std::string("_rect_feature_tracker"), getROSNode(), pipeline, getDeviceName(), rsCompatibilityMode());
         auto in = featureTrackerRightR->getInput();
-        stereoCamNode->rectifiedRight.link(in);
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            neuralDepthNode->rectifiedRight.link(in);
+        } else {
+            stereoCamNode->rectifiedRight.link(in);
+        }
     }
 }
 
@@ -263,6 +316,9 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
     pubConf.publishCompressed = ph->getParam<bool>(ParamNames::PUBLISH_COMPRESSED);
 
     stereoPub->setup(device, convConfig, pubConf);
+    if(ph->getParam<bool>("i_use_neural_depth")) {
+        neuralControl = neuralDepthNode->inputConfig.createInputQueue();
+    }
 }
 
 void Stereo::setupQueues(std::shared_ptr<dai::Device> device) {
@@ -333,12 +389,24 @@ void Stereo::link(dai::Node::Input& in, int linkType) {
         if(aligned && platform == dai::Platform::RVC4) {
             alignNode->outputAligned.link(in);
         } else {
-            stereoCamNode->depth.link(in);
+            if(ph->getParam<bool>("i_use_neural_depth")) {
+                neuralDepthNode->depth.link(in);
+            } else {
+                stereoCamNode->depth.link(in);
+            }
         }
     } else if(linkType == static_cast<int>(link_types::StereoLinkType::left)) {
-        stereoCamNode->rectifiedLeft.link(in);
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            neuralDepthNode->rectifiedLeft.link(in);
+        } else {
+            stereoCamNode->rectifiedLeft.link(in);
+        }
     } else if(linkType == static_cast<int>(link_types::StereoLinkType::right)) {
-        stereoCamNode->rectifiedRight.link(in);
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            neuralDepthNode->rectifiedRight.link(in);
+        } else {
+            stereoCamNode->rectifiedRight.link(in);
+        }
     } else {
         throw std::runtime_error("Wrong link type specified!");
     }
@@ -371,11 +439,20 @@ dai::CameraBoardSocket Stereo::getSocketID() {
 
 dai::Node::Input& Stereo::getInput(int linkType) {
     if(linkType == static_cast<int>(link_types::StereoLinkType::left)) {
-        return stereoCamNode->left;
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            return neuralDepthNode->left;
+        } else {
+            return stereoCamNode->left;
+        }
     } else if(linkType == static_cast<int>(link_types::StereoLinkType::right)) {
-        return stereoCamNode->right;
+        if(ph->getParam<bool>("i_use_neural_depth")) {
+            return neuralDepthNode->right;
+        } else {
+            return stereoCamNode->right;
+        }
     } else if(linkType == static_cast<int>(link_types::StereoLinkType::align)) {
         if(platform == dai::Platform::RVC2) {
+            // neural depth doesn't work on rvc2
             return stereoCamNode->inputAlignTo;
         } else {
             return alignNode->inputAlignTo;
@@ -396,6 +473,12 @@ int Stereo::getWidth() {
 }
 int Stereo::getHeight() {
     return ph->getParam<int>(param_handlers::ParamNames::HEIGHT);
+}
+void Stereo::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    if(ph->getParam<bool>("i_use_neural_depth")) {
+        auto ctrl = ph->setRuntimeParams(params);
+        neuralControl->send(ctrl);
+    }
 }
 
 }  // namespace dai_nodes

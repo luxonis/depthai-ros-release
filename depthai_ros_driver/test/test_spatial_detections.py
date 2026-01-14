@@ -14,6 +14,7 @@ from sensor_msgs.msg import Imu
 from vision_msgs.msg import Detection3DArray
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from depthai_ros_driver.test_helper import TestHelper
 
 
 @pytest.mark.rostest
@@ -80,6 +81,7 @@ class TestDriverLaunch(unittest.TestCase):
 
     def setUp(self):
         self.node = rclpy.create_node("test")
+        self.testHelper = TestHelper(self.node)
 
     def tearDown(self):
         self.node.destroy_node()
@@ -88,34 +90,16 @@ class TestDriverLaunch(unittest.TestCase):
         proc_output.assertWaitFor("Driver ready!", timeout=10.0, stream="stderr")
 
     def test_published_imu_messages(self, proc_output):
-        imu_received = []
-        sub = self.node.create_subscription(
-            Imu, "/oak/imu/data", lambda msg: imu_received.append(msg), 10
-        )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(imu_received) > 30:
-                    break
-            self.assertGreater(len(imu_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
+        self.assertTrue(self.testHelper.testIncomingMessages(Imu, "/oak/imu/data"))
 
     def test_published_detections(self, proc_output):
-        detections_received = []
-        sub = self.node.create_subscription(
-            Detection3DArray, "/oak/nn/spatial_detections", lambda msg: detections_received.append(msg), 10
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(
+                Detection3DArray, "/oak/nn/spatial_detections"
+            )
         )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(detections_received) > 30:
-                    break
-            self.assertGreater(len(detections_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
+
+
 @launch_testing.post_shutdown_test()
 class TestShutdown(unittest.TestCase):
     def test_exit_codes(self, proc_info):
