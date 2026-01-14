@@ -1,0 +1,28 @@
+
+#pragma once
+
+#include <string>
+#include <unordered_map>
+
+#include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
+
+namespace dai {
+enum class UsbSpeed;
+}
+
+namespace rclcpp {
+class Node;
+class Parameter;
+}  // namespace rclcpp
+
+namespace depthai_ros_driver {
+namespace param_handlers {
+
+class PipelineGenParamHandler : public BaseParamHandler {
+   public:
+    explicit PipelineGenParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name, const std::string& deviceName, bool rsCompat);
+    ~PipelineGenParamHandler();
+    void declareParams();
+};
+}  // namespace param_handlers
+}  // namespace depthai_ros_driver

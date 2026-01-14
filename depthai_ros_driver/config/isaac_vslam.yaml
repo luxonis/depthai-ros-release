@@ -1,0 +1,10 @@
+/oak:
+  ros__parameters:
+    driver:
+      i_enable_ir: false
+    pipeline_gen:
+      i_enable_imu: true
+      i_pipeline_type: depth
+    stereo:
+      i_reverse_stereo_socket_order: true
+      i_publish_synced_rect_pair: true
