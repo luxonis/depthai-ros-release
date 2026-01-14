@@ -1,0 +1,12 @@
+Source: ros-kilted-depthai-filters
+Section: misc
+Priority: optional
+Maintainer: Adam Serafin <adam.serafin@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libopencv-dev, ros-kilted-ament-cmake-auto, ros-kilted-cv-bridge, ros-kilted-depthai-ros-msgs, ros-kilted-image-transport, ros-kilted-message-filters, ros-kilted-rclcpp, ros-kilted-rclcpp-components, ros-kilted-sensor-msgs, ros-kilted-vision-msgs, ros-kilted-visualization-msgs, ros-kilted-ros-workspace
+Homepage: 
+Standards-Version: 3.9.2
+
+Package: ros-kilted-depthai-filters
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopencv-dev, ros-kilted-cv-bridge, ros-kilted-depthai-ros-msgs, ros-kilted-image-transport, ros-kilted-message-filters, ros-kilted-rclcpp, ros-kilted-rclcpp-components, ros-kilted-sensor-msgs, ros-kilted-vision-msgs, ros-kilted-visualization-msgs, ros-kilted-ros-workspace
+Description: Depthai filters package
