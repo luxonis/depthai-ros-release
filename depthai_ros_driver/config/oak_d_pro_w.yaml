@@ -1,0 +1,4 @@
+/oak:
+  ros__parameters:
+    pipeline_gen:
+      i_nn_type: none
