@@ -17,7 +17,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, 'launch', 'camera.launch.py')),
+                os.path.join(depthai_prefix, 'launch', 'driver.launch.py')),
             launch_arguments={"name": name,
                               "params_file": params_file}.items()),
 
@@ -48,6 +48,8 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    print("This functionality is still under development!")
+    return LaunchDescription()
     depthai_filters_prefix = get_package_share_directory("depthai_filters")
 
     declared_arguments = [

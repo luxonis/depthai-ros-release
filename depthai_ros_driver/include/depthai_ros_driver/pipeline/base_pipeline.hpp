@@ -6,11 +6,8 @@
 #include <vector>
 
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
-#include "depthai_ros_driver/dai_nodes/nn/nn_helpers.hpp"
-#include "depthai_ros_driver/dai_nodes/nn/nn_wrapper.hpp"
-#include "depthai_ros_driver/dai_nodes/nn/spatial_nn_wrapper.hpp"
-#include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
-#include "depthai_ros_driver/dai_nodes/sensors/stereo.hpp"
+#include "depthai_ros_driver/dai_nodes/sensors/sensor_wrapper.hpp"
+#include "depthai_ros_driver/param_handlers/pipeline_gen_param_handler.hpp"
 
 namespace dai {
 class Pipeline;
@@ -22,35 +19,66 @@ class Node;
 }
 
 namespace depthai_ros_driver {
+namespace dai_nodes {
+class SensorWrapper;
+class Imu;
+class Stereo;
+class ToF;
+}  // namespace dai_nodes
 namespace pipeline_gen {
 enum class NNType { None, RGB, Spatial };
 class BasePipeline {
    public:
-    ~BasePipeline() = default;
-    std::unique_ptr<dai_nodes::BaseNode> createNN(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline, dai_nodes::BaseNode& daiNode) {
-        using namespace dai_nodes::sensor_helpers;
-        auto nn = std::make_unique<dai_nodes::NNWrapper>(getNodeName(node, NodeNameEnum::NN), node, pipeline);
-        daiNode.link(nn->getInput(), static_cast<int>(dai_nodes::link_types::RGBLinkType::preview));
-        return nn;
-    }
-    std::unique_ptr<dai_nodes::BaseNode> createSpatialNN(std::shared_ptr<rclcpp::Node> node,
-                                                         std::shared_ptr<dai::Pipeline> pipeline,
-                                                         dai_nodes::BaseNode& daiNode,
-                                                         dai_nodes::BaseNode& daiStereoNode) {
-        using namespace dai_nodes::sensor_helpers;
-        auto nn = std::make_unique<dai_nodes::SpatialNNWrapper>(getNodeName(node, NodeNameEnum::NN), node, pipeline);
-        daiNode.link(nn->getInput(static_cast<int>(dai_nodes::nn_helpers::link_types::SpatialNNLinkType::input)),
-                     static_cast<int>(dai_nodes::link_types::RGBLinkType::preview));
-        daiStereoNode.link(nn->getInput(static_cast<int>(dai_nodes::nn_helpers::link_types::SpatialNNLinkType::inputDepth)));
-        return nn;
-    }
-
     virtual std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(std::shared_ptr<rclcpp::Node> node,
                                                                              std::shared_ptr<dai::Device> device,
                                                                              std::shared_ptr<dai::Pipeline> pipeline,
+                                                                             std::shared_ptr<param_handlers::PipelineGenParamHandler> ph,
+                                                                             const std::string& deviceName,
+                                                                             bool rsCompat,
                                                                              const std::string& nnType) = 0;
+    virtual ~BasePipeline() = default;
 
    protected:
+    bool checkForImu(std::shared_ptr<param_handlers::PipelineGenParamHandler> ph, std::shared_ptr<dai::Device> device, rclcpp::Logger logger);
+
+    void addRgbdNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& daiNodes,
+                     std::shared_ptr<rclcpp::Node> node,
+                     std::shared_ptr<dai::Device> device,
+                     std::shared_ptr<dai::Pipeline> pipeline,
+                     std::shared_ptr<param_handlers::PipelineGenParamHandler> ph,
+                     bool rsCompat,
+                     dai_nodes::SensorWrapper& rgb,
+                     dai_nodes::Stereo& stereo,
+                     const std::string& name = "rgbd");
+
+    void addRgbdNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& daiNodes,
+                     std::shared_ptr<rclcpp::Node> node,
+                     std::shared_ptr<dai::Device> device,
+                     std::shared_ptr<dai::Pipeline> pipeline,
+                     std::shared_ptr<param_handlers::PipelineGenParamHandler> ph,
+                     bool rsCompat,
+                     dai_nodes::SensorWrapper& rgb,
+                     dai_nodes::ToF& tof,
+                     const std::string& name = "rgbd");
+
+    void addNnNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& daiNodes,
+                   std::shared_ptr<rclcpp::Node> node,
+                   std::shared_ptr<dai::Pipeline> pipeline,
+                   const std::string& deviceName,
+                   bool rsCompat,
+                   dai_nodes::SensorWrapper& sensor,
+                   const std::string& nnType,
+                   const std::string& name = "nn");
+    void addNnNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& daiNodes,
+                   std::shared_ptr<rclcpp::Node> node,
+                   std::shared_ptr<dai::Pipeline> pipeline,
+                   const std::string& deviceName,
+                   bool rsCompat,
+                   dai_nodes::SensorWrapper& sensor,
+                   dai_nodes::Stereo& stereo,
+                   const std::string& name,
+                   const std::string& nnType = "nn");
+
     BasePipeline(){};
     std::unordered_map<std::string, NNType> nnTypeMap = {
         {"", NNType::None},

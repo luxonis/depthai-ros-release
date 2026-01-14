@@ -3,26 +3,27 @@
 
 #include <memory>
 
-#include "depthai-shared/common/CameraFeatures.hpp"
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
-#include "depthai/pipeline/node/Camera.hpp"
+#include "depthai/pipeline/node/Thermal.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
-#include "depthai_ros_driver/param_handlers/sensor_param_handler.hpp"
+#include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
+#include "depthai_ros_driver/param_handlers/thermal_param_handler.hpp"
 #include "depthai_ros_driver/utils.hpp"
 #include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
 namespace dai_nodes {
-Thermal::Thermal(const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline, dai::CameraFeatures camFeatures)
-    : BaseNode(daiNodeName, node, pipeline) {
+Thermal::Thermal(
+    const std::string& daiNodeName, std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Pipeline> pipeline, const std::string& deviceName, bool rsCompat)
+    : BaseNode(daiNodeName, node, pipeline, deviceName, rsCompat) {
     RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
     setNames();
-    camNode = pipeline->create<dai::node::Camera>();
-    boardSocket = camFeatures.socket;
-    ph = std::make_unique<param_handlers::SensorParamHandler>(node, daiNodeName, boardSocket);
-    ph->declareParams(camNode, camFeatures, true);
-    setXinXout(pipeline);
+    thermalNode = pipeline->create<dai::node::Thermal>();
+    ph = std::make_unique<param_handlers::ThermalParamHandler>(node, getName(), deviceName, rsCompat);
+    ph->declareParams(thermalNode);
+    boardSocket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>(param_handlers::ParamNames::BOARD_SOCKET_ID));
+    setInOut(pipeline);
     RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
 }
 Thermal::~Thermal() = default;
@@ -31,7 +32,7 @@ void Thermal::setNames() {
     rawQName = getName() + "_thermal_raw";
 }
 
-void Thermal::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
+void Thermal::setInOut(std::shared_ptr<dai::Pipeline> pipeline) {
     if(ph->getParam<bool>("i_publish_topic")) {
         utils::VideoEncoderConfig encConfig;
         encConfig.profile = static_cast<dai::VideoEncoderProperties::Profile>(ph->getParam<int>("i_low_bandwidth_profile"));
@@ -40,67 +41,66 @@ void Thermal::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
         encConfig.quality = ph->getParam<int>("i_low_bandwidth_quality");
         encConfig.enabled = ph->getParam<bool>("i_low_bandwidth");
 
-        thermalPub = setupOutput(pipeline, thermalQName, [&](auto input) { camNode->video.link(input); }, ph->getParam<bool>("i_synced"), encConfig);
+        thermalPub = setupOutput(pipeline, thermalQName, &thermalNode->color, ph->getParam<bool>("i_synced"), encConfig);
     }
     if(ph->getParam<bool>("i_publish_raw")) {
-        thermalRawPub = setupOutput(pipeline, rawQName, [&](auto input) { camNode->raw.link(input); }, ph->getParam<bool>("i_synced"));
+        thermalRawPub = setupOutput(pipeline, rawQName, &thermalNode->temperature, ph->getParam<bool>("i_synced"));
     }
 }
 
 void Thermal::setupQueues(std::shared_ptr<dai::Device> device) {
-    if(ph->getParam<bool>("i_publish_topic")) {
-        auto tfPrefix = getOpticalTFPrefix(getSocketName(boardSocket));
+    using param_handlers::ParamNames;
+    if(ph->getParam<bool>(ParamNames::PUBLISH_TOPIC)) {
+        auto tfPrefix = getOpticalFrameName(getSocketName(boardSocket));
         utils::ImgConverterConfig convConfig;
         convConfig.tfPrefix = tfPrefix;
-        convConfig.getBaseDeviceTimestamp = ph->getParam<bool>("i_get_base_device_timestamp");
-        convConfig.updateROSBaseTimeOnRosMsg = ph->getParam<bool>("i_update_ros_base_time_on_ros_msg");
-        convConfig.lowBandwidth = ph->getParam<bool>("i_low_bandwidth");
-        convConfig.encoding = dai::RawImgFrame::Type::RGB888i;
-        convConfig.addExposureOffset = ph->getParam<bool>("i_add_exposure_offset");
-        convConfig.expOffset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>("i_exposure_offset"));
-        convConfig.reverseSocketOrder = ph->getParam<bool>("i_reverse_stereo_socket_order");
+        convConfig.getBaseDeviceTimestamp = ph->getParam<bool>(ParamNames::GET_BASE_DEVICE_TIMESTAMP);
+        convConfig.updateROSBaseTimeOnRosMsg = ph->getParam<bool>(ParamNames::UPDATE_ROS_BASE_TIME_ON_ROS_MSG);
+        convConfig.lowBandwidth = ph->getParam<bool>(ParamNames::LOW_BANDWIDTH);
+        convConfig.encoding = dai::ImgFrame::Type::RGB888i;
+        convConfig.addExposureOffset = ph->getParam<bool>(ParamNames::ADD_EXPOSURE_OFFSET);
+        convConfig.expOffset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>(ParamNames::EXPOSURE_OFFSET));
+        convConfig.reverseSocketOrder = ph->getParam<bool>(ParamNames::REVERSE_STEREO_SOCKET_ORDER);
 
         utils::ImgPublisherConfig pubConfig;
         pubConfig.daiNodeName = getName();
         pubConfig.topicName = "~/" + getName();
-        pubConfig.lazyPub = ph->getParam<bool>("i_enable_lazy_publisher");
-        pubConfig.socket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"));
-        pubConfig.calibrationFile = ph->getParam<std::string>("i_calibration_file");
+        pubConfig.lazyPub = ph->getParam<bool>(ParamNames::ENABLE_LAZY_PUBLISHER);
+        pubConfig.socket = ph->getSocketID();
+        pubConfig.calibrationFile = ph->getParam<std::string>(ParamNames::CALIBRATION_FILE);
         pubConfig.rectified = false;
-        pubConfig.width = ph->getParam<int>("i_width");
-        pubConfig.height = ph->getParam<int>("i_height");
-        pubConfig.maxQSize = ph->getParam<int>("i_max_q_size");
-        pubConfig.flipImage = ph->getParam<bool>("i_flip_published_image");
+        pubConfig.width = ph->getParam<int>(ParamNames::WIDTH);
+        pubConfig.height = ph->getParam<int>(ParamNames::HEIGHT);
+        pubConfig.maxQSize = ph->getParam<int>(ParamNames::MAX_Q_SIZE);
 
         thermalPub->setup(device, convConfig, pubConfig);
     }
-    if(ph->getParam<bool>("i_publish_raw")) {
-        auto tfPrefix = getOpticalTFPrefix(getSocketName(boardSocket));
+    if(ph->getParam<bool>(ParamNames::PUBLISH_RAW)) {
+        auto tfPrefix = getOpticalFrameName(getSocketName(boardSocket));
 
         utils::ImgConverterConfig convConfig;
         convConfig.tfPrefix = tfPrefix;
-        convConfig.getBaseDeviceTimestamp = ph->getParam<bool>("i_get_base_device_timestamp");
-        convConfig.updateROSBaseTimeOnRosMsg = ph->getParam<bool>("i_update_ros_base_time_on_ros_msg");
-        convConfig.lowBandwidth = ph->getParam<bool>("i_low_bandwidth");
-        convConfig.encoding = dai::RawImgFrame::Type::RGB888i;
-        convConfig.addExposureOffset = ph->getParam<bool>("i_add_exposure_offset");
-        convConfig.expOffset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>("i_exposure_offset"));
-        convConfig.reverseSocketOrder = ph->getParam<bool>("i_reverse_stereo_socket_order");
+        convConfig.getBaseDeviceTimestamp = ph->getParam<bool>(ParamNames::GET_BASE_DEVICE_TIMESTAMP);
+        convConfig.updateROSBaseTimeOnRosMsg = ph->getParam<bool>(ParamNames::UPDATE_ROS_BASE_TIME_ON_ROS_MSG);
+        convConfig.lowBandwidth = ph->getParam<bool>(ParamNames::LOW_BANDWIDTH);
+        convConfig.encoding = dai::ImgFrame::Type::RGB888i;
+        convConfig.addExposureOffset = ph->getParam<bool>(ParamNames::ADD_EXPOSURE_OFFSET);
+        convConfig.expOffset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>(ParamNames::EXPOSURE_OFFSET));
+        convConfig.reverseSocketOrder = ph->getParam<bool>(ParamNames::REVERSE_STEREO_SOCKET_ORDER);
 
         utils::ImgPublisherConfig pubConfig;
         pubConfig.daiNodeName = getName();
         pubConfig.topicName = "~/" + getName() + "/raw_data";
-        pubConfig.lazyPub = ph->getParam<bool>("i_enable_lazy_publisher");
-        pubConfig.socket = static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"));
-        pubConfig.calibrationFile = ph->getParam<std::string>("i_calibration_file");
+        pubConfig.lazyPub = ph->getParam<bool>(ParamNames::ENABLE_LAZY_PUBLISHER);
+        pubConfig.socket = ph->getSocketID();
+        pubConfig.calibrationFile = ph->getParam<std::string>(ParamNames::CALIBRATION_FILE);
         pubConfig.rectified = false;
-        pubConfig.width = ph->getParam<int>("i_width");
-        pubConfig.height = ph->getParam<int>("i_height");
-        pubConfig.maxQSize = ph->getParam<int>("i_max_q_size");
-        pubConfig.flipImage = ph->getParam<bool>("i_flip_published_image");
-
+        pubConfig.width = ph->getParam<int>(ParamNames::WIDTH);
+        pubConfig.height = ph->getParam<int>(ParamNames::HEIGHT);
+        pubConfig.maxQSize = ph->getParam<int>(ParamNames::MAX_Q_SIZE);
         thermalRawPub->setup(device, convConfig, pubConfig);
     }
+    confQ = thermalNode->inputConfig.createInputQueue();
 }
 
 void Thermal::closeQueues() {
@@ -112,8 +112,8 @@ void Thermal::closeQueues() {
     }
 }
 
-void Thermal::link(dai::Node::Input in, int /*linkType*/) {
-    camNode->video.link(in);
+void Thermal::link(dai::Node::Input& in, int /*linkType*/) {
+    thermalNode->temperature.link(in);
 }
 
 std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> Thermal::getPublishers() {
@@ -128,7 +128,8 @@ std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> Thermal::getPublish
 }
 
 void Thermal::updateParams(const std::vector<rclcpp::Parameter>& params) {
-    ph->setRuntimeParams(params);
+    auto thermalConf = ph->setRuntimeParams(params);
+    confQ->send(thermalConf);
 }
 
 }  // namespace dai_nodes

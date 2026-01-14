@@ -5,16 +5,13 @@
 #include <string>
 #include <unordered_map>
 
-#include "depthai-shared/common/CameraBoardSocket.hpp"
-#include "depthai-shared/datatype/RawImgFrame.hpp"
-#include "depthai-shared/properties/VideoEncoderProperties.hpp"
+#include "depthai/common/CameraBoardSocket.hpp"
 #include "depthai/common/CameraExposureOffset.hpp"
+#include "depthai/pipeline/datatype/ImgFrame.hpp"
+#include "depthai/properties/VideoEncoderProperties.hpp"
 
 namespace dai {
 class Pipeline;
-namespace node {
-class XLinkOut;
-}  // namespace node
 }  // namespace dai
 
 namespace depthai_ros_driver {
@@ -48,7 +45,7 @@ struct ImgConverterConfig {
     bool updateROSBaseTimeOnRosMsg = false;
     bool lowBandwidth = false;
     bool isStereo = false;
-    dai::RawImgFrame::Type encoding = dai::RawImgFrame::Type::BGR888i;
+    dai::ImgFrame::Type encoding = dai::ImgFrame::Type::NV12;
     bool addExposureOffset = false;
     dai::CameraExposureOffset expOffset = dai::CameraExposureOffset::START;
     bool reverseSocketOrder = false;
@@ -71,13 +68,12 @@ struct ImgPublisherConfig {
     std::string compressedTopicSuffix = "/image_raw/compressed";
     std::string infoMgrSuffix = "";
     bool rectified = false;
+    bool undistorted = false;
     int width = 0;
     int height = 0;
     int maxQSize = 8;
     bool qBlocking = false;
     bool publishCompressed = false;
-    bool flipImage = false;
 };
-std::shared_ptr<dai::node::XLinkOut> setupXout(std::shared_ptr<dai::Pipeline> pipeline, const std::string& name);
 }  // namespace utils
 }  // namespace depthai_ros_driver
