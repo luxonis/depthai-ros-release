@@ -1,8 +1,0 @@
-/oak:
-  ros__parameters:
-    pipeline_gen:
-      i_pipeline_type: depth
-      i_nn_type: none
-    stereo:
-      i_depth_preset: DEFAULT
-      i_aligned: false
