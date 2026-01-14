@@ -15,6 +15,7 @@ from launch_ros.actions import ComposableNodeContainer
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.descriptions import ComposableNode
+from depthai_ros_driver.test_helper import TestHelper
 
 
 @pytest.mark.rostest
@@ -61,6 +62,7 @@ class TestDriverLaunch(unittest.TestCase):
 
     def setUp(self):
         self.node = rclpy.create_node("test")
+        self.testHelper = TestHelper(self.node)
 
     def tearDown(self):
         self.node.destroy_node()
@@ -69,50 +71,14 @@ class TestDriverLaunch(unittest.TestCase):
         proc_output.assertWaitFor("Driver ready!", timeout=10.0, stream="stderr")
 
     def test_published_rgb_image(self, proc_output):
-        images_received = []
-        info_received = []
-        sub = self.node.create_subscription(
-            Image, "/oak/rgb/image_raw", lambda msg: images_received.append(msg), 10
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(Image, "/oak/rgb/image_raw")
         )
-        sub_info = self.node.create_subscription(
-            CameraInfo,
-            "/oak/rgb/camera_info",
-            lambda msg: info_received.append(msg),
-            10,
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(CameraInfo, "/oak/rgb/camera_info")
         )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(images_received) > 30 and len(info_received) > 30:
-                    break
-            self.assertGreater(len(images_received), 30)
-            self.assertGreater(len(info_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
 
-    def test_published_stereo_image(self, proc_output):
-        images_received = []
-        info_received = []
-        sub = self.node.create_subscription(
-            Image, "/oak/stereo/image_raw", lambda msg: images_received.append(msg), 10
-        )
-        sub_info = self.node.create_subscription(
-            CameraInfo,
-            "/oak/stereo/camera_info",
-            lambda msg: info_received.append(msg),
-            10,
-        )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(images_received) > 30 and len(info_received) > 30:
-                    break
-            self.assertGreater(len(images_received), 30)
-            self.assertGreater(len(info_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
+
 @launch_testing.post_shutdown_test()
 class TestShutdown(unittest.TestCase):
     def test_exit_codes(self, proc_info):

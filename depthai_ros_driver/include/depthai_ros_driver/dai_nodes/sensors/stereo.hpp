@@ -12,11 +12,13 @@ namespace dai {
 class Pipeline;
 class Device;
 class MessageQueue;
+class InputQueue;
 class ADatatype;
 class ImgFrame;
 namespace node {
 class ImageAlign;
 class StereoDepth;
+class NeuralDepth;
 }  // namespace node
 }  // namespace dai
 
@@ -39,6 +41,14 @@ namespace sensor_helpers {
 class ImagePubliser;
 }
 class RGBD;
+class StereoNodeWrapper {
+   public:
+    StereoNodeWrapper() {}
+    std::shared_ptr<dai::node::StereoDepth> stereo;
+    std::shared_ptr<dai::node::NeuralDepth> neuralDepth;
+    auto getNode();
+};
+
 class Stereo : public BaseNode {
    public:
     explicit Stereo(const std::string& daiNodeName,
@@ -50,6 +60,7 @@ class Stereo : public BaseNode {
                     dai::CameraBoardSocket rightSocket = dai::CameraBoardSocket::CAM_C);
     ~Stereo();
     void setupQueues(std::shared_ptr<dai::Device> dvice) override;
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void link(dai::Node::Input& in, int linkType = 1) override;
     dai::Node::Input& getInput(int linkType = 0) override;
     void setNames() override;
@@ -57,6 +68,7 @@ class Stereo : public BaseNode {
     void closeQueues() override;
     std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> getPublishers() override;
     std::shared_ptr<dai::node::StereoDepth> getUnderlyingNode();
+    std::shared_ptr<dai::node::NeuralDepth> getNeuralDepthNode();
     bool isAligned();
     dai::CameraBoardSocket getSocketID();
     std::shared_ptr<SensorWrapper> getLeftSensor();
@@ -70,7 +82,9 @@ class Stereo : public BaseNode {
     void setupRightRectQueue(std::shared_ptr<dai::Device> device);
     void setupRectQueue(std::shared_ptr<dai::Device> device, dai::CameraFeatures& sensorInfo, std::shared_ptr<sensor_helpers::ImagePublisher> pub, bool isLeft);
     std::shared_ptr<sensor_helpers::ImagePublisher> stereoPub, leftRectPub, rightRectPub;
+    StereoNodeWrapper stereoNodeWrapper;
     std::shared_ptr<dai::node::StereoDepth> stereoCamNode;
+    std::shared_ptr<dai::node::NeuralDepth> neuralDepthNode;
     std::shared_ptr<dai::node::ImageAlign> alignNode;
     dai::Platform platform;
     std::unique_ptr<RGBD> rgbdNodeLeft, rgbdNodeRight;
@@ -78,6 +92,7 @@ class Stereo : public BaseNode {
     std::unique_ptr<BaseNode> featureTrackerLeftR, featureTrackerRightR, nnNodeLeft, nnNodeRight;
     std::unique_ptr<param_handlers::StereoParamHandler> ph;
     std::shared_ptr<dai::MessageQueue> leftRectQ, rightRectQ;
+    std::shared_ptr<dai::InputQueue> neuralControl;
     std::string stereoQName, leftRectQName, rightRectQName;
     dai::CameraFeatures leftSensInfo, rightSensInfo;
     bool aligned;
