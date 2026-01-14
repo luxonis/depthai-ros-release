@@ -48,7 +48,8 @@ class BasePipeline {
                      std::shared_ptr<param_handlers::PipelineGenParamHandler> ph,
                      bool rsCompat,
                      dai_nodes::SensorWrapper& rgb,
-                     dai_nodes::Stereo& stereo);
+                     dai_nodes::Stereo& stereo,
+                     const std::string& name = "rgbd");
 
     void addRgbdNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& daiNodes,
                      std::shared_ptr<rclcpp::Node> node,
@@ -57,7 +58,8 @@ class BasePipeline {
                      std::shared_ptr<param_handlers::PipelineGenParamHandler> ph,
                      bool rsCompat,
                      dai_nodes::SensorWrapper& rgb,
-                     dai_nodes::ToF& tof);
+                     dai_nodes::ToF& tof,
+                     const std::string& name = "rgbd");
 
     void addNnNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& daiNodes,
                    std::shared_ptr<rclcpp::Node> node,
@@ -65,7 +67,8 @@ class BasePipeline {
                    const std::string& deviceName,
                    bool rsCompat,
                    dai_nodes::SensorWrapper& sensor,
-                   const std::string& nnType);
+                   const std::string& nnType,
+                   const std::string& name = "nn");
     void addNnNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& daiNodes,
                    std::shared_ptr<rclcpp::Node> node,
                    std::shared_ptr<dai::Pipeline> pipeline,
@@ -73,7 +76,8 @@ class BasePipeline {
                    bool rsCompat,
                    dai_nodes::SensorWrapper& sensor,
                    dai_nodes::Stereo& stereo,
-                   const std::string& nnType);
+                   const std::string& name,
+                   const std::string& nnType = "nn");
 
     BasePipeline(){};
     std::unordered_map<std::string, NNType> nnTypeMap = {
