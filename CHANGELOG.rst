@@ -2,6 +2,11 @@
 Changelog for package depthai-ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.1.0 (2026-01-12)
+------------------
+* Add Neural Depth
+* Fix camera info for low bandwidth
+
 3.0.10 (2025-11-16)
 -------------------
 * Add functional tests
