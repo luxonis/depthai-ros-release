@@ -19,8 +19,6 @@ const std::unordered_map<NodeNameEnum, std::string> rsNodeNameMap = {
     {NodeNameEnum::Left, "infra2"},
     {NodeNameEnum::Right, "infra1"},
     {NodeNameEnum::Stereo, "depth"},
-    {NodeNameEnum::IMU, "imu"},
-    {NodeNameEnum::NN, "nn"},
 };
 
 const std::unordered_map<NodeNameEnum, std::string> NodeNameMap = {
@@ -28,8 +26,6 @@ const std::unordered_map<NodeNameEnum, std::string> NodeNameMap = {
     {NodeNameEnum::Left, "left"},
     {NodeNameEnum::Right, "right"},
     {NodeNameEnum::Stereo, "stereo"},
-    {NodeNameEnum::IMU, "imu"},
-    {NodeNameEnum::NN, "nn"},
 };
 
 const std::unordered_map<std::string, dai::ColorCameraProperties::ColorOrder> colorOrderMap = {

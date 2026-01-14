@@ -24,6 +24,7 @@ from rcl_interfaces.msg import (
 import time
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from depthai_ros_driver.test_helper import TestHelper
 
 
 @pytest.mark.rostest
@@ -90,6 +91,7 @@ class TestDriverLaunch(unittest.TestCase):
 
     def setUp(self):
         self.node = rclpy.create_node("test")
+        self.testHelper = TestHelper(self.node)
 
     def tearDown(self):
         self.node.destroy_node()
@@ -98,138 +100,81 @@ class TestDriverLaunch(unittest.TestCase):
         proc_output.assertWaitFor("Driver ready!", timeout=10.0, stream="stderr")
 
     def test_published_rgb_image(self, proc_output):
-        images_received = []
-        info_received = []
-        sub = self.node.create_subscription(
-            Image, "/oak/rgb/image_raw", lambda msg: images_received.append(msg), 10
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(Image, "/oak/rgb/image_raw")
         )
-        sub_info = self.node.create_subscription(
-            CameraInfo,
-            "/oak/rgb/camera_info",
-            lambda msg: info_received.append(msg),
-            10,
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(CameraInfo, "/oak/rgb/camera_info")
         )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(images_received) > 30 and len(info_received) > 30:
-                    break
-            self.assertGreater(len(images_received), 30)
-            self.assertGreater(len(info_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
 
     def test_published_stereo_image(self, proc_output):
-        images_received = []
-        info_received = []
-        sub = self.node.create_subscription(
-            Image, "/oak/stereo/image_raw", lambda msg: images_received.append(msg), 10
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(Image, "/oak/stereo/image_raw")
         )
-        sub_info = self.node.create_subscription(
-            CameraInfo,
-            "/oak/stereo/camera_info",
-            lambda msg: info_received.append(msg),
-            10,
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(CameraInfo, "/oak/stereo/camera_info")
         )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(images_received) > 30 and len(info_received) > 30:
-                    break
-            self.assertGreater(len(images_received), 30)
-            self.assertGreater(len(info_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
 
     def test_published_imu_messages(self, proc_output):
-        imu_received = []
-        sub = self.node.create_subscription(
-            Imu, "/oak/imu/data", lambda msg: imu_received.append(msg), 10
-        )
-        try:
-            end_time = time.time() + 5
-            while time.time() < end_time:
-                rclpy.spin_once(self.node, timeout_sec=1)
-                if len(imu_received) > 30:
-                    break
-            self.assertGreater(len(imu_received), 30)
-        finally:
-            self.node.destroy_subscription(sub)
+        self.testHelper.testIncomingMessages(Imu, "/oak/imu/data_raw")
 
     def test_stop_start_camera(self, proc_output):
-        srv = self.node.create_client(Trigger, "/oak/stop_driver")
-        while not srv.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info("service not available, waiting again...")
-        req = Trigger.Request()
-        future = srv.call_async(req)
-        rclpy.spin_until_future_complete(self.node, future)
+        self.assertTrue(self.testHelper.testTriggerService("/oak/stop_driver"))
         proc_output.assertWaitFor("Driver stopped!", timeout=10.0, stream="stderr")
-        self.assertTrue(future.result().success)
-        self.node.destroy_client(srv)
 
-        srv = self.node.create_client(Trigger, "/oak/start_driver")
-        while not srv.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info("service not available, waiting again...")
-        req = Trigger.Request()
-        future = srv.call_async(req)
-        rclpy.spin_until_future_complete(self.node, future)
+        self.assertTrue(self.testHelper.testTriggerService("/oak/start_driver"))
         proc_output.assertWaitFor("Driver ready!", timeout=10.0, stream="stderr")
-        self.assertTrue(future.result().success)
-        self.node.destroy_client(srv)
 
     def test_save_calibration(self, proc_output):
-        srv = self.node.create_client(Trigger, "/oak/save_calibration")
-        while not srv.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info("service not available, waiting again...")
-        req = Trigger.Request()
-        future = srv.call_async(req)
-        rclpy.spin_until_future_complete(self.node, future)
+        self.assertTrue(self.testHelper.testTriggerService("/oak/save_calibration"))
         proc_output.assertWaitFor(
             "Saving calibration to", timeout=10.0, stream="stderr"
         )
-        self.assertTrue(future.result().success)
-        self.node.destroy_client(srv)
 
     def test_save_pipeline(self, proc_output):
-        srv = self.node.create_client(Trigger, "/oak/save_pipeline")
-        while not srv.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info("service not available, waiting again...")
-        req = Trigger.Request()
-        future = srv.call_async(req)
-        rclpy.spin_until_future_complete(self.node, future)
+        self.assertTrue(self.testHelper.testTriggerService("/oak/save_pipeline"))
         proc_output.assertWaitFor(
             "Saving pipeline schema to", timeout=10.0, stream="stderr"
         )
-        self.assertTrue(future.result().success)
-        self.node.destroy_client(srv)
 
     def test_set_parameters(self, proc_output):
-        srv = self.node.create_client(SetParameters, "/oak/set_parameters")
-        while not srv.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info("service not available, waiting again...")
-        req = SetParameters.Request()
-        req.parameters = [
+
+        parameters = [
             Parameter(
                 name="driver.r_laser_dot_intensity",
                 value=ParameterValue(type=3, double_value=0.4),
             )
         ]
-        future = srv.call_async(req)
-        rclpy.spin_until_future_complete(self.node, future)
-        self.assertTrue(future.result().results[0].successful)
-        self.node.destroy_client(srv)
+        self.assertTrue(self.testHelper.setParameters(parameters, False))
 
-        srv = self.node.create_client(GetParameters, "/oak/get_parameters")
-        while not srv.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info("service not available, waiting again...")
-        req = GetParameters.Request()
-        req.names = ["driver.r_laser_dot_intensity"]
-        future = srv.call_async(req)
-        rclpy.spin_until_future_complete(self.node, future)
-        self.assertAlmostEqual(future.result().values[0].double_value, 0.4)
-        self.node.destroy_client(srv)
+        value = self.testHelper.getParameter("driver.r_laser_dot_intensity")
+        self.assertAlmostEqual(value.double_value, 0.4)
+
+    def test_override_camera_info(self, proc_output):
+        self.testHelper
+        parameters = [
+            Parameter(
+                name="rgb.i_calibration_file",
+                value=ParameterValue(
+                    type=4,
+                    string_value="package://depthai_ros_driver/config/calibration/rgb.yaml",
+                ),
+            )
+        ]
+        self.assertTrue(self.testHelper.setParameters(parameters))
+        value = self.testHelper.getParameter("rgb.i_calibration_file")
+        self.assertEqual(
+            value.string_value,
+            "package://depthai_ros_driver/config/calibration/rgb.yaml",
+        )
+
+        def cb(msg):
+            self.assertEqual(msg.distortion_model, "plumb_bob")
+            return msg
+
+        self.assertTrue(
+            self.testHelper.testIncomingMessages(CameraInfo, "/oak/rgb/camera_info", cb)
+        )
 
 
 @launch_testing.post_shutdown_test()
