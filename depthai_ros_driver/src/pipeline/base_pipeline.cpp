@@ -30,9 +30,10 @@ void BasePipeline::addRgbdNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>
                                std::shared_ptr<param_handlers::PipelineGenParamHandler> ph,
                                bool rsCompat,
                                dai_nodes::SensorWrapper& rgb,
-                               dai_nodes::Stereo& stereo) {
+                               dai_nodes::Stereo& stereo,
+                               const std::string& name) {
     if(ph->getParam<bool>("i_enable_rgbd")) {
-        auto rgbd = std::make_unique<dai_nodes::RGBD>("rgbd", node, pipeline, device, rsCompat, rgb, stereo.getUnderlyingNode(), stereo.isAligned());
+        auto rgbd = std::make_unique<dai_nodes::RGBD>(name, node, pipeline, device, rsCompat, rgb, stereo.getUnderlyingNode(), stereo.isAligned());
         if(device->getPlatform() == dai::Platform::RVC4) {
             stereo.link(rgbd->getInput(static_cast<int>(dai_nodes::link_types::RGBDLinkType::depth)),
                         static_cast<int>(dai_nodes::link_types::StereoLinkType::stereo));
@@ -47,9 +48,10 @@ void BasePipeline::addRgbdNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>
                                std::shared_ptr<param_handlers::PipelineGenParamHandler> ph,
                                bool rsCompat,
                                dai_nodes::SensorWrapper& rgb,
-                               dai_nodes::ToF& tof) {
+                               dai_nodes::ToF& tof,
+                               const std::string& name) {
     if(ph->getParam<bool>("i_enable_rgbd")) {
-        auto rgbd = std::make_unique<dai_nodes::RGBD>("rgbd", node, pipeline, device, rsCompat, rgb, tof, tof.isAligned());
+        auto rgbd = std::make_unique<dai_nodes::RGBD>(name, node, pipeline, device, rsCompat, rgb, tof, tof.isAligned());
         if(tof.isAligned()) {
             tof.link(rgbd->getInput(static_cast<int>(dai_nodes::link_types::RGBDLinkType::depth)));
         }
@@ -62,15 +64,15 @@ void BasePipeline::addNnNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& 
                              const std::string& deviceName,
                              bool rsCompat,
                              dai_nodes::SensorWrapper& sensor,
-                             const std::string& nnType) {
+                             const std::string& nnType,
+                             const std::string& name) {
     std::string nTypeUpCase = utils::getUpperCaseStr(nnType);
     auto nType = utils::getValFromMap(nTypeUpCase, nnTypeMap);
     switch(nType) {
         case NNType::None:
             break;
         case NNType::RGB: {
-            auto nn = std::make_unique<dai_nodes::NNWrapper>(
-                getNodeName(node, dai_nodes::sensor_helpers::NodeNameEnum::NN), node, pipeline, deviceName, rsCompat, sensor);
+            auto nn = std::make_unique<dai_nodes::NNWrapper>(name, node, pipeline, deviceName, rsCompat, sensor);
             daiNodes.push_back(std::move(nn));
             break;
         }
@@ -88,7 +90,8 @@ void BasePipeline::addNnNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& 
                              bool rsCompat,
                              dai_nodes::SensorWrapper& sensor,
                              dai_nodes::Stereo& stereo,
-                             const std::string& nnType) {
+                             const std::string& nnType,
+                             const std::string& name) {
     std::string nTypeUpCase = utils::getUpperCaseStr(nnType);
     auto nType = utils::getValFromMap(nTypeUpCase, nnTypeMap);
 
@@ -96,14 +99,12 @@ void BasePipeline::addNnNode(std::vector<std::unique_ptr<dai_nodes::BaseNode>>& 
         case NNType::None:
             break;
         case NNType::RGB: {
-            auto nn = std::make_unique<dai_nodes::NNWrapper>(
-                getNodeName(node, dai_nodes::sensor_helpers::NodeNameEnum::NN), node, pipeline, deviceName, rsCompat, sensor);
+            auto nn = std::make_unique<dai_nodes::NNWrapper>(name, node, pipeline, deviceName, rsCompat, sensor);
             daiNodes.push_back(std::move(nn));
             break;
         }
         case NNType::Spatial: {
-            auto nn = std::make_unique<dai_nodes::SpatialNNWrapper>(
-                getNodeName(node, dai_nodes::sensor_helpers::NodeNameEnum::NN), node, pipeline, deviceName, rsCompat, sensor, stereo);
+            auto nn = std::make_unique<dai_nodes::SpatialNNWrapper>(name, node, pipeline, deviceName, rsCompat, sensor, stereo);
             daiNodes.push_back(std::move(nn));
             break;
         }
