@@ -1,0 +1,6 @@
+{
+    "Grid/3D": "true",
+    "RGBD/CreateOccupancyGrid": "true",
+    "Rtabmap/SaveWMState": "true",
+    "Mem/UseOdomGravity": "true"
+}
