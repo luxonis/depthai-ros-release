@@ -1,11 +1,14 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>depthai_ros_msgs</name>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
   <description>Package to keep interface independent of the driver</description>
 
-  <maintainer email="adam.serafin@luxonis.com">Adam Serafin</maintainer>
   <author>Sachin Guruswamy</author>
+  <author>Adam Serafin</author>
+
+  <!-- temporary -->
+  <maintainer email="matevz.morato@luxonis.com">Matevz Morato</maintainer>
 
   <license>MIT</license>
   
