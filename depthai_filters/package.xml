@@ -1,10 +1,11 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>depthai_filters</name>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
   <description>Depthai filters package</description>
-  <maintainer email="adam.serafin@luxonis.com">Adam Serafin</maintainer>
+  <author>Adam Serafin</author>
+  <!-- temporary -->
+  <maintainer email="matevz.morato@luxonis.com">Matevz Morato</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
