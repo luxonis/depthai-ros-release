@@ -234,7 +234,9 @@ void TFPublisher::convertModelName() {
                                                         {"OAK-D-W", "OAK-D-S2"},
                                                         {"OAK-D", "OAK-D"},
                                                         {"OAK-T", "OAK-T"},
-                                                        {"OAK4-D-W", "OAK4-D"}};
+                                                        {"OAK-4-PRO", "OAK4-D"},
+                                                        {"OAK4-D-W", "OAK4-D"},
+                                                        {"OAK4-D-PRO", "OAK4-D"}};
 
     for(const auto& [key, value] : modelMappings) {
         if(camModel == key) {

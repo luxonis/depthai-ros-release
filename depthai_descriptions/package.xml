@@ -1,11 +1,13 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>depthai_descriptions</name>
-  <version>3.1.0</version>
+  <version>3.2.0</version>
   <description>The depthai_descriptions package</description>
 
-  <maintainer email="adam.serafin@luxonis.com">Adam Serafin</maintainer>
   <author>Adam Serafin</author>
+
+  <!-- temporary -->
+  <maintainer email="matevz.morato@luxonis.com">Matevz Morato</maintainer>
 
   <license>MIT</license>
 
