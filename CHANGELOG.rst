@@ -2,6 +2,15 @@
 Changelog for package depthai-ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.2.0 (2026-05-06)
+------------------
+* Expose pipeline auto calibration mode through the ROS driver.
+
+3.1.2 (2026-05-05)
+------------------
+* Require DepthAI 3.6.1 packages.
+* Update release preparation defaults for DepthAI 3.6.1.
+
 3.1.0 (2026-01-12)
 ------------------
 * Add Neural Depth
@@ -259,4 +268,3 @@ Changelog for package depthai-ros
 * Release 2.5.0
 * add ament package:
 * created Bridge and Coverters to handle images, IMU and camera Info
-
