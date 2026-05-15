@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>depthai-ros</name>
+  <version>3.2.0</version>
+  <description>The depthai-ros package</description>
+
+  <author>Sachin Guruswamy</author>
+  <author>Adam Serafin</author>
+
+  <!-- temporary -->
+  <maintainer email="matevz.morato@luxonis.com">Matevz Morato</maintainer>
+
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <exec_depend version_gte="3.6.1">depthai</exec_depend>
+  <exec_depend>depthai_ros_msgs</exec_depend>
+  <exec_depend>depthai_bridge</exec_depend>
+  <exec_depend>depthai_examples</exec_depend>
+  <exec_depend>depthai_ros_driver</exec_depend>
+  <exec_depend>depthai_descriptions</exec_depend>
+  <exec_depend>depthai_filters</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+
+</package>
