@@ -2,6 +2,10 @@
 Changelog for package depthai_bridge
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+3.2.1 (2026-05-15)
+------------------
+* Add support for RVC4 IMU magnetometer and rotation vector data.
+
 3.2.0 (2026-05-06)
 ------------------
 * Expose pipeline auto calibration mode through the ROS driver.
