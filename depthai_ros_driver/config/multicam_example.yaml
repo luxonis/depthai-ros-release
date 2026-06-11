@@ -1,0 +1,21 @@
+/oak_d_lite:
+  ros__parameters:
+    driver:
+      i_device_id: 18443010C1038C1200
+    pipeline_gen:
+      i_nn_type: rgb
+    nn:
+      i_nn_model: depthai_ros_driver/yolo
+/oak_d_w:
+  ros__parameters:
+    driver:
+      i_device_id: 19443010D1BFF51200
+    pipeline_gen:
+      i_nn_type: none
+/oak_d_pro:
+  ros__parameters:
+    driver:
+      i_device_id: 1944301051FB4D1300
+    pipeline_gen:
+      i_pipeline_type: stereo
+
