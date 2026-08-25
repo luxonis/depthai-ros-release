@@ -1,0 +1,12 @@
+Source: ros-lyrical-depthai-bridge
+Section: misc
+Priority: optional
+Maintainer: "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libboost-dev, libopencv-dev, ros-lyrical-ament-cmake, ros-lyrical-ament-cmake-gtest <!nocheck>, ros-lyrical-camera-info-manager, ros-lyrical-composition-interfaces, ros-lyrical-cv-bridge, ros-lyrical-depthai (>= 3.7.1), ros-lyrical-depthai-ros-msgs, ros-lyrical-ffmpeg-image-transport-msgs, ros-lyrical-image-transport, ros-lyrical-nav-msgs, ros-lyrical-rclcpp, ros-lyrical-ros-environment, ros-lyrical-sensor-msgs, ros-lyrical-std-msgs, ros-lyrical-stereo-msgs, ros-lyrical-tf2, ros-lyrical-tf2-geometry-msgs, ros-lyrical-tf2-ros, ros-lyrical-vision-msgs, ros-lyrical-ros-workspace
+Homepage: https://index.ros.org/p/depthai_bridge/#lyrical
+Standards-Version: 3.9.2
+
+Package: ros-lyrical-depthai-bridge
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libboost-dev, libopencv-dev, ros-lyrical-camera-info-manager, ros-lyrical-composition-interfaces, ros-lyrical-cv-bridge, ros-lyrical-depthai (>= 3.7.1), ros-lyrical-depthai-ros-msgs, ros-lyrical-ffmpeg-image-transport-msgs, ros-lyrical-image-transport, ros-lyrical-nav-msgs, ros-lyrical-rclcpp, ros-lyrical-robot-state-publisher, ros-lyrical-ros-environment, ros-lyrical-sensor-msgs, ros-lyrical-std-msgs, ros-lyrical-stereo-msgs, ros-lyrical-tf2, ros-lyrical-tf2-geometry-msgs, ros-lyrical-tf2-ros, ros-lyrical-vision-msgs, ros-lyrical-xacro, ros-lyrical-ros-workspace
+Description: The depthai_bridge package
