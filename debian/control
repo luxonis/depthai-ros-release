@@ -1,0 +1,12 @@
+Source: ros-lyrical-depthai-examples
+Section: misc
+Priority: optional
+Maintainer: "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libopencv-dev, ros-lyrical-ament-cmake, ros-lyrical-backward-ros, ros-lyrical-camera-info-manager, ros-lyrical-cv-bridge, ros-lyrical-depthai (>= 3.7.1), ros-lyrical-depthai-bridge, ros-lyrical-depthai-descriptions, ros-lyrical-depthai-ros-msgs, ros-lyrical-foxglove-msgs, ros-lyrical-image-transport, ros-lyrical-nav-msgs, ros-lyrical-rclcpp, ros-lyrical-ros-environment, ros-lyrical-rviz-imu-plugin, ros-lyrical-sensor-msgs, ros-lyrical-std-msgs, ros-lyrical-stereo-msgs, ros-lyrical-vision-msgs, ros-lyrical-ros-workspace
+Homepage: https://index.ros.org/p/depthai_examples/#lyrical
+Standards-Version: 3.9.2
+
+Package: ros-lyrical-depthai-examples
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopencv-dev, ros-lyrical-backward-ros, ros-lyrical-camera-info-manager, ros-lyrical-cv-bridge, ros-lyrical-depth-image-proc, ros-lyrical-depthai (>= 3.7.1), ros-lyrical-depthai-bridge, ros-lyrical-depthai-descriptions, ros-lyrical-depthai-ros-msgs, ros-lyrical-foxglove-msgs, ros-lyrical-image-transport, ros-lyrical-nav-msgs, ros-lyrical-rclcpp, ros-lyrical-robot-state-publisher, ros-lyrical-ros-environment, ros-lyrical-rviz-imu-plugin, ros-lyrical-sensor-msgs, ros-lyrical-std-msgs, ros-lyrical-stereo-msgs, ros-lyrical-vision-msgs, ros-lyrical-xacro, ros-lyrical-ros-workspace
+Description: The depthai_examples package

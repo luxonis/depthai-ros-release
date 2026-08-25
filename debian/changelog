@@ -1,0 +1,63 @@
+ros-lyrical-depthai-examples (3.4.0-1resolute) resolute; urgency=high
+
+  * Bringing to parity with develop-old
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Mon, 17 Aug 2026 22:00:00 -0000
+
+ros-lyrical-depthai-examples (3.3.0-1resolute) resolute; urgency=high
+
+  * Require DepthAI 3.7.1 packages.
+    * Adds telemetry to help us understand how the library is used so we can improve it
+    * To opt out set DEPTHAI_TELEMETRY=0 in the environment
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Tue, 09 Jun 2026 22:00:00 -0000
+
+ros-lyrical-depthai-examples (3.2.1-1resolute) resolute; urgency=high
+
+  * Add support for RVC4 IMU magnetometer and rotation vector data.
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Thu, 14 May 2026 22:00:00 -0000
+
+ros-lyrical-depthai-examples (3.2.0-1resolute) resolute; urgency=high
+
+  * Expose pipeline auto calibration mode through the ROS driver.
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Tue, 05 May 2026 22:00:00 -0000
+
+ros-lyrical-depthai-examples (3.1.2-1resolute) resolute; urgency=high
+
+  * Require DepthAI 3.6.1 packages.
+  * Update release preparation defaults for DepthAI 3.6.1.
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Mon, 04 May 2026 22:00:00 -0000
+
+ros-lyrical-depthai-examples (2.5.3-1resolute) resolute; urgency=high
+
+  * Updated release version
+  * Added upgrades to stereo node and fixed the nodelet issue (#130 <https://github.com/luxonis/depthai-ros/issues/130>)
+  * Contributors: Sachin, Sachin Guruswamy
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Sat, 20 Aug 2022 22:00:00 -0000
+
+ros-lyrical-depthai-examples (2.5.2-1resolute) resolute; urgency=high
+
+  * Upgraded examples
+  * Fixed bugs for Noetic
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Tue, 31 May 2022 22:00:00 -0000
+
+ros-lyrical-depthai-examples (2.5.1-1resolute) resolute; urgency=high
+
+  * Fix Build farm issues
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Thu, 19 May 2022 22:00:00 -0000
+
+ros-lyrical-depthai-examples (2.5.0-1resolute) resolute; urgency=high
+
+  * Release 2.5.0
+  * add ament package:
+  * created Bridge and Coverters to handle images, IMU and camera Info
+
+ -- "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>  Thu, 19 May 2022 22:00:00 -0000
+
+
