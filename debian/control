@@ -1,0 +1,12 @@
+Source: ros-lyrical-depthai-ros-driver
+Section: misc
+Priority: optional
+Maintainer: "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), ros-lyrical-ament-cmake, ros-lyrical-ament-cmake-auto, ros-lyrical-ament-cmake-python, ros-lyrical-backward-ros, ros-lyrical-camera-calibration, ros-lyrical-camera-info-manager, ros-lyrical-cv-bridge, ros-lyrical-depthai (>= 3.7.1), ros-lyrical-depthai-bridge, ros-lyrical-depthai-descriptions, ros-lyrical-depthai-ros-msgs, ros-lyrical-diagnostic-msgs, ros-lyrical-diagnostic-updater, ros-lyrical-ffmpeg-image-transport-msgs, ros-lyrical-geometry-msgs, ros-lyrical-image-pipeline, ros-lyrical-image-transport, ros-lyrical-image-transport-plugins, ros-lyrical-nav-msgs, ros-lyrical-pluginlib, ros-lyrical-rclcpp, ros-lyrical-rclcpp-components, ros-lyrical-sensor-msgs, ros-lyrical-std-msgs, ros-lyrical-std-srvs, ros-lyrical-tf2-ros, ros-lyrical-vision-msgs, ros-lyrical-ros-workspace
+Homepage: https://index.ros.org/p/depthai_ros_driver/#lyrical
+Standards-Version: 3.9.2
+
+Package: ros-lyrical-depthai-ros-driver
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-lyrical-ament-cmake-auto, ros-lyrical-backward-ros, ros-lyrical-camera-calibration, ros-lyrical-camera-info-manager, ros-lyrical-cv-bridge, ros-lyrical-depthai (>= 3.7.1), ros-lyrical-depthai-bridge, ros-lyrical-depthai-descriptions, ros-lyrical-depthai-ros-msgs, ros-lyrical-diagnostic-msgs, ros-lyrical-diagnostic-updater, ros-lyrical-ffmpeg-image-transport-msgs, ros-lyrical-geometry-msgs, ros-lyrical-image-pipeline, ros-lyrical-image-transport, ros-lyrical-image-transport-plugins, ros-lyrical-nav-msgs, ros-lyrical-pluginlib, ros-lyrical-rclcpp, ros-lyrical-rclcpp-components, ros-lyrical-sensor-msgs, ros-lyrical-std-msgs, ros-lyrical-std-srvs, ros-lyrical-tf2-ros, ros-lyrical-vision-msgs, ros-lyrical-ros-workspace
+Description: Depthai ROS Monolithic node.
