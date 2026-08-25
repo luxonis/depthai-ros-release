@@ -1,0 +1,219 @@
+
+#include "LogCollection.hpp"
+
+#include <XLink/XLinkPublicDefines.h>
+#ifdef DEPTHAI_ENABLE_CURL
+    #include <cpr/cpr.h>
+#endif
+
+#include <nlohmann/json.hpp>
+#include <optional>
+#include <system_error>
+
+#include "build/version.hpp"
+#include "sha1.hpp"
+#include "utility/Environment.hpp"
+#include "utility/Logging.hpp"
+#include "utility/Platform.hpp"
+
+namespace dai {
+namespace logCollection {
+
+constexpr auto LOG_ENDPOINT = "https://logs.luxonis.com/logs";
+
+struct FileWithSHA1 {
+    std::string content;
+    std::string sha1Hash;
+    std::string name;
+};
+
+std::string sanitizeCrashDumpTimestamp(std::string timestamp) {
+    for(char& ch : timestamp) {
+        const bool keep = (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '-' || ch == '_';
+        if(!keep) {
+            ch = '_';
+        }
+    }
+    return timestamp;
+}
+
+std::string getCrashDumpFilename(const CrashDump& crashDump) {
+    auto sanitizedTimestamp = sanitizeCrashDumpTimestamp(crashDump.crashdumpTimestamp);
+    if(sanitizedTimestamp.empty()) {
+        sanitizedTimestamp = "unknown_time";
+    }
+    return fmt::format("crash_dump_{}.tar.gz", sanitizedTimestamp);
+}
+
+std::string platformToString(XLinkPlatform_t platform) {
+    switch(platform) {
+        case X_LINK_ANY_PLATFORM:
+            return "X_LINK_ANY_PLATFORM";
+        case X_LINK_MYRIAD_X:
+            return "X_LINK_MYRIAD_X";
+        case X_LINK_MYRIAD_2:
+            return "X_LINK_MYRIAD_2";
+        case X_LINK_RVC3:
+            return "X_LINK_RVC3";
+        case X_LINK_RVC4:
+            return "X_LINK_RVC4";
+        default:
+            return "INVALID_ENUM_VALUE";
+    }
+}
+
+std::string protocolToString(XLinkProtocol_t protocol) {
+    switch(protocol) {
+        case X_LINK_USB_VSC:
+            return "X_LINK_USB_VSC";
+        case X_LINK_USB_CDC:
+            return "X_LINK_USB_CDC";
+        case X_LINK_PCIE:
+            return "X_LINK_PCIE";
+        case X_LINK_IPC:
+            return "X_LINK_IPC";
+        case X_LINK_TCP_IP:
+            return "X_LINK_TCP_IP";
+        case X_LINK_LOCAL_SHDMEM:
+            return "X_LINK_LOCAL_SHDMEM";
+        case X_LINK_TCP_IP_OR_LOCAL_SHDMEM:
+            return "X_LINK_TCP_IP_OR_LOCAL_SHDMEM";
+        case X_LINK_USB_EP:
+            return "X_LINK_USB_EP";
+        case X_LINK_NMB_OF_PROTOCOLS:
+            return "X_LINK_NMB_OF_PROTOCOLS";
+        case X_LINK_ANY_PROTOCOL:
+            return "X_LINK_ANY_PROTOCOL";
+        default:
+            return "INVALID_ENUM_VALUE";
+    }
+}
+
+std::string calculateSHA1(const std::string& input) {
+    SHA1 checksum;
+    checksum.update(input);
+    return checksum.final();
+}
+
+#ifdef DEPTHAI_ENABLE_CURL
+bool sendLogsToServer(const std::optional<FileWithSHA1>& pipelineData, const std::optional<FileWithSHA1>& crashDumpData, const dai::DeviceInfo& deviceInfo) {
+    (void)deviceInfo;  // Unused for now
+    // At least one of the files must be present
+    if(!pipelineData && !crashDumpData) {
+        logger::error("Incorrect usage of sendLogsToServer, at least one of the files must be present");
+        return false;
+    }
+    cpr::Multipart multipart{};
+    if(pipelineData) {
+        cpr::Buffer pipelineBuffer(pipelineData->content.begin(), pipelineData->content.end(), pipelineData->name);
+        multipart.parts.emplace_back("pipelineFile", pipelineBuffer);
+        multipart.parts.emplace_back("pipelineId", pipelineData->sha1Hash);
+    }
+
+    if(crashDumpData) {
+        cpr::Buffer crashDumpBuffer(crashDumpData->content.begin(), crashDumpData->content.end(), crashDumpData->name);
+        multipart.parts.emplace_back("crashDumpFile", crashDumpBuffer);
+        multipart.parts.emplace_back("crashDumpId", crashDumpData->sha1Hash);
+    }
+
+    multipart.parts.emplace_back("platform", platformToString(deviceInfo.platform));
+    multipart.parts.emplace_back("connectionType", protocolToString(deviceInfo.protocol));
+    multipart.parts.emplace_back("osPlatform", platform::getOSPlatform());
+    std::string daiVersion = fmt::format("{}-{}", build::VERSION, build::COMMIT);
+    multipart.parts.emplace_back("depthAiVersion", std::move(daiVersion));
+    multipart.parts.emplace_back("productId", deviceInfo.getDeviceId());
+    auto response = cpr::Post(cpr::Url{LOG_ENDPOINT}, multipart);
+    if(response.status_code != 200) {
+        logger::info("Failed to send logs, status code: {}, {}", response.status_code, response.text);
+        return false;
+    }
+
+    logger::info("Logs sent successfully");
+    return true;
+}
+#else
+bool sendLogsToServer(const std::optional<FileWithSHA1>&, const std::optional<FileWithSHA1>&, const dai::DeviceInfo&) {
+    logger::info("Not sending the logs to the server, as CURL support is disabled");
+    return false;
+}
+#endif
+
+void logCrashDump(const std::optional<PipelineSchema>& pipelineSchema, const CrashDump& crashDump, const dai::DeviceInfo& deviceInfo) {
+    auto crashDumpEnvVar = utility::getEnvAs<std::string>("DEPTHAI_CRASHDUMP", "", false);
+    if(crashDumpEnvVar == "0") {
+        logger::warn("Crash dump logging disabled");
+        return;
+    }
+    namespace fs = std::filesystem;
+    // Check if the varialbe points to a directory
+    std::string dirToStoreCrashDumps;
+    if(!crashDumpEnvVar.empty()) {
+        fs::path crashDumpPath(crashDumpEnvVar);
+        if(fs::is_directory(crashDumpPath)) {
+            dirToStoreCrashDumps = crashDumpEnvVar;
+        } else {
+            logger::error("DEPTHAI_CRASHDUMP is set to a non-directory path, ignoring");
+        }
+    }
+
+    // Create the crash dump object
+    FileWithSHA1 crashDumpData;
+    auto bytes = crashDump.toBytes();
+    crashDumpData.content = std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    crashDumpData.sha1Hash = calculateSHA1(crashDumpData.content);
+    crashDumpData.name = getCrashDumpFilename(crashDump);
+
+    fs::path logDir = dai::platform::getDaiCacheDir() / "crashdumps";
+    fs::path crashDumpPathLocal(dirToStoreCrashDumps);
+    if(crashDumpPathLocal.empty()) {
+        crashDumpPathLocal = logDir / crashDumpData.sha1Hash / crashDumpData.name;
+    } else {
+        crashDumpPathLocal /= crashDumpData.name;
+    }
+    auto errorString = fmt::format("Device with id {} has crashed. Crash dump logs are stored in: {} - please report to developers.",
+                                   deviceInfo.getDeviceId(),
+                                   crashDumpPathLocal.string());
+
+    std::error_code ec;
+    fs::create_directories(crashDumpPathLocal.parent_path(), ec);
+    if(ec) {
+        logger::error("Failed to create log directory: {}", ec.message());
+        return;
+    }
+
+    crashDump.toTar(crashDumpPathLocal);
+    logger::error(errorString);
+    // Send logs to the server if possible
+#ifdef DEPTHAI_ENABLE_CURL
+
+    std::optional<FileWithSHA1> pipelineData;
+    if(pipelineSchema) {
+        pipelineData = FileWithSHA1{};
+        std::string pipelineJson = nlohmann::json(*pipelineSchema).dump();
+        std::string pipelineSHA1 = calculateSHA1(pipelineJson);
+        pipelineData->content = std::move(pipelineJson);
+        pipelineData->sha1Hash = std::move(pipelineSHA1);
+    }
+
+    // Keep backward compatibility with the older global feedback switch while supporting
+    // the crashdump-specific switch introduced on this branch.
+    auto loggingDisabledLegacy = !utility::getEnvAs<std::string>("DEPTHAI_DISABLE_FEEDBACK", "").empty();
+    auto loggingDisabledCrashdump = utility::getEnvAs<bool>("DEPTHAI_DISABLE_CRASHDUMP_COLLECTION", false);
+    if(!loggingDisabledLegacy && !loggingDisabledCrashdump) {
+        logger::info("Logging enabled");
+        if(!sendLogsToServer(pipelineData, crashDumpData, deviceInfo)) {
+            // Keep at info level to not spam in case of no internet connection
+            logger::warn("Failed to send crash dump logs to the server.");
+        } else {
+            logger::info("Crash dump logs sent to server");
+        }
+    } else {
+        logger::info("Crash dump upload disabled by environment.");
+    }
+#else
+    (void)pipelineSchema;
+#endif
+}
+
+}  // namespace logCollection
+}  // namespace dai

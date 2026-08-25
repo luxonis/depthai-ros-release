@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+foxglove-websocket = {editable = true, path = "./python", extras = ["examples"]}
+
+[dev-packages]
+black = "*"
+build = "*"
+pipenv = ">=2022.1.8"
+pytest = "*"
+pytest-asyncio = "*"
+pyright = "*"
+
+[requires]
+python_version = "3.8"

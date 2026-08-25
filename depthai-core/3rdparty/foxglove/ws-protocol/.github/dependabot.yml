@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: daily
+    labels: [] # disable default labels
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [] # disable default labels
+
+    # Define groups of dependencies to be updated together
+    # https://github.blog/changelog/2023-06-30-grouped-version-updates-for-dependabot-public-beta/
+    groups:
+      eslint:
+        patterns:
+          - "@typescript-eslint/*"
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [] # disable default labels

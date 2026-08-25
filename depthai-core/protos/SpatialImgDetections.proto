@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+import "common.proto";
+package dai.proto.spatial_img_detections;
+import "ImgDetections.proto";
+
+message SpatialImgDetections {
+    int64 sequenceNum = 1;
+    common.Timestamp ts = 2;
+    common.Timestamp tsDevice = 3;
+    repeated SpatialImgDetection detections = 4;
+    common.ImgTransformation transformation = 5;
+    int64 segmentationMaskWidth = 6;
+    int64 segmentationMaskHeight = 7;
+    bytes maskData = 8;
+    common.LengthUnit unit = 9;
+    optional common.Timestamp tsSystem = 10;
+}
+
+message SpatialImgDetection {
+    img_detections.ImgDetection detection = 1;
+    Point3f spatialCoordinates = 2;
+    SpatialLocationCalculatorConfigData boundingBoxMapping = 3;
+    common.SpatialKeypointsList keypoints = 4;
+}
+
+message SpatialLocationCalculatorConfigData {
+    Rect roi = 1;
+    SpatialLocationCalculatorConfigThresholds depthThresholds = 2;
+    SpatialLocationCalculatorAlgorithm calculationAlgorithm = 3;
+    int32 stepSize = 4; // default value: AUTO
+}
+
+message Rect {
+    float x = 1; // default value: 0.0f
+    float y = 2; // default value: 0.0f
+    float width = 3; // default value: 0.0f
+    float height = 4; // default value: 0.0f
+}
+
+message SpatialLocationCalculatorConfigThresholds {
+    uint32 lowerThreshold = 1; // default value: 0
+	uint32 upperThreshold = 2; // default value: 65535
+}
+
+enum SpatialLocationCalculatorAlgorithm {
+    option allow_alias = true;
+    AVERAGE = 0;
+    MEAN = 0;
+    MIN = 1;
+    MAX = 2;
+    MODE = 3;
+    MEDIAN = 4;
+}
+
+message Point3f {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+}

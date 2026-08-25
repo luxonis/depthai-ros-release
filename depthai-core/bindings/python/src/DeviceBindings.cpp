@@ -1,0 +1,1164 @@
+#include "DeviceBindings.hpp"
+
+// depthai
+#include "depthai/device/Device.hpp"
+#include "depthai/device/EepromError.hpp"
+#include "depthai/pipeline/Pipeline.hpp"
+#include "depthai/utility/Clock.hpp"
+#include "depthai/utility/CompilerWarnings.hpp"
+#include "depthai/xlink/XLinkConnection.hpp"
+
+// pybind11_json
+#include "pybind11_json/pybind11_json.hpp"
+
+// std
+#include <filesystem>
+
+// std::chrono bindings
+#include <pybind11/chrono.h>
+// py::detail
+#include <pybind11/detail/common.h>
+// hedley
+#include <hedley/hedley.h>
+// STL Bind
+#include <pybind11/numpy.h>
+#include <pybind11/pytypes.h>
+#include <pybind11/stl_bind.h>
+
+PYBIND11_MAKE_OPAQUE(std::unordered_map<std::int8_t, dai::BoardConfig::GPIO>);
+PYBIND11_MAKE_OPAQUE(std::unordered_map<std::int8_t, dai::BoardConfig::UART>);
+
+// static std::vector<std::string> deviceGetQueueEventsHelper(dai::Device& d, const std::vector<std::string>& queueNames, std::size_t maxNumEvents,
+// std::chrono::microseconds timeout){
+//     using namespace std::chrono;
+
+//     // if timeout < 0, unlimited timeout
+//     bool unlimitedTimeout = timeout < microseconds(0);
+//     auto startTime = steady_clock::now();
+//     do {
+//         {
+//             // releases python GIL
+//             py::gil_scoped_release release;
+//             // block for 100ms
+//             auto events = d.getQueueEvents(queueNames, maxNumEvents, std::chrono::milliseconds(100));
+//             if(!events.empty()) return events;
+//         }
+//         // reacquires python GIL for PyErr_CheckSignals call
+//         // check if interrupt triggered in between
+//         if (PyErr_CheckSignals() != 0) throw py::error_already_set();
+//     } while(unlimitedTimeout || steady_clock::now() - startTime < timeout);
+
+//     return std::vector<std::string>();
+// }
+
+template <typename D, typename ARG>
+static void bindConstructors(ARG& arg) {
+    using namespace dai;
+
+    arg.def(py::init([]() {
+                auto dev = deviceSearchHelper<D>();
+                py::gil_scoped_release release;
+                return std::make_unique<D>(dev);
+            }),
+            DOC(dai, DeviceBase, DeviceBase))
+        .def(py::init([](UsbSpeed maxUsbSpeed) {
+                 auto dev = deviceSearchHelper<D>();
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(dev, maxUsbSpeed);
+             }),
+             py::arg("maxUsbSpeed"),
+             DOC(dai, DeviceBase, DeviceBase, 2))
+        .def(py::init([](const DeviceInfo& deviceInfo, UsbSpeed maxUsbSpeed) {
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(deviceInfo, maxUsbSpeed);
+             }),
+             py::arg("deviceInfo"),
+             py::arg("maxUsbSpeed"),
+             DOC(dai, DeviceBase, DeviceBase, 3))
+        .def(py::init([](const DeviceInfo& deviceInfo, std::filesystem::path pathToCmd) {
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(deviceInfo, pathToCmd);
+             }),
+             py::arg("deviceDesc"),
+             py::arg("pathToCmd"),
+             DOC(dai, DeviceBase, DeviceBase, 4))
+        .def(py::init([](typename D::Config config) {
+                 auto dev = deviceSearchHelper<D>();
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(config, dev);
+             }),
+             py::arg("config"),
+             DOC(dai, DeviceBase, DeviceBase, 5))
+        .def(py::init([](typename D::Config config, const DeviceInfo& deviceInfo) {
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(config, deviceInfo);
+             }),
+             py::arg("config"),
+             py::arg("deviceInfo"),
+             DOC(dai, DeviceBase, DeviceBase, 6))
+
+        // DeviceInfo version
+        .def(py::init([](const DeviceInfo& deviceInfo) {
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(deviceInfo);
+             }),
+             py::arg("deviceInfo"),
+             DOC(dai, DeviceBase, DeviceBase, 7))
+        .def(py::init([](const DeviceInfo& deviceInfo, UsbSpeed maxUsbSpeed) {
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(deviceInfo, maxUsbSpeed);
+             }),
+             py::arg("deviceInfo"),
+             py::arg("maxUsbSpeed"),
+             DOC(dai, DeviceBase, DeviceBase, 8))
+
+        // name or device id version
+        .def(py::init([](std::string nameOrDeviceId) {
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(std::move(nameOrDeviceId));
+             }),
+             py::arg("nameOrDeviceId"),
+             DOC(dai, DeviceBase, DeviceBase, 9))
+        .def(py::init([](std::string nameOrDeviceId, UsbSpeed maxUsbSpeed) {
+                 py::gil_scoped_release release;
+                 return std::make_unique<D>(std::move(nameOrDeviceId), maxUsbSpeed);
+             }),
+             py::arg("nameOrDeviceId"),
+             py::arg("maxUsbSpeed"),
+             DOC(dai, DeviceBase, DeviceBase, 10));
+}
+
+void DeviceBindings::bind(pybind11::module& m, void* pCallstack) {
+    using namespace dai;
+
+    // Type definitions
+    py::class_<DeviceBase, std::shared_ptr<DeviceBase>> deviceBase(m, "DeviceBase", DOC(dai, DeviceBase));
+    py::class_<Device, DeviceBase, std::shared_ptr<Device>> device(m, "Device", DOC(dai, Device));
+    py::class_<Device::Config> deviceConfig(device, "Config", DOC(dai, DeviceBase, Config));
+    py::class_<HealthCheckConfig> healthCheckConfig(m, "HealthCheckConfig", DOC(dai, HealthCheckConfig));
+    py::class_<HealthCheckIssue> healthCheckIssue(m, "HealthCheckIssue", DOC(dai, HealthCheckIssue));
+    py::class_<HealthCheckMetrics> healthCheckMetrics(m, "HealthCheckMetrics", DOC(dai, HealthCheckMetrics));
+    py::enum_<HealthCheckIssueType> healthCheckIssueType(m, "HealthCheckIssueType", DOC(dai, HealthCheckIssueType));
+    py::enum_<HealthCheckIssueStage> healthCheckIssueStage(m, "HealthCheckIssueStage", DOC(dai, HealthCheckIssueStage));
+    py::enum_<UsbGeneration> usbGeneration(m, "UsbGeneration", DOC(dai, UsbGeneration));
+    py::enum_<HealthCheckResult> healthCheckResult(m, "HealthCheckResult", DOC(dai, HealthCheckResult));
+    py::class_<BoardConfig> boardConfig(m, "BoardConfig", DOC(dai, BoardConfig));
+    py::class_<BoardConfig::USB> boardConfigUsb(boardConfig, "USB", DOC(dai, BoardConfig, USB));
+    py::class_<BoardConfig::Network> boardConfigNetwork(boardConfig, "Network", DOC(dai, BoardConfig, Network));
+    py::class_<BoardConfig::GPIO> boardConfigGpio(boardConfig, "GPIO", DOC(dai, BoardConfig, GPIO));
+    py::enum_<dai::Device::ReconnectionStatus> enumReconnectionStatus(device, "ReconnectionStatus", DOC(dai, DeviceBase, ReconnectionStatus));
+    py::enum_<BoardConfig::GPIO::Mode> boardConfigGpioMode(boardConfigGpio, "Mode", DOC(dai, BoardConfig, GPIO, Mode));
+    py::enum_<BoardConfig::GPIO::Direction> boardConfigGpioDirection(boardConfigGpio, "Direction", DOC(dai, BoardConfig, GPIO, Direction));
+    py::enum_<BoardConfig::GPIO::Level> boardConfigGpioLevel(boardConfigGpio, "Level", DOC(dai, BoardConfig, GPIO, Level));
+    py::enum_<BoardConfig::GPIO::Pull> boardConfigGpioPull(boardConfigGpio, "Pull", DOC(dai, BoardConfig, GPIO, Pull));
+    py::enum_<BoardConfig::GPIO::Drive> boardConfigGpioDrive(boardConfigGpio, "Drive", DOC(dai, BoardConfig, GPIO, Drive));
+    py::class_<BoardConfig::UART> boardConfigUart(boardConfig, "UART", DOC(dai, BoardConfig, UART));
+    py::class_<BoardConfig::UVC> boardConfigUvc(boardConfig, "UVC", DOC(dai, BoardConfig, UVC));
+    struct PyClock {};
+    py::class_<PyClock> clock(m, "Clock");
+
+    py::bind_map<std::unordered_map<std::int8_t, dai::BoardConfig::GPIO>>(boardConfig, "GPIOMap");
+    py::bind_map<std::unordered_map<std::int8_t, dai::BoardConfig::UART>>(boardConfig, "UARTMap");
+
+    // pybind11 limitation of having actual classes as exceptions
+    // Possible but requires a larger workaround
+    // https://stackoverflow.com/questions/62087383/how-can-you-bind-exceptions-with-custom-fields-and-constructors-in-pybind11-and
+
+    // Bind EepromError
+    auto eepromError = py::register_exception<EepromError>(m, "EepromError", PyExc_RuntimeError);
+
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    // Call the rest of the type defines, then perform the actual bindings
+    Callstack* callstack = (Callstack*)pCallstack;
+    auto cb = callstack->top();
+    callstack->pop();
+    cb(m, pCallstack);
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
+    // Bind BoardConfig::USB
+    boardConfigUsb.def(py::init<>())
+        .def_readwrite("vid", &BoardConfig::USB::vid)
+        .def_readwrite("pid", &BoardConfig::USB::pid)
+        .def_readwrite("flashBootedVid", &BoardConfig::USB::flashBootedVid)
+        .def_readwrite("flashBootedPid", &BoardConfig::USB::flashBootedPid)
+        .def_readwrite("maxSpeed", &BoardConfig::USB::maxSpeed)
+        .def_readwrite("productName", &BoardConfig::USB::productName)
+        .def_readwrite("manufacturer", &BoardConfig::USB::manufacturer);
+
+    // Bind BoardConfig::Network
+    boardConfigNetwork.def(py::init<>())
+        .def_readwrite("mtu", &BoardConfig::Network::mtu)
+        .def_readwrite("xlinkTcpNoDelay", &BoardConfig::Network::xlinkTcpNoDelay);
+
+    // GPIO Mode
+    boardConfigGpioMode.value("ALT_MODE_0", BoardConfig::GPIO::ALT_MODE_0, DOC(dai, BoardConfig, GPIO, Mode, ALT_MODE_0))
+        .value("ALT_MODE_1", BoardConfig::GPIO::ALT_MODE_1, DOC(dai, BoardConfig, GPIO, Mode, ALT_MODE_1))
+        .value("ALT_MODE_2", BoardConfig::GPIO::ALT_MODE_2, DOC(dai, BoardConfig, GPIO, Mode, ALT_MODE_2))
+        .value("ALT_MODE_3", BoardConfig::GPIO::ALT_MODE_3, DOC(dai, BoardConfig, GPIO, Mode, ALT_MODE_3))
+        .value("ALT_MODE_4", BoardConfig::GPIO::ALT_MODE_4, DOC(dai, BoardConfig, GPIO, Mode, ALT_MODE_4))
+        .value("ALT_MODE_5", BoardConfig::GPIO::ALT_MODE_5, DOC(dai, BoardConfig, GPIO, Mode, ALT_MODE_5))
+        .value("ALT_MODE_6", BoardConfig::GPIO::ALT_MODE_6, DOC(dai, BoardConfig, GPIO, Mode, ALT_MODE_6))
+        .value("DIRECT", BoardConfig::GPIO::DIRECT, DOC(dai, BoardConfig, GPIO, Mode, DIRECT))
+        .export_values();
+
+    // GPIO Direction
+    boardConfigGpioDirection.value("INPUT", BoardConfig::GPIO::INPUT, DOC(dai, BoardConfig, GPIO, Direction, INPUT))
+        .value("OUTPUT", BoardConfig::GPIO::OUTPUT, DOC(dai, BoardConfig, GPIO, Direction, OUTPUT))
+        .export_values();
+
+    // GPIO Level
+    boardConfigGpioLevel.value("LOW", BoardConfig::GPIO::LOW, DOC(dai, BoardConfig, GPIO, Level, LOW))
+        .value("HIGH", BoardConfig::GPIO::HIGH, DOC(dai, BoardConfig, GPIO, Level, HIGH))
+        .export_values();
+
+    // GPIO Pull
+    boardConfigGpioPull.value("NO_PULL", BoardConfig::GPIO::NO_PULL, DOC(dai, BoardConfig, GPIO, Pull, NO_PULL))
+        .value("PULL_UP", BoardConfig::GPIO::PULL_UP, DOC(dai, BoardConfig, GPIO, Pull, PULL_UP))
+        .value("PULL_DOWN", BoardConfig::GPIO::PULL_DOWN, DOC(dai, BoardConfig, GPIO, Pull, PULL_DOWN))
+        .value("BUS_KEEPER", BoardConfig::GPIO::BUS_KEEPER, DOC(dai, BoardConfig, GPIO, Pull, BUS_KEEPER))
+        .export_values();
+
+    // GPIO Drive
+    boardConfigGpioDrive.value("MA_2", BoardConfig::GPIO::MA_2, DOC(dai, BoardConfig, GPIO, Drive, MA_2))
+        .value("MA_4", BoardConfig::GPIO::MA_4, DOC(dai, BoardConfig, GPIO, Drive, MA_4))
+        .value("MA_8", BoardConfig::GPIO::MA_8, DOC(dai, BoardConfig, GPIO, Drive, MA_8))
+        .value("MA_12", BoardConfig::GPIO::MA_12, DOC(dai, BoardConfig, GPIO, Drive, MA_12))
+        .export_values();
+
+    // Bind BoardConfig::GPIO
+    boardConfigGpio.def(py::init<>())
+        .def(py::init<BoardConfig::GPIO::Direction>())
+        .def(py::init<BoardConfig::GPIO::Direction, BoardConfig::GPIO::Level>())
+        .def(py::init<BoardConfig::GPIO::Direction, BoardConfig::GPIO::Level, BoardConfig::GPIO::Pull>())
+        .def(py::init<BoardConfig::GPIO::Direction, BoardConfig::GPIO::Mode>())
+        .def(py::init<BoardConfig::GPIO::Direction, BoardConfig::GPIO::Mode, BoardConfig::GPIO::Pull>())
+        .def_readwrite("mode", &BoardConfig::GPIO::mode)
+        .def_readwrite("direction", &BoardConfig::GPIO::direction)
+        .def_readwrite("level", &BoardConfig::GPIO::level)
+        .def_readwrite("pull", &BoardConfig::GPIO::pull)
+        .def_readwrite("drive", &BoardConfig::GPIO::drive)
+        .def_readwrite("schmitt", &BoardConfig::GPIO::schmitt)
+        .def_readwrite("slewFast", &BoardConfig::GPIO::slewFast);
+
+    // Bind BoardConfig::UART
+    boardConfigUart.def(py::init<>()).def_readwrite("tmp", &BoardConfig::UART::tmp);
+
+    // Bind BoardConfig::UVC
+    boardConfigUvc.def(py::init<>())
+        .def(py::init<uint16_t, uint16_t>())
+        .def_readwrite("cameraName", &BoardConfig::UVC::cameraName)
+        .def_readwrite("width", &BoardConfig::UVC::width)
+        .def_readwrite("height", &BoardConfig::UVC::height)
+        .def_readwrite("frameType", &BoardConfig::UVC::frameType)
+        .def_readwrite("enable", &BoardConfig::UVC::enable);
+
+    // Bind Device::ReconnectionStatus
+    enumReconnectionStatus.value("RECONNECT_FAILED", Device::ReconnectionStatus::RECONNECT_FAILED);
+    enumReconnectionStatus.value("RECONNECTED", Device::ReconnectionStatus::RECONNECTED);
+    enumReconnectionStatus.value("RECONNECTING", Device::ReconnectionStatus::RECONNECTING);
+
+    // Bind BoardConfig
+    boardConfig.def(py::init<>())
+        .def_readwrite("usb", &BoardConfig::usb, DOC(dai, BoardConfig, usb))
+        .def_readwrite("network", &BoardConfig::network, DOC(dai, BoardConfig, network))
+        .def_readwrite("sysctl", &BoardConfig::sysctl, DOC(dai, BoardConfig, sysctl))
+        .def_readwrite("watchdogTimeoutMs", &BoardConfig::watchdogTimeoutMs, DOC(dai, BoardConfig, watchdogTimeoutMs))
+        .def_readwrite("watchdogInitialDelayMs", &BoardConfig::watchdogInitialDelayMs, DOC(dai, BoardConfig, watchdogInitialDelayMs))
+        .def_readwrite("gpio", &BoardConfig::gpio, DOC(dai, BoardConfig, gpio))
+        .def_readwrite("uart", &BoardConfig::uart, DOC(dai, BoardConfig, uart))
+        .def_readwrite("pcieInternalClock", &BoardConfig::pcieInternalClock, DOC(dai, BoardConfig, pcieInternalClock))
+        .def_readwrite("usb3PhyInternalClock", &BoardConfig::usb3PhyInternalClock, DOC(dai, BoardConfig, usb3PhyInternalClock))
+        .def_readwrite("mipi4LaneRgb", &BoardConfig::mipi4LaneRgb, DOC(dai, BoardConfig, mipi4LaneRgb))
+        .def_readwrite("emmc", &BoardConfig::emmc, DOC(dai, BoardConfig, emmc))
+        .def_readwrite("logPath", &BoardConfig::logPath, DOC(dai, BoardConfig, logPath))
+        .def_readwrite("logSizeMax", &BoardConfig::logSizeMax, DOC(dai, BoardConfig, logSizeMax))
+        .def_readwrite("logVerbosity", &BoardConfig::logVerbosity, DOC(dai, BoardConfig, logVerbosity))
+        .def_readwrite("logDevicePrints", &BoardConfig::logDevicePrints, DOC(dai, BoardConfig, logDevicePrints))
+        .def_readwrite("uvc", &BoardConfig::uvc, DOC(dai, BoardConfig, uvc));
+
+    // Bind Device::Config
+    deviceConfig.def(py::init<>())
+        .def_readwrite("version", &Device::Config::version)
+        .def_readwrite("board", &Device::Config::board)
+        .def_readwrite("nonExclusiveMode", &Device::Config::nonExclusiveMode)
+        .def_readwrite("outputLogLevel", &Device::Config::outputLogLevel)
+        .def_readwrite("logLevel", &Device::Config::logLevel);
+
+    // Bind UsbGeneration
+    usbGeneration.value("UNKNOWN", UsbGeneration::UNKNOWN, DOC(dai, UsbGeneration, UNKNOWN))
+        .value("USB_1_0", UsbGeneration::USB_1_0, DOC(dai, UsbGeneration, USB_1_0))
+        .value("USB_1_1", UsbGeneration::USB_1_1, DOC(dai, UsbGeneration, USB_1_1))
+        .value("USB_2_0", UsbGeneration::USB_2_0, DOC(dai, UsbGeneration, USB_2_0))
+        .value("USB_3_0", UsbGeneration::USB_3_0, DOC(dai, UsbGeneration, USB_3_0))
+        .value("USB_3_1", UsbGeneration::USB_3_1, DOC(dai, UsbGeneration, USB_3_1));
+
+    // Bind HealthCheckResult
+    healthCheckResult.value("NOT_RUN", HealthCheckResult::NOT_RUN, DOC(dai, HealthCheckResult, NOT_RUN))
+        .value("PASS", HealthCheckResult::PASS, DOC(dai, HealthCheckResult, PASS))
+        .value("FAIL", HealthCheckResult::FAIL, DOC(dai, HealthCheckResult, FAIL));
+
+    // Bind HealthCheckIssueType
+    healthCheckIssueType.value("Warning", HealthCheckIssueType::Warning, DOC(dai, HealthCheckIssueType, Warning))
+        .value("Error", HealthCheckIssueType::Error, DOC(dai, HealthCheckIssueType, Error));
+
+    // Bind HealthCheckIssueStage
+    healthCheckIssueStage.value("Connection", HealthCheckIssueStage::Connection, DOC(dai, HealthCheckIssueStage, Connection))
+        .value("DeviceAvailability", HealthCheckIssueStage::DeviceAvailability, DOC(dai, HealthCheckIssueStage, DeviceAvailability))
+        .value("UsbGeneration", HealthCheckIssueStage::UsbGeneration, DOC(dai, HealthCheckIssueStage, UsbGeneration))
+        .value("Bandwidth", HealthCheckIssueStage::Bandwidth, DOC(dai, HealthCheckIssueStage, Bandwidth))
+        .value("CameraFunctionality", HealthCheckIssueStage::CameraFunctionality, DOC(dai, HealthCheckIssueStage, CameraFunctionality))
+        .value("CameraCalibration", HealthCheckIssueStage::CameraCalibration, DOC(dai, HealthCheckIssueStage, CameraCalibration))
+        .value("ImuFunctionality", HealthCheckIssueStage::ImuFunctionality, DOC(dai, HealthCheckIssueStage, ImuFunctionality))
+        .value("ImuCalibration", HealthCheckIssueStage::ImuCalibration, DOC(dai, HealthCheckIssueStage, ImuCalibration))
+        .value("PowerSupply", HealthCheckIssueStage::PowerSupply, DOC(dai, HealthCheckIssueStage, PowerSupply));
+
+    // Bind HealthCheckIssue
+    healthCheckIssue.def(py::init<HealthCheckIssueType, HealthCheckIssueStage, const std::string&>(), py::arg("type"), py::arg("stage"), py::arg("message"))
+        .def_readwrite("type", &HealthCheckIssue::type, DOC(dai, HealthCheckIssue, type))
+        .def_readwrite("stage", &HealthCheckIssue::stage, DOC(dai, HealthCheckIssue, stage))
+        .def_readwrite("message", &HealthCheckIssue::message, DOC(dai, HealthCheckIssue, message));
+
+    // Bind HealthCheckConfig
+    healthCheckConfig
+        .def(py::init<bool, bool, bool, bool, bool, bool, bool, std::chrono::milliseconds>(),
+             py::arg("checkUsbGeneration") = true,
+             py::arg("measureBandwidth") = true,
+             py::arg("verifyCameraFunctionality") = true,
+             py::arg("verifyCameraCalibration") = true,
+             py::arg("verifyImuFunctionality") = true,
+             py::arg("verifyImuCalibration") = true,
+             py::arg("verifyPowerSupply") = true,
+             py::arg("powerSupplyCheckDuration") = std::chrono::seconds(20))
+        .def_readwrite("checkUsbGeneration", &HealthCheckConfig::checkUsbGeneration, DOC(dai, HealthCheckConfig, checkUsbGeneration))
+        .def_readwrite("measureBandwidth", &HealthCheckConfig::measureBandwidth, DOC(dai, HealthCheckConfig, measureBandwidth))
+        .def_readwrite("verifyCameraFunctionality", &HealthCheckConfig::verifyCameraFunctionality, DOC(dai, HealthCheckConfig, verifyCameraFunctionality))
+        .def_readwrite("verifyCameraCalibration", &HealthCheckConfig::verifyCameraCalibration, DOC(dai, HealthCheckConfig, verifyCameraCalibration))
+        .def_readwrite("verifyImuFunctionality", &HealthCheckConfig::verifyImuFunctionality, DOC(dai, HealthCheckConfig, verifyImuFunctionality))
+        .def_readwrite("verifyImuCalibration", &HealthCheckConfig::verifyImuCalibration, DOC(dai, HealthCheckConfig, verifyImuCalibration))
+        .def_readwrite("verifyPowerSupply", &HealthCheckConfig::verifyPowerSupply, DOC(dai, HealthCheckConfig, verifyPowerSupply))
+        .def_readwrite("powerSupplyCheckDuration", &HealthCheckConfig::powerSupplyCheckDuration, DOC(dai, HealthCheckConfig, powerSupplyCheckDuration));
+
+    // Bind HealthCheckMetrics
+    healthCheckMetrics.def(py::init<>())
+        .def_readwrite("usbGeneration", &HealthCheckMetrics::usbGeneration, DOC(dai, HealthCheckMetrics, usbGeneration))
+        .def_readwrite("bandwidthMbps", &HealthCheckMetrics::bandwidthMbps, DOC(dai, HealthCheckMetrics, bandwidthMbps))
+        .def_readwrite("cameraCalibration", &HealthCheckMetrics::cameraCalibration, DOC(dai, HealthCheckMetrics, cameraCalibration))
+        .def_readwrite("imuCalibration", &HealthCheckMetrics::imuCalibration, DOC(dai, HealthCheckMetrics, imuCalibration))
+        .def_readwrite("cameraFunctionality", &HealthCheckMetrics::cameraFunctionality, DOC(dai, HealthCheckMetrics, cameraFunctionality))
+        .def_readwrite("imuFunctionality", &HealthCheckMetrics::imuFunctionality, DOC(dai, HealthCheckMetrics, imuFunctionality))
+        .def_readwrite("powerSupplyFunctionality", &HealthCheckMetrics::powerSupplyFunctionality, DOC(dai, HealthCheckMetrics, powerSupplyFunctionality))
+        .def_readwrite("deviceInUse", &HealthCheckMetrics::deviceInUse, DOC(dai, HealthCheckMetrics, deviceInUse))
+        .def_readwrite("deviceInSetupMode", &HealthCheckMetrics::deviceInSetupMode, DOC(dai, HealthCheckMetrics, deviceInSetupMode))
+        .def_readwrite("missingUdevRules", &HealthCheckMetrics::missingUdevRules, DOC(dai, HealthCheckMetrics, missingUdevRules))
+        .def_readwrite("issues", &HealthCheckMetrics::issues, DOC(dai, HealthCheckMetrics, issues))
+        .def("toString", &HealthCheckMetrics::toString, DOC(dai, HealthCheckMetrics, toString))
+        .def("__repr__", &HealthCheckMetrics::toString)
+        .def("__str__", &HealthCheckMetrics::toString);
+
+    // Bind constructors
+    bindConstructors<DeviceBase>(deviceBase);
+    // Bind the rest
+    deviceBase
+        // Python only methods
+        .def("__enter__", [](DeviceBase& d) -> DeviceBase& { return d; })
+        .def("__exit__",
+             [](DeviceBase& d, py::object type, py::object value, py::object traceback) {
+                 py::gil_scoped_release release;
+                 d.close();
+             })
+        .def(
+            "close",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                d.close();
+            },
+            "Closes the connection to device. Better alternative is the usage of context manager: `with depthai.Device(pipeline) as device:`")
+        .def(
+            "isClosed",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.isClosed();
+            },
+            DOC(dai, DeviceBase, isClosed))
+        .def("hasCrashed", &DeviceBase::hasCrashed, DOC(dai, DeviceBase, hasCrashed))
+        .def("setMaxReconnectionAttempts",
+             &DeviceBase::setMaxReconnectionAttempts,
+             py::arg("maxAttempts"),
+             py::arg("callback") = py::none(),
+             DOC(dai, DeviceBase, setMaxReconnectionAttempts))
+
+        // dai::Device methods
+        // static
+        .def_static(
+            "getAnyAvailableDevice",
+            [](std::chrono::milliseconds ms) { return DeviceBase::getAnyAvailableDevice(ms); },
+            py::arg("timeout"),
+            DOC(dai, DeviceBase, getAnyAvailableDevice))
+        .def_static(
+            "getAnyAvailableDevice", []() { return DeviceBase::getAnyAvailableDevice(); }, DOC(dai, DeviceBase, getAnyAvailableDevice, 2))
+        .def_static("getFirstAvailableDevice",
+                    &DeviceBase::getFirstAvailableDevice,
+                    py::arg("skipInvalidDevices") = true,
+                    DOC(dai, DeviceBase, getFirstAvailableDevice))
+        .def_static("getAllAvailableDevices", &DeviceBase::getAllAvailableDevices, DOC(dai, DeviceBase, getAllAvailableDevices))
+        .def_static("getEmbeddedDeviceBinary",
+                    py::overload_cast<bool, OpenVINO::Version>(&DeviceBase::getEmbeddedDeviceBinary),
+                    py::arg("usb2Mode"),
+                    py::arg("version") = OpenVINO::VERSION_UNIVERSAL,
+                    DOC(dai, DeviceBase, getEmbeddedDeviceBinary))
+        .def_static("getEmbeddedDeviceBinary",
+                    py::overload_cast<const DeviceBase::Config&>(&DeviceBase::getEmbeddedDeviceBinary),
+                    py::arg("config"),
+                    DOC(dai, DeviceBase, getEmbeddedDeviceBinary, 2))
+        .def_static("getDeviceById", &DeviceBase::getDeviceById, py::arg("deviceId"), DOC(dai, DeviceBase, getDeviceById))
+        .def_static("getDeviceByIdOrName", &DeviceBase::getDeviceByIdOrName, py::arg("deviceIdOrName"), DOC(dai, DeviceBase, getDeviceByIdOrName))
+        .def_static("isInSetupMode", &DeviceBase::isInSetupMode, py::arg("deviceIdOrName"), DOC(dai, DeviceBase, isInSetupMode))
+        .def_static("getAllConnectedDevices", &DeviceBase::getAllConnectedDevices, DOC(dai, DeviceBase, getAllConnectedDevices))
+        .def_static("getGlobalProfilingData", &DeviceBase::getGlobalProfilingData, DOC(dai, DeviceBase, getGlobalProfilingData))
+        .def_static(
+            "performHealthCheck",
+            [](const DeviceInfo& deviceInfo, const HealthCheckConfig& config) {
+                py::gil_scoped_release release;
+                return DeviceBase::performHealthCheck(deviceInfo, config);
+            },
+            py::arg("deviceInfo"),
+            py::arg("config") = HealthCheckConfig(),
+            DOC(dai, DeviceBase, performHealthCheck))
+
+        // methods
+        .def("getBootloaderVersion", &DeviceBase::getBootloaderVersion, DOC(dai, DeviceBase, getBootloaderVersion))
+        .def(
+            "getOSVersion",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getOSVersion();
+            },
+            DOC(dai, DeviceBase, getOSVersion))
+        .def(
+            "isPipelineRunning",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.isPipelineRunning();
+            },
+            DOC(dai, DeviceBase, isPipelineRunning))
+
+        // Doesn't require GIL release (eg, don't do RPC or long blocking things in background)
+        .def("setLogOutputLevel", &DeviceBase::setLogOutputLevel, py::arg("level"), DOC(dai, DeviceBase, setLogOutputLevel))
+        .def("getLogOutputLevel", &DeviceBase::getLogOutputLevel, DOC(dai, DeviceBase, getLogOutputLevel))
+
+        // Requires GIL release
+        .def(
+            "setLogLevel",
+            [](DeviceBase& d, LogLevel l) {
+                py::gil_scoped_release release;
+                d.setLogLevel(l);
+            },
+            py::arg("level"),
+            DOC(dai, DeviceBase, setLogLevel))
+        .def(
+            "getLogLevel",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getLogLevel();
+            },
+            DOC(dai, DeviceBase, getLogLevel))
+        .def(
+            "setSystemInformationLoggingRate",
+            [](DeviceBase& d, float hz) {
+                py::gil_scoped_release release;
+                d.setSystemInformationLoggingRate(hz);
+            },
+            py::arg("rateHz"),
+            DOC(dai, DeviceBase, setSystemInformationLoggingRate))
+        .def(
+            "getSystemInformationLoggingRate",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getSystemInformationLoggingRate();
+            },
+            DOC(dai, DeviceBase, getSystemInformationLoggingRate))
+        .def(
+            "getCrashDump",
+            [](DeviceBase& d, bool clearCrashDump) -> std::shared_ptr<CrashDump> {
+                py::gil_scoped_release release;
+                return d.getCrashDump(clearCrashDump);
+            },
+            py::arg("clearCrashDump") = true,
+            DOC(dai, DeviceBase, getCrashDump))
+        .def(
+            "hasCrashDump",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.hasCrashDump();
+            },
+            DOC(dai, DeviceBase, hasCrashDump))
+        .def(
+            "getState",
+            [](DeviceBase& d) -> std::shared_ptr<CrashDump> {
+                py::gil_scoped_release release;
+                return d.getState();
+            },
+            DOC(dai, DeviceBase, getState))
+        .def(
+            "getConnectedCameras",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getConnectedCameras();
+            },
+            DOC(dai, DeviceBase, getConnectedCameras))
+        .def(
+            "getConnectedCameras",
+            [](DeviceBase& d, CameraSensorType type) {
+                py::gil_scoped_release release;
+                return d.getConnectedCameras(type);
+            },
+            py::arg("type"),
+            DOC(dai, DeviceBase, getConnectedCameras, 2))
+        .def(
+            "getConnectionInterfaces",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getConnectionInterfaces();
+            },
+            DOC(dai, DeviceBase, getConnectionInterfaces))
+        .def(
+            "getConnectedCameraFeatures",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getConnectedCameraFeatures();
+            },
+            DOC(dai, DeviceBase, getConnectedCameraFeatures))
+        .def(
+            "getCameraSensorNames",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getCameraSensorNames();
+            },
+            DOC(dai, DeviceBase, getCameraSensorNames))
+        .def(
+            "getStereoPairs",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getStereoPairs();
+            },
+            DOC(dai, DeviceBase, getStereoPairs))
+        .def(
+            "getAvailableStereoPairs",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getAvailableStereoPairs();
+            },
+            DOC(dai, DeviceBase, getAvailableStereoPairs))
+        .def(
+            "getConnectedIMU",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getConnectedIMU();
+            },
+            DOC(dai, DeviceBase, getConnectedIMU))
+        .def(
+            "getIMUFirmwareVersion",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getIMUFirmwareVersion();
+            },
+            DOC(dai, DeviceBase, getIMUFirmwareVersion))
+        .def(
+            "getEmbeddedIMUFirmwareVersion",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getEmbeddedIMUFirmwareVersion();
+            },
+            DOC(dai, DeviceBase, getEmbeddedIMUFirmwareVersion))
+        .def(
+            "startIMUFirmwareUpdate",
+            [](DeviceBase& d, bool forceUpdate) {
+                py::gil_scoped_release release;
+                return d.startIMUFirmwareUpdate(forceUpdate);
+            },
+            py::arg("forceUpdate") = false,
+            DOC(dai, DeviceBase, startIMUFirmwareUpdate))
+        .def(
+            "getIMUFirmwareUpdateStatus",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getIMUFirmwareUpdateStatus();
+            },
+            DOC(dai, DeviceBase, getIMUFirmwareUpdateStatus))
+        .def(
+            "getDdrMemoryUsage",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getDdrMemoryUsage();
+            },
+            DOC(dai, DeviceBase, getDdrMemoryUsage))
+        .def(
+            "getCmxMemoryUsage",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getCmxMemoryUsage();
+            },
+            DOC(dai, DeviceBase, getCmxMemoryUsage))
+        .def(
+            "getLeonCssHeapUsage",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getLeonCssHeapUsage();
+            },
+            DOC(dai, DeviceBase, getLeonCssHeapUsage))
+        .def(
+            "getLeonMssHeapUsage",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getLeonMssHeapUsage();
+            },
+            DOC(dai, DeviceBase, getLeonMssHeapUsage))
+        .def(
+            "getChipTemperature",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getChipTemperature();
+            },
+            DOC(dai, DeviceBase, getChipTemperature))
+        .def(
+            "getLeonCssCpuUsage",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getLeonCssCpuUsage();
+            },
+            DOC(dai, DeviceBase, getLeonCssCpuUsage))
+        .def(
+            "getLeonMssCpuUsage",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getLeonMssCpuUsage();
+            },
+            DOC(dai, DeviceBase, getLeonMssCpuUsage))
+        .def(
+            "getProcessMemoryUsage",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getProcessMemoryUsage();
+            },
+            DOC(dai, DeviceBase, getProcessMemoryUsage))
+        .def(
+            "addLogCallback",
+            [](DeviceBase& d, std::function<void(LogMessage)> callback) {
+                py::gil_scoped_release release;
+                return d.addLogCallback(callback);
+            },
+            py::arg("callback"),
+            DOC(dai, DeviceBase, addLogCallback))
+        .def(
+            "removeLogCallback",
+            [](DeviceBase& d, int cbId) {
+                py::gil_scoped_release release;
+                return d.removeLogCallback(cbId);
+            },
+            py::arg("callbackId"),
+            DOC(dai, DeviceBase, removeLogCallback))
+        .def(
+            "registerCrashdumpCallback",
+            [](DeviceBase& d, std::function<void(std::shared_ptr<CrashDump>)> callback) {
+                // Create a python-compatible callback function that acquires the GIL
+                auto pythonCallback = [callback](std::shared_ptr<CrashDump> dump) {
+                    py::gil_scoped_acquire acquire;
+                    // Keep one stable Python wrapper alive across callback and sync.
+                    py::object pyDump = py::cast(dump);
+                    callback(dump);
+
+                    // After callback, sync _extra_dict to native extra
+                    if(py::hasattr(pyDump, "_extra_dict")) {
+                        dump->extra = pyjson::to_json(pyDump.attr("_extra_dict"));
+                    }
+                };
+                d.registerCrashdumpCallback(std::move(pythonCallback));
+            },
+            py::arg("callback"),
+            DOC(dai, DeviceBase, registerCrashdumpCallback))
+        .def(
+            "removeCrashdumpCallback", [](DeviceBase& d) { d.removeCrashdumpCallback(); }, DOC(dai, DeviceBase, removeCrashdumpCallback))
+        .def(
+            "getUsbSpeed",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getUsbSpeed();
+            },
+            DOC(dai, DeviceBase, getUsbSpeed))
+        .def(
+            "getDeviceInfo",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getDeviceInfo();
+            },
+            DOC(dai, DeviceBase, getDeviceInfo))
+        .def(
+            "getMxId",
+            [](DeviceBase& d) {
+                PyErr_WarnEx(PyExc_DeprecationWarning, "Use getDeviceId() instead.", 1);
+                py::gil_scoped_release release;
+                DEPTHAI_BEGIN_SUPPRESS_DEPRECATION_WARNING
+                return d.getMxId();
+                DEPTHAI_END_SUPPRESS_DEPRECATION_WARNING
+            },
+            DOC(dai, DeviceBase, getMxId))
+        .def(
+            "getDeviceId",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getDeviceId();
+            },
+            DOC(dai, DeviceBase, getDeviceId))
+        .def(
+            "getProfilingData",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getProfilingData();
+            },
+            DOC(dai, DeviceBase, getProfilingData))
+        .def(
+            "readCalibration",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.readCalibration();
+            },
+            DOC(dai, DeviceBase, readCalibration))
+        .def(
+            "readCBACalibration",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.readCBACalibration(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, readCBACalibration))
+        .def(
+            "tryFlashCalibration",
+            [](DeviceBase& d, CalibrationHandler calibrationDataHandler) {
+                py::gil_scoped_release release;
+                return d.tryFlashCalibration(calibrationDataHandler);
+            },
+            py::arg("calibrationDataHandler"),
+            DOC(dai, DeviceBase, tryFlashCalibration))
+        .def(
+            "tryFlashCBACalibration",
+            [](DeviceBase& d, CBACalibrationHandler calibrationDataHandler, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.tryFlashCBACalibration(calibrationDataHandler, camSocket);
+            },
+            py::arg("calibrationDataHandler"),
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, tryFlashCBACalibration))
+        .def(
+            "setXLinkChunkSize",
+            [](DeviceBase& d, int s) {
+                py::gil_scoped_release release;
+                d.setXLinkChunkSize(s);
+            },
+            py::arg("sizeBytes"),
+            DOC(dai, DeviceBase, setXLinkChunkSize))
+        .def(
+            "getXLinkChunkSize",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getXLinkChunkSize();
+            },
+            DOC(dai, DeviceBase, getXLinkChunkSize))
+        .def(
+            "setProperties",
+            [](DeviceBase& d, const DeviceProperties& properties) {
+                py::gil_scoped_release release;
+                d.setProperties(properties);
+            },
+            py::arg("properties"),
+            DOC(dai, DeviceBase, setProperties))
+        .def(
+            "getProperties",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getProperties();
+            },
+            DOC(dai, DeviceBase, getProperties))
+        .def(
+            "setSippBufferSize",
+            [](DeviceBase& d, int sizeBytes) {
+                py::gil_scoped_release release;
+                d.setSippBufferSize(sizeBytes);
+            },
+            py::arg("sizeBytes"),
+            DOC(dai, DeviceBase, setSippBufferSize))
+        .def(
+            "setSippDmaBufferSize",
+            [](DeviceBase& d, int sizeBytes) {
+                py::gil_scoped_release release;
+                d.setSippDmaBufferSize(sizeBytes);
+            },
+            py::arg("sizeBytes"),
+            DOC(dai, DeviceBase, setSippDmaBufferSize))
+        .def(
+            "setXLinkRateLimit",
+            [](DeviceBase& d, int maxRateBytesPerSecond, int burstSize, int waitUs) {
+                py::gil_scoped_release release;
+                d.setXLinkRateLimit(maxRateBytesPerSecond, burstSize, waitUs);
+            },
+            py::arg("maxRateBytesPerSecond"),
+            py::arg("burstSize") = 0,
+            py::arg("waitUs") = 0,
+            DOC(dai, DeviceBase, setXLinkRateLimit))
+
+        .def(
+            "setIrLaserDotProjectorIntensity",
+            [](DeviceBase& d, float intensity, int mask) {
+                py::gil_scoped_release release;
+                return d.setIrLaserDotProjectorIntensity(intensity, mask);
+            },
+            py::arg("intensity"),
+            py::arg("mask") = -1,
+            DOC(dai, DeviceBase, setIrLaserDotProjectorIntensity))
+        .def(
+            "setIrFloodLightIntensity",
+            [](DeviceBase& d, float intensity, int mask) {
+                py::gil_scoped_release release;
+                return d.setIrFloodLightIntensity(intensity, mask);
+            },
+            py::arg("intensity"),
+            py::arg("mask") = -1,
+            DOC(dai, DeviceBase, setIrFloodLightIntensity))
+        .def(
+            "getIrDrivers",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getIrDrivers();
+            },
+            DOC(dai, DeviceBase, getIrDrivers))
+        .def(
+            "isEepromAvailable",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.isEepromAvailable();
+            },
+            DOC(dai, DeviceBase, isEepromAvailable))
+        .def(
+            "isCBAEepromAvailable",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.isCBAEepromAvailable(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, isCBAEepromAvailable))
+        .def(
+            "flashCalibration",
+            [](DeviceBase& d, CalibrationHandler ch) {
+                py::gil_scoped_release release;
+                return d.flashCalibration(ch);
+            },
+            DOC(dai, DeviceBase, flashCalibration))
+        .def(
+            "flashCBACalibration",
+            [](DeviceBase& d, CBACalibrationHandler ch, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.flashCBACalibration(ch, camSocket);
+            },
+            py::arg("calibrationDataHandler"),
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, flashCBACalibration))
+        .def(
+            "setCalibration",
+            [](DeviceBase& d, CalibrationHandler ch) {
+                py::gil_scoped_release release;
+                return d.setCalibration(ch);
+            },
+            DOC(dai, DeviceBase, setCalibration))
+        .def(
+            "getCalibration",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getCalibration();
+            },
+            DOC(dai, DeviceBase, getCalibration))
+        .def(
+            "readCalibration2",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.readCalibration2();
+            },
+            DOC(dai, DeviceBase, readCalibration2))
+        .def(
+            "readCBACalibration2",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.readCBACalibration2(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, readCBACalibration2))
+        .def(
+            "readCalibrationOrDefault",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.readCalibrationOrDefault();
+            },
+            DOC(dai, DeviceBase, readCalibrationOrDefault))
+        .def(
+            "readCBACalibrationOrDefault",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.readCBACalibrationOrDefault(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, readCBACalibrationOrDefault))
+        .def(
+            "factoryResetCalibration",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.factoryResetCalibration();
+            },
+            DOC(dai, DeviceBase, factoryResetCalibration))
+        .def(
+            "factoryResetCBACalibration",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.factoryResetCBACalibration(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, factoryResetCBACalibration))
+        .def(
+            "flashFactoryCalibration",
+            [](DeviceBase& d, CalibrationHandler ch) {
+                py::gil_scoped_release release;
+                return d.flashFactoryCalibration(ch);
+            },
+            DOC(dai, DeviceBase, flashFactoryCalibration))
+        .def(
+            "flashFactoryCBACalibration",
+            [](DeviceBase& d, CBACalibrationHandler ch, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.flashFactoryCBACalibration(ch, camSocket);
+            },
+            py::arg("calibrationHandler"),
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, flashFactoryCBACalibration))
+        .def(
+            "readFactoryCalibration",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.readFactoryCalibration();
+            },
+            DOC(dai, DeviceBase, readFactoryCalibration))
+        .def(
+            "readFactoryCBACalibration",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.readFactoryCBACalibration(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, readFactoryCBACalibration))
+        .def(
+            "readFactoryCalibrationOrDefault",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.readFactoryCalibrationOrDefault();
+            },
+            DOC(dai, DeviceBase, readFactoryCalibrationOrDefault))
+        .def(
+            "readFactoryCBACalibrationOrDefault",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                return d.readFactoryCBACalibrationOrDefault(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, readFactoryCBACalibrationOrDefault))
+        .def(
+            "readCalibrationRaw",
+            [](DeviceBase& d) {
+                std::vector<uint8_t> data;
+                {
+                    py::gil_scoped_release release;
+                    data = d.readCalibrationRaw();
+                }
+                return py::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+            },
+            DOC(dai, DeviceBase, readCalibrationRaw))
+        .def(
+            "readFactoryCalibrationRaw",
+            [](DeviceBase& d) {
+                std::vector<uint8_t> data;
+                {
+                    py::gil_scoped_release release;
+                    data = d.readFactoryCalibrationRaw();
+                }
+                return py::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+            },
+            DOC(dai, DeviceBase, readFactoryCalibrationRaw))
+        .def(
+            "readCcmEepromRaw",
+            [](DeviceBase& d, CameraBoardSocket s, int sz, int o) {
+                std::vector<uint8_t> data;
+                {
+                    py::gil_scoped_release release;
+                    data = d.readCcmEepromRaw(s, sz, o);
+                }
+                return py::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+            },
+            py::arg("socket"),
+            py::arg("size"),
+            py::arg("offset") = 0,
+            DOC(dai, DeviceBase, readCcmEepromRaw))
+        .def(
+            "writeCcmEepromRaw",
+            [](DeviceBase& d, CameraBoardSocket s, py::bytes buf, int o) {
+                std::string data = buf;
+                std::vector<uint8_t> raw(data.begin(), data.end());
+
+                py::gil_scoped_release release;
+                d.writeCcmEepromRaw(s, raw, o);
+            },
+            py::arg("socket"),
+            py::arg("data"),
+            py::arg("offset") = 0,
+            DOC(dai, DeviceBase, writeCcmEepromRaw))
+
+        .def(
+            "flashEepromClear",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                d.flashEepromClear();
+            },
+            DOC(dai, DeviceBase, flashEepromClear))
+        .def(
+            "flashCBAEepromClear",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                d.flashCBAEepromClear(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, flashCBAEepromClear))
+        .def(
+            "flashFactoryEepromClear",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                d.flashFactoryEepromClear();
+            },
+            DOC(dai, DeviceBase, flashFactoryEepromClear))
+        .def(
+            "flashFactoryCBAEepromClear",
+            [](DeviceBase& d, dai::CameraBoardSocket camSocket) {
+                py::gil_scoped_release release;
+                d.flashFactoryCBAEepromClear(camSocket);
+            },
+            py::arg("camSocket"),
+            DOC(dai, DeviceBase, flashFactoryCBAEepromClear))
+        .def(
+            "setTimesync",
+            [](DeviceBase& d, std::chrono::milliseconds p, int s, bool r) {
+                py::gil_scoped_release release;
+                return d.setTimesync(p, s, r);
+            },
+            DOC(dai, DeviceBase, setTimesync))
+        .def(
+            "setTimesync",
+            [](DeviceBase& d, bool e) {
+                py::gil_scoped_release release;
+                return d.setTimesync(e);
+            },
+            py::arg("enable"),
+            DOC(dai, DeviceBase, setTimesync, 2))
+        .def(
+            "setExternalFrameSyncRole",
+            [](DeviceBase& d, ExternalFrameSyncRole role) {
+                py::gil_scoped_release release;
+                return d.setExternalFrameSyncRole(role);
+            },
+            py::arg("role"),
+            DOC(dai, DeviceBase, setExternalFrameSyncRole))
+        .def(
+            "getExternalFrameSyncRole",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getExternalFrameSyncRole();
+            },
+            DOC(dai, DeviceBase, getExternalFrameSyncRole))
+        .def(
+            "setExternalStrobeRelativeLimits",
+            [](DeviceBase& d, float min, float max) {
+                py::gil_scoped_release release;
+                return d.setExternalStrobeRelativeLimits(min, max);
+            },
+            py::arg("min"),
+            py::arg("max"),
+            DOC(dai, DeviceBase, setExternalStrobeRelativeLimits))
+        .def(
+            "setExternalStrobeEnable",
+            [](DeviceBase& d, bool enable) {
+                py::gil_scoped_release release;
+                d.setExternalStrobeEnable(enable);
+            },
+            py::arg("enable"),
+            DOC(dai, DeviceBase, setExternalStrobeEnable))
+        .def(
+            "getDeviceName",
+            [](DeviceBase& d) {
+                std::string name;
+                {
+                    py::gil_scoped_release release;
+                    name = d.getDeviceName();
+                }
+                return py::bytes(name).attr("decode")("utf-8", "replace");
+            },
+            DOC(dai, DeviceBase, getDeviceName))
+        .def(
+            "getProductName",
+            [](DeviceBase& d) {
+                std::string name;
+                {
+                    py::gil_scoped_release release;
+                    name = d.getProductName();
+                }
+                return py::bytes(name).attr("decode")("utf-8", "replace");
+            },
+            DOC(dai, DeviceBase, getProductName))
+        .def(
+            "crashDevice",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.crashDevice();
+            },
+            DOC(dai, DeviceBase, crashDevice))
+        .def(
+            "isNeuralDepthSupported",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.isNeuralDepthSupported();
+            },
+            DOC(dai, DeviceBase, isNeuralDepthSupported))
+        .def(
+            "hasGPU",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.hasGPU();
+            },
+            DOC(dai, DeviceBase, hasGPU))
+        .def(
+            "isGpuStereoSupported",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.isGpuStereoSupported();
+            },
+            DOC(dai, DeviceBase, isGpuStereoSupported))
+        .def(
+            "getSupportedDeviceModels",
+            [](DeviceBase& d) {
+                py::gil_scoped_release release;
+                return d.getSupportedDeviceModels();
+            },
+            DOC(dai, DeviceBase, getSupportedDeviceModels))
+        .def("getPlatform", &DeviceBase::getPlatform, DOC(dai, DeviceBase, getPlatform))
+        .def("getPlatformAsString", &DeviceBase::getPlatformAsString, DOC(dai, DeviceBase, getPlatformAsString));
+
+    // Bind constructors
+    bindConstructors<Device>(device);
+
+    clock.def("now", &Clock::now);
+}

@@ -137,6 +137,10 @@ void StereoParamHandler::declareParams(std::shared_ptr<dai::node::StereoDepth> s
     if(declareAndLogParam<bool>("i_set_disparity_to_depth_use_spec_translation", false)) {
         stereo->setDisparityToDepthUseSpecTranslation(true);
     }
+    float focalLength = declareAndLogParam<float>("i_focal_length", 0.0f);
+    if(focalLength > 0.0f) {
+        stereo->setFocalLength(focalLength);
+    }
     //
     stereo->initialConfig->setBilateralFilterSigma(declareAndLogParam<int>("i_bilateral_sigma", 0));
     stereo->initialConfig->setLeftRightCheckThreshold(declareAndLogParam<int>("i_lrc_threshold", 10));

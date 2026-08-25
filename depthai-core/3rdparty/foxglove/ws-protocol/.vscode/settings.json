@@ -1,0 +1,37 @@
+// -*- jsonc -*-
+{
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "prettier.prettierPath": "./node_modules/prettier/index.cjs",
+  "eslint.packageManager": "yarn",
+  "eslint.options": {
+    "reportUnusedDisableDirectives": "error"
+  },
+
+  "python.analysis.diagnosticSeverityOverrides": {
+    // produces spurious errors when importing local packages from tests
+    "reportMissingTypeStubs": "none"
+  },
+  "python.testing.pytestArgs": ["python"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.formatting.provider": "black",
+  "python.analysis.typeCheckingMode": "strict",
+  "jest.rootPath": "typescript/ws-protocol",
+
+  "search.exclude": {
+    "**/*_pb2.py*": true,
+    "**/*.pb.cc": true,
+    "**/*.pb.h": true,
+    "**/node_modules/": true,
+    "**/dist/": true
+  },
+
+  // https://github.com/microsoft/vscode-cpptools/issues/722
+  "C_Cpp.autoAddFileAssociations": false
+}

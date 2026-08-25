@@ -1,0 +1,805 @@
+#pragma once
+
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <set>
+#include <string>
+#include <tuple>
+#include <unordered_set>
+#include <utility>
+
+// project
+#include "depthai/openvino/OpenVINO.hpp"
+#include "depthai/pipeline/AssetManager.hpp"
+#include "depthai/pipeline/MessageQueue.hpp"
+#include "depthai/utility/RecordReplay.hpp"
+#include "depthai/utility/copyable_unique_ptr.hpp"
+
+// depthai
+#include "depthai/capabilities/Capability.hpp"
+#include "depthai/pipeline/datatype/DatatypeEnum.hpp"
+#include "depthai/properties/Properties.hpp"
+#include "depthai/utility/PipelineEventDispatcherInterface.hpp"
+
+// libraries
+#include <optional>
+
+namespace dai {
+// fwd declare Pipeline
+class Pipeline;
+class PipelineImpl;
+namespace utility {
+class PipelineImplHelper;
+}
+
+// fwd declare input queue class
+class InputQueue;
+
+// fwd declare XLink node classes
+namespace node {
+namespace internal {
+class XLinkIn;
+class XLinkOut;
+class XLinkInHost;
+class XLinkOutHost;
+
+/**
+ * @brief XLink bridge structure for host-to-device communication
+ * Contains pointers to XLinkOutHost and XLinkIn nodes
+ */
+struct XLinkInBridge {
+    std::shared_ptr<dai::node::internal::XLinkOutHost> xLinkOutHost;
+    std::shared_ptr<dai::node::internal::XLinkIn> xLinkIn;
+};
+
+/**
+ * @brief XLink bridge structure for device-to-host communication
+ * Contains pointers to XLinkOut and XLinkInHost nodes
+ */
+struct XLinkOutBridge {
+    std::shared_ptr<dai::node::internal::XLinkOut> xLinkOut;
+    std::shared_ptr<dai::node::internal::XLinkInHost> xLinkInHost;
+};
+}  // namespace internal
+}  // namespace node
+
+/**
+ * @brief Abstract Node
+ */
+class Node : public std::enable_shared_from_this<Node> {
+    friend class Pipeline;
+    friend class PipelineImpl;
+    friend class utility::PipelineImplHelper;
+    friend class Device;
+
+   public:
+    // Nodes must always be managed
+    Node(const Node&) = delete;
+    Node& operator=(const Node&) = delete;
+    Node(Node&&) = delete;
+    Node& operator=(Node&&) = delete;
+
+    /// Node identificator. Unique for every node on a single Pipeline
+    using Id = std::int64_t;
+    struct Connection;
+    struct ConnectionInternal;
+    // fwd declare classes
+    class Input;
+    class Output;
+    class InputMap;
+    class OutputMap;
+    struct DatatypeHierarchy {
+        DatatypeHierarchy(DatatypeEnum d, bool c) : datatype(d), descendants(c) {}
+        DatatypeEnum datatype;
+        bool descendants;
+    };
+    static constexpr auto DEFAULT_GROUP = "";
+    static constexpr auto DEFAULT_NAME = "";
+#define DEFAULT_TYPES                  \
+    {                                  \
+        { DatatypeEnum::Buffer, true } \
+    }
+    static constexpr auto DEFAULT_BLOCKING = true;
+    static constexpr auto DEFAULT_QUEUE_SIZE = 3;
+    static constexpr auto DEFAULT_WAIT_FOR_MESSAGE = false;
+    static constexpr auto BLOCKING_QUEUE = true;
+    static constexpr auto NON_BLOCKING_QUEUE = false;
+
+    std::string createUniqueInputName();
+    std::string createUniqueOutputName();
+
+   protected:
+    std::vector<Output*> outputRefs;
+    std::vector<Input*> inputRefs;
+    std::vector<OutputMap*> outputMapRefs;
+    std::vector<InputMap*> inputMapRefs;
+    std::vector<std::shared_ptr<Node>*> nodeRefs;
+
+    std::unique_ptr<utility::PipelineEventDispatcherInterface> pipelineEventDispatcher;
+
+    // helpers for setting refs
+    void setOutputRefs(std::initializer_list<Output*> l);
+    void setOutputRefs(Output* outRef);
+    void setInputRefs(std::initializer_list<Input*> l);
+    void setInputRefs(Input* inRef);
+    void setOutputMapRefs(std::initializer_list<OutputMap*> l);
+    void setOutputMapRefs(OutputMap* outMapRef);
+    void setInputMapRefs(std::initializer_list<InputMap*> l);
+    void setInputMapRefs(InputMap* inMapRef);
+    void setNodeRefs(std::initializer_list<std::pair<std::string, std::shared_ptr<Node>*>> l);
+    void setNodeRefs(std::pair<std::string, std::shared_ptr<Node>*> nodeRef);
+    void setNodeRefs(std::string alias, std::shared_ptr<Node>* nodeRef);
+
+   private:
+    std::vector<std::string> uniqueNames;
+
+   public:
+    struct OutputDescription {
+        std::string name{DEFAULT_NAME};
+        std::string group{DEFAULT_GROUP};
+        std::vector<DatatypeHierarchy> types DEFAULT_TYPES;
+    };
+
+    template <typename U>
+    friend class Subnode;
+
+    class Output {
+        friend class PipelineImpl;
+
+       public:
+        struct QueueConnection {
+            Output* output;
+            std::shared_ptr<MessageQueue> queue;
+            bool operator==(const QueueConnection& rhs) const {
+                return output == rhs.output && queue == rhs.queue;
+            }
+        };
+        enum class Type { MSender, SSender };
+        virtual ~Output() = default;
+
+       private:
+        std::reference_wrapper<Node> parent;
+        std::vector<MessageQueue*> connectedInputs;
+        std::vector<QueueConnection> queueConnections;
+        Type type = Type::MSender;  // Slave sender not supported yet
+        OutputDescription desc;
+        utility::PipelineEventDispatcherInterface* pipelineEventDispatcher = nullptr;
+        std::shared_ptr<dai::node::internal::XLinkOutBridge> xLinkBridge;
+
+       public:
+        // std::vector<Capability> possibleCapabilities;
+
+        Output(Node& par, OutputDescription desc, bool ref = true)
+            : parent(par), desc(std::move(desc)), pipelineEventDispatcher(par.pipelineEventDispatcher.get()) {
+            // Place oneself to the parents references
+            if(ref) {
+                par.setOutputRefs(this);
+            }
+            if(getName().empty()) {
+                setName(par.createUniqueOutputName());
+            }
+        }
+
+        Node& getParent() {
+            return parent;
+        }
+        const Node& getParent() const {
+            return parent;
+        }
+
+        /// Output to string representation
+        std::string toString() const;
+
+        /**
+         * Get name of the output
+         */
+        std::string getName() const {
+            return desc.name;
+        }
+
+        /**
+         * Get group of the output
+         */
+        std::string getGroup() const {
+            return desc.group;
+        }
+
+        /**
+         * Set group name for this output
+         */
+        void setGroup(std::string group) {
+            desc.group = std::move(group);
+        }
+
+        /**
+         * Set name for this output
+         */
+        void setName(std::string name) {
+            desc.name = std::move(name);
+        }
+
+        /**
+         * Get type of the output
+         */
+        Type getType() const {
+            return type;
+        }
+
+        /**
+         * Get possible datatypes that can be sent
+         */
+        std::vector<DatatypeHierarchy> getPossibleDatatypes() const;
+
+        /**
+         * Set possible datatypes that can be sent
+         */
+        void setPossibleDatatypes(std::vector<DatatypeHierarchy> types);
+
+        /**
+         * Check if this output and given input are on the same pipeline.
+         * @see canConnect for checking if connection is possible
+         * @returns True if output and input are on the same pipeline
+         */
+        bool isSamePipeline(const Input& in);
+
+        /**
+         * Check if connection is possible
+         * @param in Input to connect to
+         * @returns True if connection is possible, false otherwise
+         */
+        bool canConnect(const Input& in);
+
+        /**
+         * Retrieve all connections from this output
+         * @returns Vector of connections
+         */
+        std::vector<ConnectionInternal> getConnections();
+
+        /**
+         * Retrieve all queue connections from this output
+         * @returns Vector of queue connections
+         */
+        std::vector<QueueConnection> getQueueConnections() {
+            return queueConnections;
+        }
+
+        /** Default value for the blocking argument in the createOutputQueue method */
+        static constexpr bool OUTPUT_QUEUE_DEFAULT_BLOCKING = false;
+
+        /** Default value for the maxSize argument in the createOutputQueue method */
+        static constexpr unsigned int OUTPUT_QUEUE_DEFAULT_MAX_SIZE = 16;
+
+        /**
+         * @brief Construct and return a shared pointer to an output message queue
+         *
+         * @param maxSize: Maximum size of the output queue
+         * @param blocking: Whether the output queue should block when full
+         *
+         * @return std::shared_ptr<dai::MessageQueue>: shared pointer to an output queue
+         */
+        std::shared_ptr<dai::MessageQueue> createOutputQueue(unsigned int maxSize = OUTPUT_QUEUE_DEFAULT_MAX_SIZE,
+                                                             bool blocking = OUTPUT_QUEUE_DEFAULT_BLOCKING);
+
+       private:
+        void link(const std::shared_ptr<dai::MessageQueue>& queue) {
+            connectedInputs.push_back(queue.get());
+            queueConnections.push_back({this, queue});
+        }
+
+        void unlink(const std::shared_ptr<dai::MessageQueue>& queue) {
+            connectedInputs.erase(std::remove(connectedInputs.begin(), connectedInputs.end(), queue.get()), connectedInputs.end());
+            queueConnections.erase(std::remove(queueConnections.begin(), queueConnections.end(), QueueConnection{this, queue}), queueConnections.end());
+        }
+
+       public:
+        /**
+         * Link current output to input.
+         *
+         * Throws an error if this output cannot be linked to given input,
+         * or if they are already linked
+         *
+         * @param in Input to link to
+         */
+        void link(Input& in);
+
+        virtual void link(std::shared_ptr<Node> in);
+
+        /**
+         * Unlink a previously linked connection
+         *
+         * Throws an error if not linked.
+         *
+         * @param in Input from which to unlink from
+         */
+        void unlink(Input& in);
+
+        /**
+         * Sends a Message to all connected inputs
+         * @param msg Message to send to all connected inputs
+         */
+        void send(const std::shared_ptr<ADatatype>& msg);
+
+        /**
+         * Try sending a message to all connected inputs
+         * @param msg Message to send to all connected inputs
+         * @returns True if ALL connected inputs got the message, false otherwise
+         */
+        bool trySend(const std::shared_ptr<ADatatype>& msg);
+
+        /**
+         * @brief Get XLink bridge associated with this output (only valid for device outputs after pipeline build)
+         *
+         * @return std::shared_ptr<dai::node::internal::XLinkOutBridge>: pointer to the XLink bridge or nullptr if not applicable
+         */
+        std::shared_ptr<dai::node::internal::XLinkOutBridge> getXLinkBridge() const;
+    };
+
+    struct PairHash {
+        template <class T1, class T2>
+        std::size_t operator()(const std::pair<T1, T2>& pair) const {
+            return std::hash<T1>()(pair.first) ^ std::hash<T2>()(pair.second);
+        }
+    };
+    /**
+     * Output map which keeps track of extra outputs assigned to a node
+     * Extends std::unordered_map<std::string, dai::Node::Output>
+     */
+    class OutputMap : public std::unordered_map<std::pair<std::string, std::string>, Output, PairHash> {
+        OutputDescription defaultOutput;
+        std::reference_wrapper<Node> parent;
+
+       public:
+        std::string name;
+        OutputMap(Node& parent, std::string name, const OutputDescription& defaultOutput, bool ref = true);
+        OutputMap(Node& parent, OutputDescription defaultOutput, bool ref = true);
+        /// Create or modify an output
+        Output& operator[](const std::string& key);
+        /// Create or modify an output with specified group
+        Output& operator[](std::pair<std::string, std::string> groupKey);
+    };
+
+    // Input extends the message queue with additional option that specifies whether to wait for message or not
+    struct InputDescription {
+        std::string name = DEFAULT_NAME;                     // Name of the input
+        std::string group = DEFAULT_GROUP;                   // Group of the input
+        bool blocking{DEFAULT_BLOCKING};                     // Whether to block when input queue is full
+        int queueSize{DEFAULT_QUEUE_SIZE};                   // Size of the queue
+        std::vector<DatatypeHierarchy> types DEFAULT_TYPES;  // Possible datatypes that can be received
+        bool waitForMessage{DEFAULT_WAIT_FOR_MESSAGE};
+    };
+
+    class Input : public MessageQueue {
+        friend class Output;
+        friend class OutputMap;
+        friend class PipelineImpl;
+
+       public:
+        enum class Type { SReceiver, MReceiver };  // TODO(Morato) - refactor, make the MReceiver a separate class (shouldn't inherit from MessageQueue)
+
+        ~Input() override;
+
+       protected:
+        std::vector<Output*> connectedOutputs;
+
+       private:
+        std::reference_wrapper<Node> parent;
+        // Options - more information about the input
+        bool waitForMessage{false};
+        std::string group;
+        Type type = Type::SReceiver;
+        std::shared_ptr<dai::node::internal::XLinkInBridge> xLinkBridge;
+
+       public:
+        std::vector<DatatypeHierarchy> possibleDatatypes;
+        explicit Input(Node& par, InputDescription desc, bool ref = true)
+            : MessageQueue(desc.name.empty() ? par.createUniqueInputName() : desc.name, desc.queueSize, desc.blocking, par.pipelineEventDispatcher.get()),
+              parent(par),
+              waitForMessage(desc.waitForMessage),
+              group(desc.group),
+              possibleDatatypes(std::move(desc.types)) {
+            if(ref) {
+                par.setInputRefs(this);
+            }
+        }
+
+        /**
+         * Get the parent node
+         */
+        const Node& getParent() const {
+            return parent;
+        }
+        /**
+         * Get the parent node
+         */
+        Node& getParent() {
+            return parent;
+        }
+
+        /**
+         * Get type
+         */
+        Type getType() const {
+            return type;
+        }
+
+        /**
+         * Input to string representation
+         */
+        std::string toString() const;
+
+        /**
+         * Overrides default wait for message behavior.
+         * Applicable for nodes with multiple inputs.
+         * Specifies behavior whether to wait for this input when a Node processes certain data or not.
+         * @param waitForMessage Whether to wait for message to arrive to this input or not
+         */
+        void setWaitForMessage(bool waitForMessage);
+
+        /**
+         * Get behavior whether to wait for this input when a Node processes certain data or not
+         * @returns Whether to wait for message to arrive to this input or not
+         */
+        bool getWaitForMessage() const;
+
+        /**
+         * Get possible datatypes that can be received
+         */
+        std::vector<DatatypeHierarchy> getPossibleDatatypes() const;
+
+        /**
+         * Set possible datatypes that can be received
+         */
+        void setPossibleDatatypes(std::vector<DatatypeHierarchy> types);
+
+        /**
+         * Equivalent to setWaitForMessage but with inverted logic.
+         */
+        void setReusePreviousMessage(bool reusePreviousMessage);
+
+        /**
+         * Equivalent to getWaitForMessage but with inverted logic.
+         */
+        bool getReusePreviousMessage() const;
+
+        /**
+         * Set group name for this input
+         */
+        void setGroup(std::string group);
+
+        /**
+         * Get group name for this input
+         */
+        std::string getGroup() const;
+
+        /**
+         * Check if this input is connected
+         */
+        bool isConnected() const;
+
+        /** Default value for the blocking argument in the createInputQueue method */
+        static constexpr bool INPUT_QUEUE_DEFAULT_BLOCKING = false;
+
+        /** Default value for the maxSize argument in the createInputQueue method */
+        static constexpr unsigned int INPUT_QUEUE_DEFAULT_MAX_SIZE = 16;
+
+        /**
+         * @brief Create an shared pointer to an input queue that can be used to send messages to this input from onhost
+         *
+         * @param maxSize: Maximum size of the input queue
+         * @param blocking: Whether the input queue should block when full
+         *
+         * @return std::shared_ptr<InputQueue>: shared pointer to an input queue
+         */
+        std::shared_ptr<InputQueue> createInputQueue(unsigned int maxSize = INPUT_QUEUE_DEFAULT_MAX_SIZE, bool blocking = INPUT_QUEUE_DEFAULT_BLOCKING);
+
+        /**
+         * @brief Get XLink bridge associated with this input (only valid for device inputs after pipeline build)
+         *
+         * @return std::shared_ptr<dai::node::internal::XLinkInBridge>: pointer to the XLink bridge or nullptr if not applicable
+         */
+        std::shared_ptr<dai::node::internal::XLinkInBridge> getXLinkBridge() const;
+    };
+
+    /**
+     * Input map which keeps track of inputs assigned to a node
+     * Extends std::unordered_map<std::string, dai::Node::Input>
+     */
+    class InputMap : public std::unordered_map<std::pair<std::string, std::string>, Input, PairHash> {
+        std::reference_wrapper<Node> parent;
+        InputDescription defaultInput;
+
+       public:
+        std::string name;
+        // InputMap(Input defaultInput);
+        // InputMap(std::string name, Input defaultInput);
+        InputMap(Node& parent, InputDescription defaultInput);
+        InputMap(Node& parent, std::string name, InputDescription defaultInput);
+        /// Create or modify an input
+        Input& operator[](const std::string& key);
+        /// Create or modify an input with specified group
+        Input& operator[](std::pair<std::string, std::string> groupKey);
+        // Check if the input exists
+        bool has(const std::string& key) const;
+    };
+
+    /// Connection between an Input and Output internal
+    struct ConnectionInternal {
+        ConnectionInternal(Output& out, Input& in);
+        std::weak_ptr<Node> outputNode;
+        std::string outputName;
+        std::string outputGroup;
+        std::weak_ptr<Node> inputNode;
+        std::string inputName;
+        std::string inputGroup;
+        Output* out;
+        Input* in;
+        bool operator==(const ConnectionInternal& rhs) const;
+        struct Hash {
+            size_t operator()(const dai::Node::ConnectionInternal& obj) const;
+        };
+    };
+
+    /// Connection between an Input and Output
+    struct Connection {
+        friend struct std::hash<Connection>;
+        Connection(Output out, Input in);
+        Connection(const ConnectionInternal& c);
+        Id outputId;
+        std::string outputName;
+        std::string outputGroup;
+        Id inputId;
+        std::string inputName;
+        std::string inputGroup;
+        bool operator==(const Connection& rhs) const;
+    };
+
+   protected:
+    bool configureMode{false};
+
+    // when Pipeline tries to serialize and construct on remote, it will check if all connected nodes are on same pipeline
+    std::weak_ptr<PipelineImpl> parent;
+
+    // Node ID of the parent node
+    int parentId{-1};
+
+    // used to improve error messages
+    // when pipeline starts all nodes are checked
+    virtual bool needsBuild() {
+        return false;
+    }
+
+   public:
+    // TODO(themarpe) - restrict access
+    /// Id of node. Assigned after being placed on the pipeline
+    Id id{-1};
+    // used for naming inputs/outputs
+    Id inputId{0};
+    Id outputId{0};
+
+    /// alias or name
+    std::string alias;
+
+   protected:
+    AssetManager assetManager;
+
+    // Optimized for adding, searching and removing connections
+    // using NodeMap = std::unordered_map<Node::Id, std::shared_ptr<Node>>;
+    using NodeMap = std::vector<std::shared_ptr<Node>>;
+    NodeMap nodeMap;
+
+    // Connection map, NodeId represents id of node connected TO (input)
+    // using NodeConnectionMap = std::unordered_map<Node::Id, std::unordered_set<Node::Connection>>;
+    using SetConnectionInternal = std::unordered_set<ConnectionInternal, ConnectionInternal::Hash>;
+    SetConnectionInternal connections;
+    using ConnectionMap = std::unordered_map<std::shared_ptr<Node>, SetConnectionInternal>;
+
+   public:
+    // access
+    Pipeline getParentPipeline();
+    const Pipeline getParentPipeline() const;
+
+    /// Get alias
+    std::string getAlias() const {
+        return alias;
+    }
+    /// Set alias
+    void setAlias(std::string alias) {
+        this->alias = std::move(alias);
+    }
+
+    /// Retrieves nodes name
+    virtual const char* getName() const = 0;
+
+    /// Start node execution
+    virtual void start() {};
+
+    /// Wait for node to finish execution
+    virtual void wait() {};
+
+    /// Stop node execution
+    virtual void stop() {};
+
+    void stopPipeline();
+
+    /// Build stages;
+    virtual void buildStage1();
+    virtual void buildStage2();
+    virtual void buildStage3();
+    virtual void postBuildStage();
+
+    /// Retrieves all nodes outputs
+    std::vector<Output> getOutputs();
+
+    /// Retrieves all nodes inputs
+    std::vector<Input> getInputs();
+
+    /// Retrieves reference to node outputs
+    std::vector<Output*> getOutputRefs();
+
+    /// Retrieves reference to node outputs
+    std::vector<const Output*> getOutputRefs() const;
+
+    /// Retrieves reference to node inputs
+    std::vector<Input*> getInputRefs();
+
+    /// Retrieves reference to node inputs
+    std::vector<const Input*> getInputRefs() const;
+
+    /// Retrieves reference to node outputs
+    std::vector<OutputMap*> getOutputMapRefs();
+
+    /// Retrieves reference to node inputs
+    std::vector<InputMap*> getInputMapRefs();
+
+    /// Retrieves reference to specific output
+    Output* getOutputRef(const std::string& name);
+    Output* getOutputRef(const std::string& group, const std::string& name);
+
+    /// Retrieves reference to specific input
+    Input* getInputRef(const std::string& name);
+    Input* getInputRef(const std::string& group, const std::string& name);
+
+    /// Retrieves reference to specific output map
+    OutputMap* getOutputMapRef(const std::string& group);
+
+    /// Retrieves reference to specific input map
+    InputMap* getInputMapRef(const std::string& group);
+
+    // For record and replay
+    virtual bool isSourceNode() const;
+
+   protected:
+    Node() = default;
+    Node(bool conf);
+    void removeConnectionToNode(const std::shared_ptr<Node>& node);
+
+   public:
+    virtual ~Node() = default;
+
+    /// Get node AssetManager as a const reference
+    const AssetManager& getAssetManager() const;
+
+    /// Get node AssetManager as a reference
+    AssetManager& getAssetManager();
+
+    /// Loads resource specified by URI and returns its data
+    std::vector<uint8_t> loadResource(const std::filesystem::path& uri);
+
+    /// Moves the resource out
+    std::vector<uint8_t> moveResource(const std::filesystem::path& uri);
+
+    /// Create and place Node to this Node
+    template <class N>
+    std::shared_ptr<N> create() {
+        // Check that passed type 'N' is subclass of Node
+        static_assert(std::is_base_of<Node, N>::value, "Specified class is not a subclass of Node");
+        // Create and store the node in the map
+        auto node = std::make_shared<N>();
+        // Add
+        add(node);
+        // Return shared pointer to this node
+        return node;
+    }
+
+    /// Add existing node to nodeMap
+    void add(const std::shared_ptr<Node>& node);
+
+    // Access to nodes
+    std::vector<std::shared_ptr<Node>> getAllNodes() const;
+    std::shared_ptr<const Node> getNode(Node::Id id) const;
+    std::shared_ptr<Node> getNode(Node::Id id);
+    void remove(const std::shared_ptr<Node>& node);
+    ConnectionMap getConnectionMap();
+    void link(const Node::Output& out, const Node::Input& in);
+    void unlink(const Node::Output& out, const Node::Input& in);
+    /// Get a reference to internal node map
+
+    virtual void link(std::shared_ptr<Node> in);
+    virtual Node::Output* requestOutput(const Capability& capability, bool onHost);
+    virtual std::vector<std::pair<Input&, std::shared_ptr<Capability>>> getRequiredInputs();
+
+    /**
+     * @brief Returns true or false whether the node should be run on host or not
+     */
+    virtual bool runOnHost() const = 0;
+
+    /**
+     * @brief Returns whether this node is provided by depthai-core.
+     */
+    virtual bool isBuiltInNode() const {
+        return false;
+    }
+
+    const NodeMap& getNodeMap() const {
+        return nodeMap;
+    }
+
+    /**
+     * @brief Function called from within the `create` function to build the node.
+     * This function is useful for initialization, setting up inputs and outputs =
+     * stuff that cannot be perform in the constuctor.
+     */
+    virtual void buildInternal() {};
+};
+
+class SourceNode {
+   public:
+    virtual ~SourceNode() = default;
+    virtual NodeRecordParams getNodeRecordParams() const;
+    virtual Node::Output& getRecordOutput();
+    virtual Node::Input& getReplayInput();
+};
+
+// Node CRTP class
+template <typename Base, typename Derived, bool BuiltInNode = true>
+class NodeCRTP : public Base {
+   public:
+    virtual ~NodeCRTP() = default;
+
+    const char* getName() const override {
+        return Derived::NAME;
+    };
+
+    bool isBuiltInNode() const override {
+        return BuiltInNode;
+    }
+
+    // std::unique_ptr<Node> clone() const override {
+    //     return std::make_unique<Derived>(static_cast<const Derived&>(*this));
+    // };
+
+    // No public constructor, only a factory function.
+    template <typename... Args>
+    [[nodiscard]] static std::shared_ptr<Derived> create(Args&&... args) {
+        auto nodePtr = std::shared_ptr<Derived>(new Derived(std::forward<Args>(args)...));
+        nodePtr->buildInternal();
+        return nodePtr;
+    }
+    [[nodiscard]] static std::shared_ptr<Derived> create(std::unique_ptr<Properties> props) {
+        return std::shared_ptr<Derived>(new Derived(props));
+    }
+
+    friend Derived;
+    friend Base;
+};
+
+}  // namespace dai
+
+// Specialization of std::hash for Node::Connection
+namespace std {
+template <>
+struct hash<dai::Node::Connection> {
+    size_t operator()(const dai::Node::Connection& obj) const {
+        size_t seed = 0;
+        std::hash<dai::Node::Id> hId;
+        std::hash<std::string> hStr;
+        seed ^= hId(obj.outputId) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= hStr(obj.outputName) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= hId(obj.inputId) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= hStr(obj.outputName) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        return seed;
+    }
+};
+
+}  // namespace std

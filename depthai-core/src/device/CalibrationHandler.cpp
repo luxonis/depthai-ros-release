@@ -1,0 +1,1401 @@
+#include <vector>
+#define _USE_MATH_DEFINES
+
+#include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <unordered_set>
+
+#include "depthai/common/CameraInfo.hpp"
+#include "depthai/common/DepthUnit.hpp"
+#include "depthai/common/Extrinsics.hpp"
+#include "depthai/common/HousingCoordinateSystem.hpp"
+#include "depthai/common/Point3f.hpp"
+#include "depthai/utility/matrixOps.hpp"
+#include "device/CalibrationHandler.hpp"
+#include "nlohmann/json.hpp"
+#include "spdlog/spdlog.h"
+#include "utility/Logging.hpp"
+
+namespace dai {
+
+using namespace matrix;
+
+namespace {
+
+constexpr size_t kImuCalibrationRowCount = 3;
+constexpr size_t kImuCalibrationColumnCount = 4;
+
+std::optional<std::array<float, 3>> lookupHousingEntry(const std::string& productName, HousingCoordinateSystem housingCs) {
+    if(productName.empty()) return std::nullopt;
+
+    const auto& housingData = getHousingCoordinates();
+    auto productIt = housingData.find(productName);
+    if(productIt == housingData.end()) return std::nullopt;
+
+    auto housingIt = productIt->second.find(housingCs);
+    if(housingIt == productIt->second.end()) return std::nullopt;
+
+    return housingIt->second;
+}
+
+void validateImuCalibrationMatrix(const std::vector<std::vector<float>>& calibration, const char* sensorName) {
+    if(calibration.size() != kImuCalibrationRowCount) {
+        throw std::runtime_error(std::string(sensorName) + " calibration must contain exactly 3 rows for canonical 3x4 [Q|b] matrix");
+    }
+    for(const auto& row : calibration) {
+        if(row.size() != kImuCalibrationColumnCount) {
+            throw std::runtime_error(std::string(sensorName) + " calibration must contain exactly 4 columns per row for canonical 3x4 [Q|b] matrix");
+        }
+    }
+}
+
+EepromData validateCBAEepromData(EepromData eepromData) {
+    if(eepromData.cameraData.size() != 1) {
+        throw std::runtime_error("CBA calibration data must contain exactly one cameraData entry.");
+    }
+
+    auto it = eepromData.cameraData.begin();
+    if(it->first != CameraBoardSocket::CBA) {
+        CameraInfo cameraInfo = it->second;
+        eepromData.cameraData.erase(it);
+        eepromData.cameraData.emplace(CameraBoardSocket::CBA, cameraInfo);
+    }
+    return eepromData;
+}
+
+}  // namespace
+
+LengthUnit CalibrationHandler::getEepromTranslationUnits() const {
+    return eepromTranslationUnits;
+}
+
+void CalibrationHandler::scaleTranslationInPlace(std::vector<std::vector<float>>& mat, LengthUnit unit) const {
+    const LengthUnit myUnits = getEepromTranslationUnits();
+    const float scale = getLengthUnitMultiplier(unit) / getLengthUnitMultiplier(myUnits);
+    if(scale == 1.0f) return;
+    for(int i = 0; i < 3; ++i) {
+        mat[i][3] *= scale;
+    }
+}
+
+CalibrationHandler::ExtrinsicGraphValidationResult CalibrationHandler::validateExtrinsicGraph() const {
+    std::unordered_map<CameraBoardSocket, CameraBoardSocket> originMap;
+    for(const auto& kv : eepromData.cameraData) {
+        CameraBoardSocket start = kv.first;
+        CameraBoardSocket originCamera;
+        std::unordered_set<CameraBoardSocket> localVisited;
+        CameraBoardSocket current = start;
+
+        while(true) {
+            if(localVisited.count(current)) {
+                return {CalibrationHandler::ExtrinsicGraphError::CycleDetected, current, eepromData.cameraData.at(current).extrinsics.toCameraSocket};
+            }
+
+            localVisited.insert(current);
+
+            const auto& info = eepromData.cameraData.at(current);
+
+            if(info.extrinsics.toCameraSocket == CameraBoardSocket::AUTO) break;
+
+            if(eepromData.cameraData.count(info.extrinsics.toCameraSocket) == 0) {
+                return {CalibrationHandler::ExtrinsicGraphError::DanglingReference, current, info.extrinsics.toCameraSocket};
+            }
+
+            current = info.extrinsics.toCameraSocket;
+        }
+        std::vector<std::vector<float>> srcOriginMatrix = getExtrinsicsToOrigin(start, false, originCamera);
+        originMap[start] = originCamera;
+    }
+    // Now, check that all cameras have the same origin
+    if(!originMap.empty()) {
+        CameraBoardSocket expectedOrigin = originMap.begin()->second;
+
+        for(const auto& kv : originMap) {
+            CameraBoardSocket camOrigin = kv.second;
+
+            if(camOrigin != expectedOrigin) {
+                return {CalibrationHandler::ExtrinsicGraphError::DisconnectedGraph, camOrigin, expectedOrigin};
+            }
+        }
+    }
+
+    return {};
+}
+
+void CalibrationHandler::validateCalibrationHandler(bool throwOnError) const {
+    auto result = validateExtrinsicGraph();
+
+    if(result.error == ExtrinsicGraphError::None) return;
+
+    std::string message;
+    switch(result.error) {
+        case ExtrinsicGraphError::None:
+            return;
+        case ExtrinsicGraphError::CycleDetected:
+            message = "Extrinsic cycle detected: " + toString(result.at) + " → " + toString(result.to);
+            break;
+
+        case ExtrinsicGraphError::DanglingReference:
+            message = "Dangling extrinsic reference: " + toString(result.at) + " → " + toString(result.to);
+            break;
+
+        case ExtrinsicGraphError::DisconnectedGraph:
+            message = "Missing extrinsic link in calibration chain: " + toString(result.at) + " → " + toString(result.to);
+            break;
+    }
+
+    if(throwOnError) {
+        throw std::runtime_error(message);
+    } else {
+        std::cout << "Warning: " << message << std::endl;
+    }
+}
+
+CalibrationHandler::CalibrationHandler(std::filesystem::path eepromDataPath, std::optional<bool> validateCalibration) {
+    std::ifstream jsonStream(eepromDataPath);
+    // TODO(sachin): Check if the file exists first.
+    if(!jsonStream.is_open()) {
+        throw std::runtime_error("Calibration data file doesn't exist at the provided path. Please provide a absolute path.");
+    }
+    if(!jsonStream.good() || jsonStream.bad()) {
+        throw std::runtime_error("Calibration data file not found or corrupted");
+    }
+    nlohmann::json jsonData = nlohmann::json::parse(jsonStream);
+    eepromData = jsonData;
+    if(validateCalibration.value_or(false)) {
+        validateCalibrationHandler();
+    }
+}
+
+CalibrationHandler CalibrationHandler::fromJson(const nlohmann::json& eepromDataJson, std::optional<bool> validateCalibration) {
+    CalibrationHandler calib;
+    calib.eepromData = eepromDataJson;
+    if(validateCalibration.value_or(false)) {
+        calib.validateCalibrationHandler();
+    }
+    return calib;
+}
+
+CalibrationHandler::CalibrationHandler(std::filesystem::path calibrationDataPath,
+                                       std::filesystem::path boardConfigPath,
+                                       std::optional<bool> validateCalibration) {
+    auto matrixConv = [](std::vector<float>& src, int startIdx) {
+        std::vector<std::vector<float>> dest;
+        int currIdx = startIdx;
+        for(int j = 0; j < 3; j++) {
+            std::vector<float> temp;
+            for(int k = 0; k < 3; k++) {
+                temp.push_back(src[currIdx]);
+                currIdx++;
+            }
+            dest.push_back(temp);
+        }
+        return dest;
+    };
+
+    unsigned versionSize = sizeof(float) * (9 * 7 + 3 * 2 + 14 * 3); /*R1,R2,M1,M2,R,T,M3,R_rgb,T_rgb,d1,d2,d3*/
+    std::ifstream file(calibrationDataPath, std::ios::binary);
+    if(!file.is_open() || !file.good() || file.bad()) {
+        throw std::runtime_error("Calibration data file not found or corrupted");
+    }
+
+    std::ifstream boardConfigStream(boardConfigPath);
+    if(!boardConfigStream.is_open() || !boardConfigStream.good() || boardConfigStream.bad()) {
+        throw std::runtime_error("BoardConfig file not found or corrupted");
+    }
+
+    nlohmann::json boardConfigData = nlohmann::json::parse(boardConfigStream);
+    CameraBoardSocket left = CameraBoardSocket::CAM_B;
+    CameraBoardSocket right = CameraBoardSocket::CAM_C;
+
+    if(boardConfigData.contains("board_config")) {
+        eepromData.boardName = boardConfigData.at("board_config").at("name").get<std::string>();
+        eepromData.boardRev = boardConfigData.at("board_config").at("revision").get<std::string>();
+        bool swapLeftRightCam = boardConfigData.at("board_config").at("swap_left_and_right_cameras").get<bool>();
+        eepromData.version = 6;
+
+        if(!swapLeftRightCam) {
+            right = CameraBoardSocket::CAM_B;
+            left = CameraBoardSocket::CAM_C;
+        }
+
+        eepromData.cameraData[right].specHfovDeg = boardConfigData.at("board_config").at("left_fov_deg").get<float>();
+        eepromData.cameraData[left].specHfovDeg = boardConfigData.at("board_config").at("left_fov_deg").get<float>();
+        eepromData.cameraData[CameraBoardSocket::CAM_A].specHfovDeg = boardConfigData.at("board_config").at("rgb_fov_deg").get<float>();
+
+        eepromData.cameraData[left].extrinsics.specTranslation.x = -boardConfigData.at("board_config").at("left_to_right_distance_cm").get<float>();
+        eepromData.cameraData[left].extrinsics.specTranslation.y = 0;
+        eepromData.cameraData[left].extrinsics.specTranslation.z = 0;
+
+        eepromData.cameraData[right].extrinsics.specTranslation.x = boardConfigData.at("board_config").at("left_to_right_distance_cm").get<float>()
+                                                                    - boardConfigData.at("board_config").at("left_to_rgb_distance_cm").get<float>();
+        eepromData.cameraData[right].extrinsics.specTranslation.y = 0;
+        eepromData.cameraData[right].extrinsics.specTranslation.z = 0;
+    } else {
+        throw std::runtime_error("board_config key not found");
+    }
+
+    file.seekg(0, file.end);
+    const unsigned fSize = static_cast<unsigned>(file.tellg());
+    file.seekg(0, file.beg);
+
+    if(fSize != versionSize) {
+        throw std::runtime_error("The calib file version is less than version 5. which has been deprecated. Please Recalibrate with the new version.");
+    }
+
+    std::vector<float> calibrationBuff(versionSize / sizeof(float));
+    file.read(reinterpret_cast<char*>(calibrationBuff.data()), fSize);
+    // std::vector<float> calibrationBuff(std::istreambuf_iterator<char>(file), {});
+
+    eepromData.stereoRectificationData.rectifiedRotationLeft = matrixConv(calibrationBuff, 0);
+    eepromData.stereoRectificationData.rectifiedRotationRight = matrixConv(calibrationBuff, 9);
+    eepromData.stereoRectificationData.leftCameraSocket = left;
+    eepromData.stereoRectificationData.rightCameraSocket = right;
+
+    eepromData.cameraData[left].intrinsicMatrix = matrixConv(calibrationBuff, 18);
+    eepromData.cameraData[right].intrinsicMatrix = matrixConv(calibrationBuff, 27);
+    eepromData.cameraData[CameraBoardSocket::CAM_A].intrinsicMatrix = matrixConv(calibrationBuff, 48);  // 9*5 + 3
+
+    eepromData.cameraData[left].cameraType = CameraModel::Perspective;
+    eepromData.cameraData[right].cameraType = CameraModel::Perspective;
+    eepromData.cameraData[CameraBoardSocket::CAM_A].cameraType = CameraModel::Perspective;  // 9*5 + 3
+
+    eepromData.cameraData[left].width = 1280;
+    eepromData.cameraData[left].height = 800;
+
+    eepromData.cameraData[right].width = 1280;
+    eepromData.cameraData[right].height = 800;
+
+    eepromData.cameraData[CameraBoardSocket::CAM_A].width = 1920;
+    eepromData.cameraData[CameraBoardSocket::CAM_A].height = 1080;
+
+    eepromData.cameraData[left].distortionCoeff = std::vector<float>(calibrationBuff.begin() + 69, calibrationBuff.begin() + 83);  // 69 + 14
+    eepromData.cameraData[right].distortionCoeff = std::vector<float>(calibrationBuff.begin() + 83, calibrationBuff.begin() + 69 + (2 * 14));
+    eepromData.cameraData[CameraBoardSocket::CAM_A].distortionCoeff =
+        std::vector<float>(calibrationBuff.begin() + 69 + (2 * 14), calibrationBuff.begin() + 69 + (3 * 14));
+
+    eepromData.cameraData[left].extrinsics.rotationMatrix = matrixConv(calibrationBuff, 36);
+    eepromData.cameraData[left].extrinsics.toCameraSocket = right;
+
+    eepromData.cameraData[left].extrinsics.translation.x = calibrationBuff[45];
+    eepromData.cameraData[left].extrinsics.translation.y = calibrationBuff[46];
+    eepromData.cameraData[left].extrinsics.translation.z = calibrationBuff[47];
+
+    eepromData.cameraData[right].extrinsics.rotationMatrix = matrixConv(calibrationBuff, 57);
+    eepromData.cameraData[right].extrinsics.toCameraSocket = CameraBoardSocket::CAM_A;
+
+    eepromData.cameraData[right].extrinsics.translation.x = -calibrationBuff[66];
+    eepromData.cameraData[right].extrinsics.translation.y = -calibrationBuff[67];
+    eepromData.cameraData[right].extrinsics.translation.z = -calibrationBuff[68];
+
+    CameraInfo& camera = eepromData.cameraData[right];
+
+    float temp = camera.extrinsics.rotationMatrix[0][1];
+    camera.extrinsics.rotationMatrix[0][1] = camera.extrinsics.rotationMatrix[1][0];
+    camera.extrinsics.rotationMatrix[1][0] = temp;
+
+    temp = camera.extrinsics.rotationMatrix[0][2];
+    camera.extrinsics.rotationMatrix[0][2] = camera.extrinsics.rotationMatrix[2][0];
+    camera.extrinsics.rotationMatrix[2][0] = temp;
+
+    temp = camera.extrinsics.rotationMatrix[1][2];
+    camera.extrinsics.rotationMatrix[1][2] = camera.extrinsics.rotationMatrix[2][1];
+    camera.extrinsics.rotationMatrix[2][1] = temp;
+    if(validateCalibration.value_or(false)) {
+        validateCalibrationHandler();
+    }
+}
+
+CalibrationHandler::CalibrationHandler(const EepromData& newEepromData, std::optional<bool> validateCalibration) {
+    eepromData = newEepromData;
+    if(validateCalibration.value_or(false)) {
+        validateCalibrationHandler();
+    }
+}
+
+dai::EepromData CalibrationHandler::getEepromData() const {
+    return eepromData;
+}
+
+bool CalibrationHandler::hasCalibrationData() const {
+    return eepromData.version >= 4 && !eepromData.cameraData.empty();
+}
+
+bool CalibrationHandler::hasCameraCalibration(CameraBoardSocket cameraId) const {
+    // Checks both that the device has a current calibration version and that data exists for this camera.
+    return hasCalibrationData() && eepromData.cameraData.find(cameraId) != eepromData.cameraData.end();
+}
+
+void CalibrationHandler::validateIntrinsicsMatrix(CameraBoardSocket cameraId) const {
+    const auto& storedIntrinsics = eepromData.cameraData.at(cameraId).intrinsicMatrix;
+    if(storedIntrinsics.size() < 3 || storedIntrinsics[0].size() < 3 || storedIntrinsics[1].size() < 3 || storedIntrinsics[2].size() < 3
+       || storedIntrinsics[0][0] == 0) {
+        throw std::runtime_error("There is no Intrinsic matrix available for the requested cameraID");
+    }
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getCameraIntrinsics(
+    CameraBoardSocket cameraId, int resizeWidth, int resizeHeight, Point2f topLeftPixelId, Point2f bottomRightPixelId, bool keepAspectRatio) const {
+    if(eepromData.version < 4) {
+        throw std::runtime_error("Your device contains old calibration which doesn't include Intrinsic data. Please recalibrate your device");
+    }
+    if(!hasCameraCalibration(cameraId)) {
+        throw std::runtime_error(
+            "Your device contains old calibration which doesn't include Intrinsic data or there is no Camera data available for the requested cameraID. Please "
+            "recalibrate your device");
+    }
+    validateIntrinsicsMatrix(cameraId);
+    std::vector<std::vector<float>> intrinsicMatrix = eepromData.cameraData.at(cameraId).intrinsicMatrix;
+    if(resizeWidth != -1 || resizeHeight != -1) {
+        if(resizeWidth == -1) {
+            resizeWidth = static_cast<decltype(resizeWidth)>(eepromData.cameraData.at(cameraId).width * resizeHeight
+                                                             / static_cast<float>(eepromData.cameraData.at(cameraId).height));
+        }
+        if(resizeHeight == -1) {
+            resizeHeight = static_cast<decltype(resizeHeight)>(eepromData.cameraData.at(cameraId).height * resizeWidth
+                                                               / static_cast<float>(eepromData.cameraData.at(cameraId).width));
+        }
+
+        std::vector<std::vector<float>> scaleMat;
+        if(keepAspectRatio) {
+            float originalRatio = eepromData.cameraData.at(cameraId).width / static_cast<float>(eepromData.cameraData.at(cameraId).height);
+            float resizeRatio = resizeWidth / static_cast<float>(resizeHeight);
+            if(resizeRatio <= 1.34f && originalRatio <= 1.778f && originalRatio > 1.5f) {
+                float scaleW = resizeWidth / static_cast<float>(eepromData.cameraData.at(cameraId).width);
+                float scaleH = resizeHeight / static_cast<float>(eepromData.cameraData.at(cameraId).height);
+
+                scaleW = std::min(scaleW, scaleH);
+                scaleMat = {{scaleW, 0, 0}, {0, scaleW, 0}, {0, 0, 1}};
+                intrinsicMatrix = matMul(scaleMat, intrinsicMatrix);
+
+                if(scaleW * eepromData.cameraData.at(cameraId).height < resizeHeight) {
+                    intrinsicMatrix[1][2] += static_cast<float>(resizeHeight - eepromData.cameraData.at(cameraId).height * scaleW) / 2.0f;
+                } else if(scaleW * eepromData.cameraData.at(cameraId).width > resizeWidth) {
+                    intrinsicMatrix[0][2] += static_cast<float>(resizeWidth - eepromData.cameraData.at(cameraId).width * scaleW) / 2.0f;
+                }
+            } else {
+                float scale = resizeHeight / static_cast<float>(eepromData.cameraData.at(cameraId).height);
+                if(scale * eepromData.cameraData.at(cameraId).width < resizeWidth) {
+                    scale = resizeWidth / static_cast<float>(eepromData.cameraData.at(cameraId).width);
+                }
+
+                scaleMat = {{scale, 0, 0}, {0, scale, 0}, {0, 0, 1}};
+                intrinsicMatrix = matMul(scaleMat, intrinsicMatrix);
+                if(scale * eepromData.cameraData.at(cameraId).height > resizeHeight) {
+                    intrinsicMatrix[1][2] -= (eepromData.cameraData.at(cameraId).height * scale - resizeHeight) / 2;
+                } else if(scale * eepromData.cameraData.at(cameraId).width > resizeWidth) {
+                    intrinsicMatrix[0][2] -= (eepromData.cameraData.at(cameraId).width * scale - resizeWidth) / 2;
+                }
+            }
+        } else {
+            float scaleX = resizeWidth / static_cast<float>(eepromData.cameraData.at(cameraId).width);
+            float scaleY = resizeHeight / static_cast<float>(eepromData.cameraData.at(cameraId).height);
+            scaleMat = {{scaleX, 0, 0}, {0, scaleY, 0}, {0, 0, 1}};
+            intrinsicMatrix = matMul(scaleMat, intrinsicMatrix);
+        }
+    }
+    if(resizeWidth != -1 || resizeHeight != -1) {
+        if(bottomRightPixelId.y > resizeHeight || bottomRightPixelId.x > resizeWidth) {
+            throw std::runtime_error("Invalid Crop size. Crop width or height is more than the original resized height and width");
+        }
+    } else {
+        if(bottomRightPixelId.y > eepromData.cameraData.at(cameraId).height || bottomRightPixelId.x > eepromData.cameraData.at(cameraId).width) {
+            throw std::runtime_error("Invalid Crop size. Crop width or height is more than the original  height and width");
+        }
+    }
+
+    if(topLeftPixelId.x > bottomRightPixelId.x || topLeftPixelId.y > bottomRightPixelId.y) {
+        throw std::runtime_error("Invalid Crop ratio.");
+    }
+
+    intrinsicMatrix[0][2] -= topLeftPixelId.x;
+    intrinsicMatrix[1][2] -= topLeftPixelId.y;
+    return intrinsicMatrix;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getCameraIntrinsics(
+    CameraBoardSocket cameraId, Size2f destShape, Point2f topLeftPixelId, Point2f bottomRightPixelId, bool keepAspectRatio) const {
+    return getCameraIntrinsics(
+        cameraId, static_cast<int>(destShape.width), static_cast<int>(destShape.height), topLeftPixelId, bottomRightPixelId, keepAspectRatio);
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getCameraIntrinsics(
+    CameraBoardSocket cameraId, const std::tuple<int, int>& destShape, Point2f topLeftPixelId, Point2f bottomRightPixelId, bool keepAspectRatio) const {
+    return getCameraIntrinsics(cameraId, std::get<0>(destShape), std::get<1>(destShape), topLeftPixelId, bottomRightPixelId, keepAspectRatio);
+}
+
+std::tuple<std::vector<std::vector<float>>, int, int> CalibrationHandler::getDefaultIntrinsics(CameraBoardSocket cameraId) const {
+    if(eepromData.version < 4)
+        throw std::runtime_error("Your device contains old calibration which doesn't include Intrinsic data. Please recalibrate your device");
+
+    if(!hasCameraCalibration(cameraId)) throw std::runtime_error("There is no Camera data available corresponding to the requested cameraId");
+
+    validateIntrinsicsMatrix(cameraId);
+
+    return {eepromData.cameraData.at(cameraId).intrinsicMatrix, eepromData.cameraData.at(cameraId).width, eepromData.cameraData.at(cameraId).height};
+}
+
+uint32_t CalibrationHandler::getSourceHeight(CameraBoardSocket cameraId) const {
+    if(!hasCameraCalibration(cameraId)) throw std::runtime_error("There is no Camera data available corresponding to the requested cameraId");
+
+    return eepromData.cameraData.at(cameraId).height;
+}
+
+uint32_t CalibrationHandler::getSourceWidth(CameraBoardSocket cameraId) const {
+    if(!hasCameraCalibration(cameraId)) throw std::runtime_error("There is no Camera data available corresponding to the requested cameraId");
+
+    return eepromData.cameraData.at(cameraId).width;
+}
+
+std::vector<float> CalibrationHandler::getDistortionCoefficients(CameraBoardSocket cameraId) const {
+    if(eepromData.version < 4)
+        throw std::runtime_error("Your device contains old calibration which doesn't include Intrinsic data. Please recalibrate your device");
+
+    if(!hasCameraCalibration(cameraId)) throw std::runtime_error("There is no Camera data available corresponding to the requested cameraID");
+
+    validateIntrinsicsMatrix(cameraId);
+
+    if(eepromData.cameraData.at(cameraId).cameraType == CameraModel::Fisheye) {
+        // in this case the camera model is Fisheye; we only want to return four floats.
+        // camera calibration is stored as 14 floats in eeprom, only return the first four.
+        std::vector<float> ret(4);
+        for(int i = 0; i < 4; i++) {
+            ret[i] = eepromData.cameraData.at(cameraId).distortionCoeff[i];
+        }
+        return ret;
+    }
+
+    // in this case the camera model is Perspective, we want to return all 14
+    return eepromData.cameraData.at(cameraId).distortionCoeff;
+}
+
+float CalibrationHandler::getFov(CameraBoardSocket cameraId, bool useSpec) const {
+    if(!hasCameraCalibration(cameraId)) throw std::runtime_error("There is no Camera data available corresponding to the requested cameraID");
+
+    if(useSpec) {
+        return eepromData.cameraData.at(cameraId).specHfovDeg;
+    }
+    // Calculate fov from intrinsics
+    std::vector<std::vector<float>> intrinsics;
+    int width, height;
+    std::tie(intrinsics, width, height) = CalibrationHandler::getDefaultIntrinsics(cameraId);
+    auto focalLength = intrinsics[0][0];
+    return 2 * 180 / ((float)M_PI) * std::atan(width * 0.5f / focalLength);
+}
+
+float CalibrationHandler::getCameraZAxisAngle(CameraBoardSocket cameraId1, CameraBoardSocket cameraId2) const {
+    const auto rotationMatrix = getCameraRotationMatrix(cameraId1, cameraId2);
+    if(rotationMatrix.size() != 3 || rotationMatrix[2].size() != 3) {
+        throw std::runtime_error("Invalid 3x3 camera rotation matrix");
+    }
+
+    const float cosAngle = std::clamp(rotationMatrix[2][2], -1.0f, 1.0f);
+    return std::acos(cosAngle);
+}
+
+uint8_t CalibrationHandler::getLensPosition(CameraBoardSocket cameraId) const {
+    if(!hasCameraCalibration(cameraId)) throw std::runtime_error("There is no Camera data available corresponding to the requested cameraID");
+
+    return eepromData.cameraData.at(cameraId).lensPosition;
+}
+
+CameraModel CalibrationHandler::getDistortionModel(CameraBoardSocket cameraId) const {
+    if(!hasCameraCalibration(cameraId)) throw std::runtime_error("There is no Camera data available corresponding to the requested cameraID");
+
+    return eepromData.cameraData.at(cameraId).cameraType;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getCameraExtrinsics(CameraBoardSocket srcCamera,
+                                                                        CameraBoardSocket dstCamera,
+                                                                        bool useSpecTranslation,
+                                                                        LengthUnit unit) const {
+    /**
+     * 1. Check if both camera ID exists.
+     * 2. Check if the forward link exists from source and destination camera to origin camera.
+     * 3. Call computeExtrinsicMatrix to get the projection matrix from source -> origin camera.
+     * 4. Invert the matrix from destination -> origin camera.
+     * 5. Multiply the two matrices to get the projection matrix from source -> destination camera.
+     * 6. Return the projection matrix.
+     */
+    if(!hasCameraCalibration(srcCamera)) {
+        throw std::runtime_error("There is no Camera data available corresponding to the requested source cameraId");
+    }
+    if(!hasCameraCalibration(dstCamera)) {
+        throw std::runtime_error("There is no Camera data available corresponding to the requested destination cameraId");
+    }
+
+    std::vector<std::vector<float>> extrinsics;
+    CameraBoardSocket originCamera1;
+    CameraBoardSocket originCamera2;
+
+    // Get matrix from src to -1 camera and dst to -1 camera and set originCamera1 and originCamera2
+    std::vector<std::vector<float>> srcOriginMatrix = getExtrinsicsToOrigin(srcCamera, useSpecTranslation, originCamera1);
+    std::vector<std::vector<float>> dstOriginMatrix = getExtrinsicsToOrigin(dstCamera, useSpecTranslation, originCamera2);
+
+    if(originCamera1 != originCamera2) {
+        throw std::runtime_error("Missing extrinsic link from source camera to to destination camera.");
+    }
+
+    // Invert the matrix dstOriginMatrix
+    invertSe3Matrix4x4InPlace(dstOriginMatrix);
+
+    // Get the matrix from src to dst camera
+    extrinsics = matMul(dstOriginMatrix, srcOriginMatrix);
+    scaleTranslationInPlace(extrinsics, unit);
+    return extrinsics;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getExtrinsicsToOrigin(CameraBoardSocket cameraId,
+                                                                          bool useSpecTranslation,
+                                                                          CameraBoardSocket& originSocket) const {
+    std::vector<std::vector<float>> extrinsics;
+
+    // Check if the cameraId exists in the data
+    auto cameraIt = eepromData.cameraData.find(cameraId);
+    if(cameraIt == eepromData.cameraData.end()) {
+        logger::error("Camera ID {} does not exist in the calibration data.", static_cast<int>(cameraId));
+        throw std::runtime_error("Camera ID does not exist in the calibration data.");
+    }
+
+    // Traverse to find the origin camera (the one that has toCameraSocket == AUTO/-1)
+    CameraBoardSocket currentCameraId = cameraId;
+    std::vector<CameraBoardSocket> path;  // To store the path of sockets
+    path.push_back(currentCameraId);
+
+    while(true) {
+        auto currentIt = eepromData.cameraData.find(currentCameraId);
+        if(currentIt == eepromData.cameraData.end()) {
+            logger::error("Invalid camera link detected at camera ID {}.", static_cast<int>(currentCameraId));
+            throw std::runtime_error("Invalid camera link detected.");
+        }
+
+        CameraBoardSocket nextCameraSocket = currentIt->second.extrinsics.toCameraSocket;
+
+        // Prevent infinite loop in case of cyclic connections
+        if(std::find(path.begin(), path.end(), nextCameraSocket) != path.end()) {
+            throw std::runtime_error("Cyclic extrinsics detected in device calibration data.");
+        }
+
+        if(nextCameraSocket == CameraBoardSocket::AUTO) {
+            break;
+        }
+
+        // Move to the next camera in the chain
+        currentCameraId = nextCameraSocket;
+        path.push_back(currentCameraId);
+    }
+
+    // Set the origin camera
+    originSocket = currentCameraId;
+
+    // Now compute the extrinsic matrix from cameraId to the origin
+
+    // If the cameraId is the origin (no actual transformation needed), return identity matrix
+    if(cameraId == currentCameraId) {
+        extrinsics = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+    } else {
+        extrinsics = computeExtrinsicMatrix(cameraId, currentCameraId, useSpecTranslation);
+    }
+
+    return extrinsics;
+}
+
+CameraBoardSocket CalibrationHandler::getCameraWithLowestId() const {
+    if(eepromData.cameraData.empty()) {
+        throw std::runtime_error("No camera data available in the calibration data.");
+    }
+    dai::CameraBoardSocket currentCameraId = eepromData.cameraData.begin()->first;
+    for(const auto& cameraData : eepromData.cameraData) {
+        if(static_cast<int>(cameraData.first) < static_cast<int>(currentCameraId)) {
+            currentCameraId = cameraData.first;
+        }
+    }
+    return currentCameraId;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getHousingToHousingOriginExtrinsics(const HousingCoordinateSystem housingCS,
+                                                                                        bool useSpecTranslation,
+                                                                                        CameraBoardSocket& originSocket,
+                                                                                        LengthUnit unit) const {
+    const float mmToUnitScale = getDistanceUnitScale(unit, LengthUnit::MILLIMETER);
+    const Extrinsics& housingExtrinsics = eepromData.housingExtrinsics;
+
+    originSocket = housingExtrinsics.toCameraSocket;
+
+    // Convert CameraBoardSocket to HousingCoordinateSystem (they have the same enum order)
+    HousingCoordinateSystem housingOrigin = static_cast<HousingCoordinateSystem>(static_cast<int32_t>(housingExtrinsics.toCameraSocket));
+
+    auto housingRotation = housingExtrinsics.rotationMatrix;
+    const auto housingTranslationVector = housingExtrinsics.getTranslationVector(false, unit);
+    auto housingTranslation = Point3f(housingTranslationVector[0], housingTranslationVector[1], housingTranslationVector[2]);
+    const auto housingSpecTranslationVector = housingExtrinsics.getTranslationVector(true, unit);
+    auto housingSpecTranslation = Point3f(housingSpecTranslationVector[0], housingSpecTranslationVector[1], housingSpecTranslationVector[2]);
+
+    // ------------------------------------------------------------
+    // If using spec translation, try to get it from the database
+    // ------------------------------------------------------------
+    if(useSpecTranslation) {
+        if(const auto dbTranslation = lookupHousingEntry(eepromData.productName, housingOrigin)) {
+            // Get the translation from the database (in mm) and convert to cm.
+            // The database positions are in the housing frame, but the translation
+            // column of [R | t] must be in the destination (housing-origin) frame:
+            // t = -R * db / scale
+            std::vector<std::vector<float>> c = {
+                {-(*dbTranslation)[0] * mmToUnitScale}, {-(*dbTranslation)[1] * mmToUnitScale}, {-(*dbTranslation)[2] * mmToUnitScale}};
+            auto rc = matMul(housingRotation, c);
+            housingSpecTranslation = Point3f(rc[0][0], rc[1][0], rc[2][0]);
+        }
+    }
+
+    // Build 4x4 transform matrix from HousingOrigin to Housing
+    std::vector<std::vector<float>> translationHousingToHousingOrigin(4, std::vector<float>(4, 0.0f));
+
+    for(int r = 0; r < 3; ++r) {
+        // Copy rotation row
+        for(int c = 0; c < 3; ++c) {
+            translationHousingToHousingOrigin[r][c] = housingRotation[r][c];
+        }
+
+        // Pick translation vector
+        const auto& t = useSpecTranslation ? housingSpecTranslation : housingTranslation;
+
+        // Map row index -> x/y/z
+        float tval = (r == 0 ? t.x : (r == 1 ? t.y : t.z));
+        translationHousingToHousingOrigin[r][3] = tval;
+    }
+
+    // Last row = [0 0 0 1]
+    translationHousingToHousingOrigin[3][3] = 1.0f;
+
+    // ------------------------------------------------------------
+    // Get the requested specific housing coordinate system translation and subtract it
+    // ------------------------------------------------------------
+    if(useSpecTranslation && housingCS != HousingCoordinateSystem::AUTO) {
+        if(const auto requestedDbTranslation = lookupHousingEntry(eepromData.productName, housingCS)) {
+            // All housing coordinate systems share the same orientation;
+            // only their origins differ. Build the pure-translation transform
+            // translationSpecificHousing_to_Housing from the database position.
+            std::vector<std::vector<float>> translationSpecificHousingToHousing = {{1.0f, 0.0f, 0.0f, (*requestedDbTranslation)[0] * mmToUnitScale},
+                                                                                   {0.0f, 1.0f, 0.0f, (*requestedDbTranslation)[1] * mmToUnitScale},
+                                                                                   {0.0f, 0.0f, 1.0f, (*requestedDbTranslation)[2] * mmToUnitScale},
+                                                                                   {0.0f, 0.0f, 0.0f, 1.0f}};
+
+            // Compose: translationSpecificHousing→HousingOrigin = translationHousing→HousingOrigin * translationSpecificHousing→Housing
+            translationHousingToHousingOrigin = matMul(translationHousingToHousingOrigin, translationSpecificHousingToHousing);
+        }
+    }
+
+    return translationHousingToHousingOrigin;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getHousingCalibration(CameraBoardSocket srcCamera,
+                                                                          const HousingCoordinateSystem housingCS,
+                                                                          bool useSpecTranslation,
+                                                                          LengthUnit unit) const {
+    // Ensure we have calibration data for the requested source camera
+    if(eepromData.cameraData.find(srcCamera) == eepromData.cameraData.end()) {
+        throw std::runtime_error("There is no Camera data available corresponding to the requested source cameraId");
+    }
+
+    std::vector<std::vector<float>> camToHousing;
+    std::vector<std::vector<float>> camToHousingOrigin;
+    CameraBoardSocket housingOriginCamera;
+    CameraBoardSocket originCamera1;
+    CameraBoardSocket originCamera2;
+
+    // ------------------------------------------------------------
+    // 1. Retrieve the following transformations:
+    //    cam_src           → origin
+    //    housing_origin    → origin
+    //    housing           → housing_origin
+    // These are provided by the calibration data.
+    // ------------------------------------------------------------
+
+    std::vector<std::vector<float>> housingToHousingOrigin = getHousingToHousingOriginExtrinsics(housingCS, useSpecTranslation, housingOriginCamera);
+
+    std::vector<std::vector<float>> housingOriginToOrigin = getExtrinsicsToOrigin(housingOriginCamera, useSpecTranslation, originCamera1);
+
+    std::vector<std::vector<float>> camToOrigin = getExtrinsicsToOrigin(srcCamera, useSpecTranslation, originCamera2);
+
+    // The "origin" for both lookups must be the same camera
+    if(originCamera1 != originCamera2) {
+        throw std::runtime_error("Missing extrinsic link from source camera to destination camera.");
+    }
+
+    // ------------------------------------------------------------
+    // 2. To combine cam_src → origin with origin → housing_origin,
+    //    we need the matrices:
+    //         origin → housing_origin
+    //         housing_origin → housing
+    //    But what we have:
+    //         housing_origin → origin
+    //         housing → housing_origin
+    //    So we invert that SE3 transform first.
+    // ------------------------------------------------------------
+    invertSe3Matrix4x4InPlace(housingOriginToOrigin);   // now represents origin → housing_origin
+    invertSe3Matrix4x4InPlace(housingToHousingOrigin);  // now represents housing_origin → housing
+    // ------------------------------------------------------------
+    // 3. Compose transformations:
+    //    cam_src → origin → housing_origin
+    // ------------------------------------------------------------
+    camToHousingOrigin = matMul(housingOriginToOrigin, camToOrigin);
+
+    // ------------------------------------------------------------
+    // 4. And finally:
+    //    cam_src → housing_origin → housing
+    //    Which gives us: cam_src → housing
+    // ------------------------------------------------------------
+    camToHousing = matMul(housingToHousingOrigin, camToHousingOrigin);
+    scaleTranslationInPlace(camToHousing, unit);
+
+    return camToHousing;
+}
+
+std::vector<float> CalibrationHandler::getCameraTranslationVector(CameraBoardSocket srcCamera,
+                                                                  CameraBoardSocket dstCamera,
+                                                                  bool useSpecTranslation,
+                                                                  LengthUnit unit) const {
+    std::vector<std::vector<float>> extrinsics = getCameraExtrinsics(srcCamera, dstCamera, useSpecTranslation, unit);
+
+    std::vector<float> translationVector = {0, 0, 0};
+    for(auto i = 0; i < 3; i++) {
+        translationVector[i] = extrinsics[i][3];
+    }
+    return translationVector;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getCameraRotationMatrix(CameraBoardSocket srcCamera, CameraBoardSocket dstCamera) const {
+    std::vector<std::vector<float>> extrinsics = getCameraExtrinsics(srcCamera, dstCamera, false, LengthUnit::CENTIMETER);
+
+    std::vector<std::vector<float>> rotationMatrix = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    for(auto i = 0; i < 3; i++) {
+        for(auto j = 0; j < 3; j++) {
+            rotationMatrix[i][j] = extrinsics[i][j];
+        }
+    }
+    return rotationMatrix;
+}
+
+float CalibrationHandler::getBaselineDistance(CameraBoardSocket cam1, CameraBoardSocket cam2, bool useSpecTranslation, LengthUnit unit) const {
+    std::vector<float> translationVector = getCameraTranslationVector(cam1, cam2, useSpecTranslation, unit);
+    float sum = 0;
+    for(auto val : translationVector) {
+        sum += val * val;
+    }
+    return std::sqrt(sum);
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getCameraToImuExtrinsics(CameraBoardSocket cameraId, bool useSpecTranslation, LengthUnit unit) const {
+    std::vector<std::vector<float>> transformationMatrix = getImuToCameraExtrinsics(cameraId, useSpecTranslation, unit);
+    invertSe3Matrix4x4InPlace(transformationMatrix);
+    return transformationMatrix;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getImuToCameraExtrinsics(CameraBoardSocket cameraId, bool useSpecTranslation, LengthUnit unit) const {
+    if(eepromData.imuExtrinsics.rotationMatrix.size() == 0 || eepromData.imuExtrinsics.toCameraSocket == CameraBoardSocket::AUTO) {
+        throw std::runtime_error("IMU calibration data is not available on device yet.");
+    } else if(eepromData.cameraData.find(cameraId) == eepromData.cameraData.end()) {
+        throw std::runtime_error("There is no Camera data available corresponding to the requested source cameraId");
+    }
+
+    std::vector<std::vector<float>> currTransformationMatrixImu = eepromData.imuExtrinsics.rotationMatrix;
+    if(useSpecTranslation) {
+        currTransformationMatrixImu[0].push_back(eepromData.imuExtrinsics.specTranslation.x);
+        currTransformationMatrixImu[1].push_back(eepromData.imuExtrinsics.specTranslation.y);
+        currTransformationMatrixImu[2].push_back(eepromData.imuExtrinsics.specTranslation.z);
+    } else {
+        currTransformationMatrixImu[0].push_back(eepromData.imuExtrinsics.translation.x);
+        currTransformationMatrixImu[1].push_back(eepromData.imuExtrinsics.translation.y);
+        currTransformationMatrixImu[2].push_back(eepromData.imuExtrinsics.translation.z);
+    }
+    std::vector<float> homogeneous_vector = {0, 0, 0, 1};
+    currTransformationMatrixImu.push_back(homogeneous_vector);
+
+    if(eepromData.imuExtrinsics.toCameraSocket == cameraId) {
+        scaleTranslationInPlace(currTransformationMatrixImu, unit);
+        return currTransformationMatrixImu;
+    } else {
+        std::vector<std::vector<float>> destTransformationMatrixCurr =
+            getCameraExtrinsics(eepromData.imuExtrinsics.toCameraSocket, cameraId, useSpecTranslation, LengthUnit::CENTIMETER);
+        auto result = matMul(destTransformationMatrixCurr, currTransformationMatrixImu);
+        scaleTranslationInPlace(result, unit);
+        return result;
+    }
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getStereoRightRectificationRotation() const {
+    std::vector<std::vector<float>> rotationMatrix = eepromData.stereoRectificationData.rectifiedRotationRight;
+    if(rotationMatrix.size() != 3 || rotationMatrix[0].size() != 3) {
+        throw std::runtime_error("Rectified Rotation Matrix Doesn't exist ");
+    }
+    return rotationMatrix;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getStereoLeftRectificationRotation() const {
+    ;
+    std::vector<std::vector<float>> rotationMatrix = eepromData.stereoRectificationData.rectifiedRotationLeft;
+    if(rotationMatrix.size() != 3 || rotationMatrix[0].size() != 3) {
+        throw std::runtime_error("Rectified Rotation Matrix Doesn't exist ");
+    }
+    return rotationMatrix;
+}
+
+dai::CameraBoardSocket CalibrationHandler::getStereoLeftCameraId() const {
+    return eepromData.stereoRectificationData.leftCameraSocket;
+}
+
+dai::CameraBoardSocket CalibrationHandler::getStereoRightCameraId() const {
+    return eepromData.stereoRectificationData.rightCameraSocket;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getAccelerometerCalibration() const {
+    return eepromData.imuCalibrationParams.accelerometer;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::getGyroscopeCalibration() const {
+    return eepromData.imuCalibrationParams.gyroscope;
+}
+
+dai::ImuNoiseParameters CalibrationHandler::getImuNoiseParameters() const {
+    return eepromData.imuCalibrationParams.noise;
+}
+
+dai::ImuCalibrationParams CalibrationHandler::getImuParameters() const {
+    dai::ImuCalibrationParams params;
+    params.noise = getImuNoiseParameters();
+    params.accelerometer = getAccelerometerCalibration();
+    params.gyroscope = getGyroscopeCalibration();
+    return params;
+}
+
+bool CalibrationHandler::eepromToJsonFile(std::filesystem::path destPath) const {
+    nlohmann::json j = eepromData;
+    std::ofstream ob(destPath);
+    ob << std::setw(4) << j << std::endl;
+    return true;
+}
+
+nlohmann::json CalibrationHandler::eepromToJson() const {
+    return eepromData;
+}
+
+std::vector<std::vector<float>> CalibrationHandler::computeExtrinsicMatrix(CameraBoardSocket srcCamera,
+                                                                           CameraBoardSocket dstCamera,
+                                                                           bool useSpecTranslation) const {
+    if(srcCamera == CameraBoardSocket::AUTO || dstCamera == CameraBoardSocket::AUTO) {
+        throw std::runtime_error("Invalid cameraId input..");
+    }
+    if(!hasCameraCalibration(srcCamera)) {
+        throw std::runtime_error("There is no Camera data available corresponding to the requested source cameraId");
+    }
+    if(!hasCameraCalibration(dstCamera)) {
+        throw std::runtime_error("There is no Camera data available corresponding to the requested destination cameraId");
+    }
+    if(eepromData.cameraData.at(srcCamera).extrinsics.toCameraSocket == dstCamera) {
+        if(eepromData.cameraData.at(srcCamera).extrinsics.rotationMatrix.size() == 0
+           || eepromData.cameraData.at(srcCamera).extrinsics.toCameraSocket == CameraBoardSocket::AUTO) {
+            throw std::runtime_error(
+                "Defined Extrinsic conenction but rotation matrix is not available. Please cross check your calibration data configuration.");
+        }
+        std::vector<std::vector<float>> transformationMatrix = eepromData.cameraData.at(srcCamera).extrinsics.rotationMatrix;
+        if(useSpecTranslation) {
+            const dai::Point3f& mTrans = eepromData.cameraData.at(srcCamera).extrinsics.specTranslation;
+            if(mTrans.x == 0 && mTrans.y == 0 && mTrans.z == 0) {
+                throw std::runtime_error("Cannot use useSpecTranslation argument since specTranslation has {0, 0, 0}");
+            }
+            transformationMatrix[0].push_back(eepromData.cameraData.at(srcCamera).extrinsics.specTranslation.x);
+            transformationMatrix[1].push_back(eepromData.cameraData.at(srcCamera).extrinsics.specTranslation.y);
+            transformationMatrix[2].push_back(eepromData.cameraData.at(srcCamera).extrinsics.specTranslation.z);
+        } else {
+            transformationMatrix[0].push_back(eepromData.cameraData.at(srcCamera).extrinsics.translation.x);
+            transformationMatrix[1].push_back(eepromData.cameraData.at(srcCamera).extrinsics.translation.y);
+            transformationMatrix[2].push_back(eepromData.cameraData.at(srcCamera).extrinsics.translation.z);
+        }
+        std::vector<float> homogeneous_vector = {0, 0, 0, 1};
+        transformationMatrix.push_back(homogeneous_vector);
+        return transformationMatrix;
+    } else {
+        std::vector<std::vector<float>> destTransformationMatrixCurr =
+            computeExtrinsicMatrix(eepromData.cameraData.at(srcCamera).extrinsics.toCameraSocket, dstCamera, useSpecTranslation);
+        std::vector<std::vector<float>> currTransformationMatrixSrc = eepromData.cameraData.at(srcCamera).extrinsics.rotationMatrix;
+        if(useSpecTranslation) {
+            const dai::Point3f& mTrans = eepromData.cameraData.at(srcCamera).extrinsics.specTranslation;
+            if(mTrans.x == 0 && mTrans.y == 0 && mTrans.z == 0) {
+                throw std::runtime_error("Cannot use useSpecTranslation argument since specTranslation has {0, 0, 0}");
+            }
+            currTransformationMatrixSrc[0].push_back(eepromData.cameraData.at(srcCamera).extrinsics.specTranslation.x);
+            currTransformationMatrixSrc[1].push_back(eepromData.cameraData.at(srcCamera).extrinsics.specTranslation.y);
+            currTransformationMatrixSrc[2].push_back(eepromData.cameraData.at(srcCamera).extrinsics.specTranslation.z);
+        } else {
+            currTransformationMatrixSrc[0].push_back(eepromData.cameraData.at(srcCamera).extrinsics.translation.x);
+            currTransformationMatrixSrc[1].push_back(eepromData.cameraData.at(srcCamera).extrinsics.translation.y);
+            currTransformationMatrixSrc[2].push_back(eepromData.cameraData.at(srcCamera).extrinsics.translation.z);
+        }
+        std::vector<float> homogeneous_vector = {0, 0, 0, 1};
+        currTransformationMatrixSrc.push_back(homogeneous_vector);
+        return matMul(destTransformationMatrixCurr, currTransformationMatrixSrc);
+    }
+}
+
+bool CalibrationHandler::checkExtrinsicsLink(CameraBoardSocket srcCamera, CameraBoardSocket dstCamera) const {
+    if(!hasCameraCalibration(srcCamera) || !hasCameraCalibration(dstCamera)) {
+        return false;
+    }
+
+    bool isConnectionFound = false;
+    CameraBoardSocket currentCameraId = srcCamera;
+    while(currentCameraId != CameraBoardSocket::AUTO) {
+        if(eepromData.cameraData.find(currentCameraId) == eepromData.cameraData.end()) {
+            return false;
+        }
+        currentCameraId = eepromData.cameraData.at(currentCameraId).extrinsics.toCameraSocket;
+        if(currentCameraId == dstCamera) {
+            isConnectionFound = true;
+            break;
+        }
+    }
+    return isConnectionFound;
+}
+
+void CalibrationHandler::setBoardInfo(const std::string& boardName, const std::string& boardRev) {
+    eepromData.boardName = boardName;
+    eepromData.boardRev = boardRev;
+}
+
+void CalibrationHandler::setBoardInfo(const std::string& productName,
+                                      const std::string& boardName,
+                                      const std::string& boardRev,
+                                      const std::string& boardConf,
+                                      const std::string& hardwareConf,
+                                      const std::string& batchName,
+                                      uint64_t batchTime,
+                                      uint32_t boardOptions,
+                                      const std::string& boardCustom) {
+    eepromData.productName = productName;
+    eepromData.boardName = boardName;
+    eepromData.boardRev = boardRev;
+    eepromData.boardConf = boardConf;
+    eepromData.hardwareConf = hardwareConf;
+    eepromData.batchTime = batchTime;
+    eepromData.boardCustom = boardCustom;
+    eepromData.boardOptions = boardOptions;
+
+    if(batchName != "") {
+        logger::warn("batchName parameter not supported anymore");
+    }
+
+    // Bump version to V7
+    eepromData.version = 7;
+}
+
+void CalibrationHandler::setBoardInfo(const std::string& deviceName,
+                                      const std::string& productName,
+                                      const std::string& boardName,
+                                      const std::string& boardRev,
+                                      const std::string& boardConf,
+                                      const std::string& hardwareConf,
+                                      const std::string& batchName,
+                                      uint64_t batchTime,
+                                      uint32_t boardOptions,
+                                      const std::string& boardCustom) {
+    eepromData.productName = productName;
+    eepromData.boardName = boardName;
+    eepromData.boardRev = boardRev;
+    eepromData.boardConf = boardConf;
+    eepromData.hardwareConf = hardwareConf;
+    eepromData.batchTime = batchTime;
+    eepromData.boardCustom = boardCustom;
+    eepromData.boardOptions = boardOptions;
+    eepromData.deviceName = deviceName;
+
+    if(batchName != "") {
+        logger::warn("batchName parameter not supported anymore");
+    }
+
+    // Bump version to V7
+    eepromData.version = 7;
+}
+
+void CalibrationHandler::setDeviceName(const std::string& deviceName) {
+    eepromData.deviceName = deviceName;
+
+    // Bump version to V7
+    eepromData.version = 7;
+}
+
+void CalibrationHandler::setProductName(const std::string& productName) {
+    eepromData.productName = productName;
+
+    // Bump version to V7
+    eepromData.version = 7;
+}
+
+void CalibrationHandler::setCameraIntrinsics(CameraBoardSocket cameraId, const std::vector<std::vector<float>>& intrinsics, int width, int height) {
+    if(intrinsics.size() != 3 || intrinsics[0].size() != 3) {
+        throw std::runtime_error("Intrinsic Matrix size should always be 3x3 ");
+    }
+
+    if(intrinsics[1][0] != 0 || intrinsics[2][0] != 0 || intrinsics[2][1] != 0) {
+        throw std::runtime_error("Invalid Intrinsic Matrix entered!!");
+    }
+
+    if(eepromData.cameraData.find(cameraId) == eepromData.cameraData.end()) {
+        dai::CameraInfo camera_info;
+        camera_info.height = height;
+        camera_info.width = width;
+        camera_info.intrinsicMatrix = intrinsics;
+        eepromData.cameraData.emplace(cameraId, camera_info);
+    } else {
+        eepromData.cameraData.at(cameraId).height = height;
+        eepromData.cameraData.at(cameraId).width = width;
+        eepromData.cameraData.at(cameraId).intrinsicMatrix = intrinsics;
+    }
+    return;
+}
+
+void CalibrationHandler::setCameraIntrinsics(CameraBoardSocket cameraId, const std::vector<std::vector<float>>& intrinsics, Size2f frameSize) {
+    setCameraIntrinsics(cameraId, intrinsics, static_cast<int>(frameSize.width), static_cast<int>(frameSize.height));
+    return;
+}
+
+void CalibrationHandler::setCameraIntrinsics(CameraBoardSocket cameraId,
+                                             const std::vector<std::vector<float>>& intrinsics,
+                                             const std::tuple<int, int>& frameSize) {
+    setCameraIntrinsics(cameraId, intrinsics, std::get<0>(frameSize), std::get<1>(frameSize));
+    return;
+}
+
+void CalibrationHandler::setDistortionCoefficients(CameraBoardSocket cameraId, std::vector<float> distortionCoefficients) {
+    const size_t num = 14;
+
+    if(distortionCoefficients.size() > num) {
+        throw std::runtime_error("Too many distortion coefficients! Max is 14.");
+    }
+
+    if(num != 14) {
+        while(distortionCoefficients.size() != num) {
+            // Pad to 14 parameters.
+            // On the device it's static PoD, we always want it to be 14 parameters - for Perspective camera model, we return all 14; for Fisheye camera model,
+            // we only return the first four.
+            distortionCoefficients.push_back(0.0f);
+        }
+    }
+
+    if(eepromData.cameraData.find(cameraId) == eepromData.cameraData.end()) {
+        dai::CameraInfo camera_info;
+        camera_info.distortionCoeff = distortionCoefficients;
+        eepromData.cameraData.emplace(cameraId, camera_info);
+    } else {
+        eepromData.cameraData.at(cameraId).distortionCoeff = distortionCoefficients;
+    }
+    return;
+}
+
+void CalibrationHandler::setFov(CameraBoardSocket cameraId, float hfov) {
+    if(eepromData.cameraData.find(cameraId) == eepromData.cameraData.end()) {
+        dai::CameraInfo camera_info;
+        camera_info.specHfovDeg = hfov;
+        eepromData.cameraData.emplace(cameraId, camera_info);
+    } else {
+        eepromData.cameraData.at(cameraId).specHfovDeg = hfov;
+    }
+    return;
+}
+
+void CalibrationHandler::setLensPosition(CameraBoardSocket cameraId, uint8_t lensPosition) {
+    if(eepromData.cameraData.find(cameraId) == eepromData.cameraData.end()) {
+        dai::CameraInfo camera_info;
+        camera_info.lensPosition = lensPosition;
+        eepromData.cameraData.emplace(cameraId, camera_info);
+    } else {
+        eepromData.cameraData.at(cameraId).lensPosition = lensPosition;
+    }
+    return;
+}
+
+void CalibrationHandler::setCameraType(CameraBoardSocket cameraId, CameraModel cameraModel) {
+    if(eepromData.cameraData.find(cameraId) == eepromData.cameraData.end()) {
+        dai::CameraInfo camera_info;
+        camera_info.cameraType = cameraModel;
+        eepromData.cameraData.emplace(cameraId, camera_info);
+    } else {
+        eepromData.cameraData.at(cameraId).cameraType = cameraModel;
+    }
+    return;
+}
+
+void CalibrationHandler::updateCameraExtrinsics(CameraBoardSocket srcCameraId,
+                                                CameraBoardSocket destCameraId,
+                                                const std::vector<std::vector<float>>& rotationMatrix,
+                                                const std::vector<float>& translation) {
+    validateRotationMatrix3x3(rotationMatrix);
+    if(translation.size() != 3) {
+        throw std::runtime_error("Translation vector size should always be 3x1");
+    }
+
+    auto cameraData = eepromData.cameraData.find(srcCameraId);
+    if(cameraData == eepromData.cameraData.end()) {
+        throw std::runtime_error("No existing extrinsics found for the source camera socket");
+    }
+
+    if(cameraData->second.extrinsics.toCameraSocket == CameraBoardSocket::AUTO) {
+        throw std::runtime_error("Cannot overwrite extrinsics for source camera socket " + toString(srcCameraId)
+                                 + " because toCameraSocket is AUTO and there is no existing link to update.");
+    }
+
+    if(cameraData->second.extrinsics.toCameraSocket != destCameraId) {
+        throw std::runtime_error("overwriteExtrinsics crash: source camera socket " + toString(srcCameraId) + " has different toCameraSocket "
+                                 + toString(cameraData->second.extrinsics.toCameraSocket) + ". Correct link should be set with "
+                                 + "setCameraExtrinsics(sourceCameraSocket, destinationCameraSocket, rotationMatrix, translation, specTranslation).");
+    }
+
+    cameraData->second.extrinsics.rotationMatrix = rotationMatrix;
+    cameraData->second.extrinsics.translation = dai::Point3f(translation[0], translation[1], translation[2]);
+    return;
+}
+
+void CalibrationHandler::setCameraExtrinsics(CameraBoardSocket srcCameraId,
+                                             CameraBoardSocket destCameraId,
+                                             const std::vector<std::vector<float>>& rotationMatrix,
+                                             const std::vector<float>& translation,
+                                             const std::vector<float>& specTranslation) {
+    validateRotationMatrix3x3(rotationMatrix);
+    if(translation.size() != 3) {
+        throw std::runtime_error("Translation vector size should always be 3x1");
+    }
+    if(specTranslation.size() != 3) {
+        throw std::runtime_error("specTranslation vector size should always be 3x1");
+    }
+
+    dai::Extrinsics extrinsics;
+    extrinsics.rotationMatrix = rotationMatrix;
+    extrinsics.translation = dai::Point3f(translation[0], translation[1], translation[2]);
+    extrinsics.specTranslation = dai::Point3f(specTranslation[0], specTranslation[1], specTranslation[2]);
+    extrinsics.toCameraSocket = destCameraId;
+
+    if(eepromData.cameraData.find(srcCameraId) == eepromData.cameraData.end()) {
+        dai::CameraInfo camera_info;
+        camera_info.extrinsics = extrinsics;
+        eepromData.cameraData.emplace(srcCameraId, camera_info);
+    } else {
+        eepromData.cameraData[srcCameraId].extrinsics = extrinsics;
+    }
+    auto result = validateExtrinsicGraph();
+    if(result.error == ExtrinsicGraphError::CycleDetected) {
+        auto message = "Extrinsic cycle detected: " + toString(result.at) + " → " + toString(result.to);
+        throw std::runtime_error(message);
+    }
+    return;
+}
+
+void CalibrationHandler::setHousingToHousingOriginExtrinsics(std::vector<std::vector<float>> rotationMatrix, std::vector<float> translation, LengthUnit unit) {
+    validateRotationMatrix3x3(rotationMatrix);
+    if(translation.size() != 3) {
+        throw std::runtime_error("Translation vector size should always be 3x1");
+    }
+    const float scale = getDistanceUnitScale(getEepromTranslationUnits(), unit);
+    if(scale != 1.0f) {
+        for(auto& value : translation) {
+            value *= scale;
+        }
+    }
+    eepromData.housingExtrinsics.rotationMatrix = rotationMatrix;
+    eepromData.housingExtrinsics.translation = dai::Point3f(translation[0], translation[1], translation[2]);
+}
+
+void CalibrationHandler::setImuExtrinsics(CameraBoardSocket destCameraId,
+                                          const std::vector<std::vector<float>>& rotationMatrix,
+                                          const std::vector<float>& translation,
+                                          const std::vector<float>& specTranslation) {
+    validateRotationMatrix3x3(rotationMatrix);
+    if(translation.size() != 3) {
+        throw std::runtime_error("Translation vector size should always be 3x1");
+    }
+    if(specTranslation.size() != 3) {
+        throw std::runtime_error("specTranslation vector size should always be 3x1");
+    }
+
+    dai::Extrinsics extrinsics;
+    extrinsics.rotationMatrix = rotationMatrix;
+    extrinsics.translation = dai::Point3f(translation[0], translation[1], translation[2]);
+    extrinsics.specTranslation = dai::Point3f(specTranslation[0], specTranslation[1], specTranslation[2]);
+    extrinsics.toCameraSocket = destCameraId;
+    eepromData.imuExtrinsics = extrinsics;
+    return;
+}
+
+void CalibrationHandler::setStereoLeft(CameraBoardSocket cameraId, const std::vector<std::vector<float>>& rectifiedRotation) {
+    if(rectifiedRotation.size() != 3 || rectifiedRotation[0].size() != 3) {
+        throw std::runtime_error("Rotation Matrix size should always be 3x3 ");
+    }
+    eepromData.stereoRectificationData.rectifiedRotationLeft = rectifiedRotation;
+    eepromData.stereoRectificationData.leftCameraSocket = cameraId;
+    return;
+}
+
+void CalibrationHandler::setStereoRight(CameraBoardSocket cameraId, const std::vector<std::vector<float>>& rectifiedRotation) {
+    if(rectifiedRotation.size() != 3 || rectifiedRotation[0].size() != 3) {
+        throw std::runtime_error("Rotation Matrix size should always be 3x3 ");
+    }
+    eepromData.stereoRectificationData.rectifiedRotationRight = rectifiedRotation;
+    eepromData.stereoRectificationData.rightCameraSocket = cameraId;
+    return;
+}
+
+bool CalibrationHandler::validateCameraArray() const {
+    if(eepromData.cameraData.size() > 1) {
+        if(eepromData.cameraData.find(dai::CameraBoardSocket::CAM_B) != eepromData.cameraData.end()) {
+            return checkSrcLinks(dai::CameraBoardSocket::CAM_B) || checkSrcLinks(dai::CameraBoardSocket::CAM_C);
+        } else {
+            logger::debug(
+                "make sure the head of the Extrinsics is your left camera. Please cross check the data by creating a json file using "
+                "eepromToJsonFile(). ");
+            return false;
+        }
+    } else {
+        return true;  // Considering this would be bw1093 device
+    }
+}
+
+void CalibrationHandler::setAccelerometerCalibration(const std::vector<std::vector<float>>& calibration) {
+    validateImuCalibrationMatrix(calibration, "Accelerometer");
+    eepromData.imuCalibrationParams.accelerometer = calibration;
+}
+
+void CalibrationHandler::setGyroscopeCalibration(const std::vector<std::vector<float>>& calibration) {
+    validateImuCalibrationMatrix(calibration, "Gyroscope");
+    eepromData.imuCalibrationParams.gyroscope = calibration;
+}
+
+void CalibrationHandler::setImuParameters(const ImuCalibrationParams& params) {
+    eepromData.imuCalibrationParams.noise = params.noise;
+    setAccelerometerCalibration(params.accelerometer);
+    setGyroscopeCalibration(params.gyroscope);
+}
+
+bool CalibrationHandler::checkSrcLinks(CameraBoardSocket headSocket) const {
+    bool isConnectionValidated = true;
+    std::unordered_set<dai::CameraBoardSocket> marked;
+
+    while(headSocket != CameraBoardSocket::AUTO) {
+        if(eepromData.cameraData.find(headSocket) == eepromData.cameraData.end()) {
+            logger::debug(
+                "Found link to a CameraID whose camera calibration is not loaded. Please cross check the connection by creating a json file using "
+                "eepromToJsonFile(). ");
+            isConnectionValidated = false;
+            break;
+        }
+        if(marked.find(headSocket) != marked.end()) {
+            logger::debug(
+                "Loop found in extrinsics connection. Please cross check that the extrinsics are connected in an array in single direction by creating "
+                "a json file using eepromToJsonFile(). ");
+            isConnectionValidated = false;
+            break;
+        }
+        marked.insert(headSocket);
+        headSocket = eepromData.cameraData.at(headSocket).extrinsics.toCameraSocket;
+    }
+
+    if(isConnectionValidated && eepromData.cameraData.size() != marked.size()) {
+        isConnectionValidated = false;
+        logger::debug("Extrinsics between all the cameras is not found with single head and a tail");
+    }
+    return isConnectionValidated;
+}
+
+CBACalibrationHandler::CBACalibrationHandler() = default;
+
+CBACalibrationHandler::CBACalibrationHandler(const EepromData& newEepromData, std::optional<bool> validateCalibration)
+    : CalibrationHandler(validateCBAEepromData(newEepromData), validateCalibration) {}
+
+CBACalibrationHandler CBACalibrationHandler::fromJson(const nlohmann::json& eepromDataJson, std::optional<bool> validateCalibration) {
+    EepromData eepromData = eepromDataJson;
+    return CBACalibrationHandler(eepromData, validateCalibration);
+}
+
+bool CBACalibrationHandler::hasCameraCalibration() const {
+    return CalibrationHandler::hasCameraCalibration(cameraDataSocket);
+}
+
+std::vector<std::vector<float>> CBACalibrationHandler::getCameraIntrinsics(
+    int resizeWidth, int resizeHeight, Point2f topLeftPixelId, Point2f bottomRightPixelId, bool keepAspectRatio) const {
+    return CalibrationHandler::getCameraIntrinsics(cameraDataSocket, resizeWidth, resizeHeight, topLeftPixelId, bottomRightPixelId, keepAspectRatio);
+}
+
+std::vector<std::vector<float>> CBACalibrationHandler::getCameraIntrinsics(Size2f destShape,
+                                                                           Point2f topLeftPixelId,
+                                                                           Point2f bottomRightPixelId,
+                                                                           bool keepAspectRatio) const {
+    return CalibrationHandler::getCameraIntrinsics(cameraDataSocket, destShape, topLeftPixelId, bottomRightPixelId, keepAspectRatio);
+}
+
+std::vector<std::vector<float>> CBACalibrationHandler::getCameraIntrinsics(const std::tuple<int, int>& destShape,
+                                                                           Point2f topLeftPixelId,
+                                                                           Point2f bottomRightPixelId,
+                                                                           bool keepAspectRatio) const {
+    return CalibrationHandler::getCameraIntrinsics(cameraDataSocket, destShape, topLeftPixelId, bottomRightPixelId, keepAspectRatio);
+}
+
+std::tuple<std::vector<std::vector<float>>, int, int> CBACalibrationHandler::getDefaultIntrinsics() const {
+    return CalibrationHandler::getDefaultIntrinsics(cameraDataSocket);
+}
+
+uint32_t CBACalibrationHandler::getSourceHeight() const {
+    return CalibrationHandler::getSourceHeight(cameraDataSocket);
+}
+
+uint32_t CBACalibrationHandler::getSourceWidth() const {
+    return CalibrationHandler::getSourceWidth(cameraDataSocket);
+}
+
+std::vector<float> CBACalibrationHandler::getDistortionCoefficients() const {
+    return CalibrationHandler::getDistortionCoefficients(cameraDataSocket);
+}
+
+float CBACalibrationHandler::getFov(bool useSpec) const {
+    return CalibrationHandler::getFov(cameraDataSocket, useSpec);
+}
+
+uint8_t CBACalibrationHandler::getLensPosition() const {
+    return CalibrationHandler::getLensPosition(cameraDataSocket);
+}
+
+CameraModel CBACalibrationHandler::getDistortionModel() const {
+    return CalibrationHandler::getDistortionModel(cameraDataSocket);
+}
+
+void CBACalibrationHandler::setCameraIntrinsics(const std::vector<std::vector<float>>& intrinsics, Size2f frameSize) {
+    CalibrationHandler::setCameraIntrinsics(cameraDataSocket, intrinsics, frameSize);
+}
+
+void CBACalibrationHandler::setCameraIntrinsics(const std::vector<std::vector<float>>& intrinsics, int width, int height) {
+    CalibrationHandler::setCameraIntrinsics(cameraDataSocket, intrinsics, width, height);
+}
+
+void CBACalibrationHandler::setCameraIntrinsics(const std::vector<std::vector<float>>& intrinsics, const std::tuple<int, int>& frameSize) {
+    CalibrationHandler::setCameraIntrinsics(cameraDataSocket, intrinsics, frameSize);
+}
+
+void CBACalibrationHandler::setDistortionCoefficients(const std::vector<float>& distortionCoefficients) {
+    CalibrationHandler::setDistortionCoefficients(cameraDataSocket, distortionCoefficients);
+}
+
+void CBACalibrationHandler::setFov(float hfov) {
+    CalibrationHandler::setFov(cameraDataSocket, hfov);
+}
+
+void CBACalibrationHandler::setLensPosition(uint8_t lensPosition) {
+    CalibrationHandler::setLensPosition(cameraDataSocket, lensPosition);
+}
+
+void CBACalibrationHandler::setCameraType(CameraModel cameraModel) {
+    CalibrationHandler::setCameraType(cameraDataSocket, cameraModel);
+}
+
+}  // namespace dai

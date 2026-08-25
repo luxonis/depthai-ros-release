@@ -1,0 +1,1520 @@
+#include <catch2/catch_all.hpp>
+#include <cmath>
+#include <depthai/device/CalibrationHandler.hpp>
+#include <nlohmann/json.hpp>
+#include <stdexcept>
+#include <vector>
+
+using namespace dai;
+
+namespace {
+
+// Expose the protected helper for direct testing without changing
+// CalibrationHandler's production API visibility.
+struct CalibrationHandlerTestAccess : CalibrationHandler {
+    using CalibrationHandler::CalibrationHandler;
+    using CalibrationHandler::getCameraZAxisAngle;
+};
+
+}  // namespace
+
+static ImuNoiseParameters makeImuNoiseParams() {
+    ImuNoiseParameters params;
+    params.name = "BNO086";
+
+    params.accelerometer.x = {0.11f, 0.21f, 0.31f};
+    params.accelerometer.y = {0.12f, 0.22f, 0.32f};
+    params.accelerometer.z = {0.13f, 0.23f, 0.33f};
+
+    params.gyroscope.x = {0.41f, 0.51f, 0.61f};
+    params.gyroscope.y = {0.42f, 0.52f, 0.62f};
+    params.gyroscope.z = {0.43f, 0.53f, 0.63f};
+
+    return params;
+}
+
+static nlohmann::json makeImuNoiseParamsJson() {
+    return {{"name", "BNO086"},
+            {"accelerometer",
+             {{"x", {{"noiseDensity", 0.11f}, {"randomWalk", 0.21f}, {"biasStability", 0.31f}}},
+              {"y", {{"noiseDensity", 0.12f}, {"randomWalk", 0.22f}, {"biasStability", 0.32f}}},
+              {"z", {{"noiseDensity", 0.13f}, {"randomWalk", 0.23f}, {"biasStability", 0.33f}}}}},
+            {"gyroscope",
+             {{"x", {{"noiseDensity", 0.41f}, {"randomWalk", 0.51f}, {"biasStability", 0.61f}}},
+              {"y", {{"noiseDensity", 0.42f}, {"randomWalk", 0.52f}, {"biasStability", 0.62f}}},
+              {"z", {{"noiseDensity", 0.43f}, {"randomWalk", 0.53f}, {"biasStability", 0.63f}}}}}};
+}
+
+static void requireImuNoiseParamsEqual(const ImuNoiseParameters& actual, const ImuNoiseParameters& expected) {
+    REQUIRE(actual.name == expected.name);
+
+    REQUIRE(actual.accelerometer.x.noiseDensity == Catch::Approx(expected.accelerometer.x.noiseDensity).margin(1e-6));
+    REQUIRE(actual.accelerometer.x.randomWalk == Catch::Approx(expected.accelerometer.x.randomWalk).margin(1e-6));
+    REQUIRE(actual.accelerometer.x.biasStability == Catch::Approx(expected.accelerometer.x.biasStability).margin(1e-6));
+    REQUIRE(actual.accelerometer.y.noiseDensity == Catch::Approx(expected.accelerometer.y.noiseDensity).margin(1e-6));
+    REQUIRE(actual.accelerometer.y.randomWalk == Catch::Approx(expected.accelerometer.y.randomWalk).margin(1e-6));
+    REQUIRE(actual.accelerometer.y.biasStability == Catch::Approx(expected.accelerometer.y.biasStability).margin(1e-6));
+    REQUIRE(actual.accelerometer.z.noiseDensity == Catch::Approx(expected.accelerometer.z.noiseDensity).margin(1e-6));
+    REQUIRE(actual.accelerometer.z.randomWalk == Catch::Approx(expected.accelerometer.z.randomWalk).margin(1e-6));
+    REQUIRE(actual.accelerometer.z.biasStability == Catch::Approx(expected.accelerometer.z.biasStability).margin(1e-6));
+
+    REQUIRE(actual.gyroscope.x.noiseDensity == Catch::Approx(expected.gyroscope.x.noiseDensity).margin(1e-6));
+    REQUIRE(actual.gyroscope.x.randomWalk == Catch::Approx(expected.gyroscope.x.randomWalk).margin(1e-6));
+    REQUIRE(actual.gyroscope.x.biasStability == Catch::Approx(expected.gyroscope.x.biasStability).margin(1e-6));
+    REQUIRE(actual.gyroscope.y.noiseDensity == Catch::Approx(expected.gyroscope.y.noiseDensity).margin(1e-6));
+    REQUIRE(actual.gyroscope.y.randomWalk == Catch::Approx(expected.gyroscope.y.randomWalk).margin(1e-6));
+    REQUIRE(actual.gyroscope.y.biasStability == Catch::Approx(expected.gyroscope.y.biasStability).margin(1e-6));
+    REQUIRE(actual.gyroscope.z.noiseDensity == Catch::Approx(expected.gyroscope.z.noiseDensity).margin(1e-6));
+    REQUIRE(actual.gyroscope.z.randomWalk == Catch::Approx(expected.gyroscope.z.randomWalk).margin(1e-6));
+    REQUIRE(actual.gyroscope.z.biasStability == Catch::Approx(expected.gyroscope.z.biasStability).margin(1e-6));
+}
+
+// Helper to create calibration data directly in code
+static nlohmann::json loadCalibJson() {
+    nlohmann::json calibJson = {
+        {"cameraData",
+         {{0,
+           {{"cameraType", 0},
+            {"distortionCoeff", nlohmann::json::array()},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 0.0}, {"y", -4.9000301361084}, {"z", 0.0}}},
+              {"toCameraSocket", -1},
+              {"translation", {{"x", 0.0}, {"y", -4.9000301361084}, {"z", 0.0}}}}},
+            {"height", 1080},
+            {"intrinsicMatrix", {{613.353271484375, 0.0, 863.0769653320312}, {0.0, 612.0604248046875, 535.8486328125}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}},
+          {3,
+           {{"cameraType", 0},
+            {"distortionCoeff", nlohmann::json::array()},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 0.0}, {"y", -3.2509000301361084}, {"z", 0.0}}},
+              {"toCameraSocket", 1},
+              {"translation", {{"x", 0.0}, {"y", -3.2509000301361084}, {"z", 0.0}}}}},
+            {"height", 1080},
+            {"intrinsicMatrix", {{613.353271484375, 0.0, 863.0769653320312}, {0.0, 612.0604248046875, 535.8486328125}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}},
+          {2,
+           {{"cameraType", 0},
+            {"distortionCoeff", {0.0015864927554503083, -0.006391937844455242, 0.0014326359378173947, -0.0006138950702734292}},
+            {"extrinsics",
+             {{"rotationMatrix",
+               {{0.9999265074729919, 0.006867990363389254, -0.009992731735110283},
+                {-0.006895299535244703, 0.9999725818634033, -0.00270105991512537},
+                {0.00997390691190958, 0.002769764279946685, 0.9999464154243469}}},
+              {"specTranslation", {{"x", 6.548969268798828}, {"y", 0.01233222708106041}, {"z", 0.2119242250919342}}},
+              {"toCameraSocket", -1},
+              {"translation", {{"x", 6.548969268798828}, {"y", 0.01233222708106041}, {"z", 0.2119242250919342}}}}},
+            {"height", 1200},
+            {"intrinsicMatrix", {{613.353271484375, 0.0, 863.0769653320312}, {0.0, 612.0604248046875, 535.8486328125}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}},
+          {1,
+           {{"cameraType", 0},
+            {"distortionCoeff", {0.005035185255110264, -0.006586757488548756, -0.011081146076321602, 0.007332072593271732}},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+              {"toCameraSocket", 0},
+              {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+            {"height", 1200},
+            {"intrinsicMatrix", {{618.7698974609375, 0.0, 927.1336669921875}, {0.0, 617.28955078125, 548.0191040039062}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}}}}};
+
+    return calibJson;
+}
+
+static nlohmann::json loadValidCalibJson() {
+    nlohmann::json calibJson = {
+        {"cameraData",
+         {{0,
+           {{"cameraType", 0},
+            {"distortionCoeff", nlohmann::json::array()},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 0.0}, {"y", -4.9000301361084}, {"z", 0.0}}},
+              {"toCameraSocket", 1},
+              {"translation", {{"x", 0.0}, {"y", -4.9000301361084}, {"z", 0.0}}}}},
+            {"height", 1080},
+            {"intrinsicMatrix", {{613.353271484375, 0.0, 863.0769653320312}, {0.0, 612.0604248046875, 535.8486328125}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}},
+          {3,
+           {{"cameraType", 0},
+            {"distortionCoeff", nlohmann::json::array()},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+              {"toCameraSocket", -1},
+              {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+            {"height", 1080},
+            {"intrinsicMatrix", {{613.353271484375, 0.0, 863.0769653320312}, {0.0, 612.0604248046875, 535.8486328125}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}},
+          {2,
+           {{"cameraType", 0},
+            {"distortionCoeff", {0.0015864927554503083, -0.006391937844455242, 0.0014326359378173947, -0.0006138950702734292}},
+            {"extrinsics",
+             {{"rotationMatrix",
+               {{0.9999265074729919, 0.006867990363389254, -0.009992731735110283},
+                {-0.006895299535244703, 0.9999725818634033, -0.00270105991512537},
+                {0.00997390691190958, 0.002769764279946685, 0.9999464154243469}}},
+              {"specTranslation", {{"x", 6.548969268798828}, {"y", 0.01233222708106041}, {"z", 0.2119242250919342}}},
+              {"toCameraSocket", 3},
+              {"translation", {{"x", 6.548969268798828}, {"y", 0.01233222708106041}, {"z", 0.2119242250919342}}}}},
+            {"height", 1200},
+            {"intrinsicMatrix", {{613.353271484375, 0.0, 863.0769653320312}, {0.0, 612.0604248046875, 535.8486328125}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}},
+          {1,
+           {{"cameraType", 0},
+            {"distortionCoeff", {0.005035185255110264, -0.006586757488548756, -0.011081146076321602, 0.007332072593271732}},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 0.0}, {"y", -3.2509000301361084}, {"z", 0.0}}},
+              {"toCameraSocket", 2},
+              {"translation", {{"x", 0.0}, {"y", -3.2509000301361084}, {"z", 0.0}}}}},
+            {"height", 1200},
+            {"intrinsicMatrix", {{618.7698974609375, 0.0, 927.1336669921875}, {0.0, 617.28955078125, 548.0191040039062}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 0.0},
+            {"width", 1920}}}}}};
+
+    return calibJson;
+}
+
+static CalibrationHandler loadHandlerWithHousing() {
+    nlohmann::json calibJson = {
+        {"productName", "OAK-4-D-AF"},
+        {"cameraData",
+         {// ---------------------- CAM_C (socket 2) - Right stereo ----------------------
+          {2,
+           {{"cameraType", 0},
+            {"distortionCoeff", {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 3.75}, {"y", 0.0}, {"z", 0.0}}},
+              {"toCameraSocket", 0},
+              {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+            {"height", 800},
+            {"intrinsicMatrix", {{796.0, 0.0, 648.5}, {0.0, 796.0, 410.7}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 71.86},
+            {"width", 1280}}},
+
+          // ---------------------- CAM_A (socket 0) - RGB ----------------------
+          {0,
+           {{"cameraType", 0},
+            {"distortionCoeff", {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+              {"toCameraSocket", -1},
+              {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+            {"height", 2160},
+            {"intrinsicMatrix", {{3088.5, 0.0, 1964.4}, {0.0, 3087.1, 1032.4}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 68.79},
+            {"width", 3840}}},
+
+          // ---------------------- CAM_B (socket 1) - Left stereo ----------------------
+          {1,
+           {{"cameraType", 0},
+            {"distortionCoeff", {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}},
+            {"extrinsics",
+             {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+              {"specTranslation", {{"x", -7.5}, {"y", 0.0}, {"z", 0.0}}},
+              {"toCameraSocket", 2},
+              {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+            {"height", 800},
+            {"intrinsicMatrix", {{785.9, 0.0, 665.3}, {0.0, 785.9, 409.4}, {0.0, 0.0, 1.0}}},
+            {"lensPosition", 0},
+            {"specHfovDeg", 71.86},
+            {"width", 1280}}}}},
+
+        // ---------------------- Housing extrinsics ----------------------
+        {"housingExtrinsics",
+         {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+          {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+          {"toCameraSocket", 2},
+          {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+    };
+
+    return CalibrationHandler::fromJson(calibJson);
+}
+
+static CalibrationHandler loadHandlerWithHousingRotation() {
+    nlohmann::json calibJson = {{"cameraData",
+                                 {// ---------------------- Camera 2 ----------------------
+                                  {2,
+                                   {{"cameraType", 0},
+                                    {"distortionCoeff", {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+                                    {"extrinsics",
+                                     {// Rz(90°)
+                                      {"rotationMatrix", {{0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 0.0, 1.0}}},
+                                      {"specTranslation", {{"x", 1.5}, {"y", 0.5}, {"z", 0.2}}},
+                                      {"toCameraSocket", 0},
+                                      {"translation", {{"x", 1.0}, {"y", 0.0}, {"z", 0.0}}}}},
+                                    {"height", 100},
+                                    {"intrinsicMatrix", {{100.0, 0.0, 50.0}, {0.0, 100.0, 50.0}, {0.0, 0.0, 1.0}}},
+                                    {"lensPosition", 0},
+                                    {"specHfovDeg", 90.0},
+                                    {"width", 100}}},
+
+                                  // ---------------------- Camera 1 ----------------------
+                                  {1,
+                                   {{"cameraType", 0},
+                                    {"distortionCoeff", {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+                                    {"extrinsics",
+                                     {// Ry(90°)
+                                      {"rotationMatrix", {{0.0, 0.0, 1.0}, {0.0, 1.0, 0.0}, {-1.0, 0.0, 0.0}}},
+                                      {"specTranslation", {{"x", -1.2}, {"y", 0.3}, {"z", 0.1}}},
+                                      {"toCameraSocket", 2},
+                                      {"translation", {{"x", -1.0}, {"y", 0.0}, {"z", 0.0}}}}},
+                                    {"height", 100},
+                                    {"intrinsicMatrix", {{100.0, 0.0, 50.0}, {0.0, 100.0, 50.0}, {0.0, 0.0, 1.0}}},
+                                    {"lensPosition", 0},
+                                    {"specHfovDeg", 90.0},
+                                    {"width", 100}}},
+
+                                  // ---------------------- Camera 0 ----------------------
+                                  {0,
+                                   {{"cameraType", 0},
+                                    {"distortionCoeff", {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+                                    {"extrinsics",
+                                     {// Rx(90°)
+                                      {"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+                                      {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+                                      {"toCameraSocket", -1},
+                                      {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+                                    {"height", 100},
+                                    {"intrinsicMatrix", {{100.0, 0.0, 50.0}, {0.0, 100.0, 50.0}, {0.0, 0.0, 1.0}}},
+                                    {"lensPosition", 0},
+                                    {"specHfovDeg", 90.0},
+                                    {"width", 100}}}}},
+
+                                // ---------------------- Housing extrinsics ----------------------
+                                {"housingExtrinsics",
+                                 {// Rz(45°)
+                                  {"rotationMatrix", {{0.70710678, -0.70710678, 0.0}, {0.70710678, 0.70710678, 0.0}, {0.0, 0.0, 1.0}}},
+                                  {"specTranslation", {{"x", 1.5}, {"y", 2.5}, {"z", 3.5}}},
+                                  {"toCameraSocket", 2},
+                                  {"translation", {{"x", 1.0}, {"y", 2.0}, {"z", 3.0}}}}}};
+
+    return CalibrationHandler::fromJson(calibJson);
+}
+
+// Same camera chain as loadHandlerWithHousing (identity camera rotations, OAK-4-D-AF database)
+// but with a non-identity housing rotation Rz(90°) to exercise the database rotation path.
+static CalibrationHandler loadHandlerWithHousingRotationAndDB() {
+    auto baseHandler = loadHandlerWithHousing();
+    auto eepromData = baseHandler.getEepromData();
+
+    // Patch only housing rotation to Rz(90°), keep shared fixture data from loadHandlerWithHousing().
+    eepromData.housingExtrinsics.rotationMatrix = {{{0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
+
+    return CalibrationHandler(eepromData);
+}
+
+static CalibrationHandler loadHandlerWithImuExtrinsics() {
+    dai::EepromData data;
+    data.cameraData[CameraBoardSocket::CAM_A];
+
+    data.imuExtrinsics.rotationMatrix = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    data.imuExtrinsics.translation = {10.0f, -5.0f, 2.5f};
+    data.imuExtrinsics.specTranslation = {1.0f, 2.0f, 3.0f};
+    data.imuExtrinsics.toCameraSocket = CameraBoardSocket::CAM_A;
+
+    return CalibrationHandler(data);
+}
+
+static std::vector<std::pair<LengthUnit, float>> getAllUnitScales(LengthUnit baseUnit) {
+    const float cm = getLengthUnitMultiplier(baseUnit);
+    return {
+        {LengthUnit::METER, getLengthUnitMultiplier(LengthUnit::METER) / cm},
+        {LengthUnit::CENTIMETER, getLengthUnitMultiplier(LengthUnit::CENTIMETER) / cm},
+        {LengthUnit::MILLIMETER, getLengthUnitMultiplier(LengthUnit::MILLIMETER) / cm},
+        {LengthUnit::INCH, getLengthUnitMultiplier(LengthUnit::INCH) / cm},
+        {LengthUnit::FOOT, getLengthUnitMultiplier(LengthUnit::FOOT) / cm},
+        {LengthUnit::CUSTOM, getLengthUnitMultiplier(LengthUnit::CUSTOM) / cm},
+    };
+}
+
+static CalibrationHandler loadInvalidHandler() {
+    return CalibrationHandler::fromJson(loadCalibJson());
+}
+
+static CalibrationHandler loadValidHandler() {
+    return CalibrationHandler::fromJson(loadValidCalibJson());
+}
+
+static CalibrationHandler loadLegacyHandlerWithCamera() {
+    dai::EepromData data;
+    data.version = 3;
+
+    dai::CameraInfo cam;
+    cam.width = 1920;
+    cam.height = 1080;
+    cam.lensPosition = 120;
+    cam.specHfovDeg = 68.0f;
+    cam.cameraType = CameraModel::Perspective;
+    cam.intrinsicMatrix = {{1000.0f, 0.0f, 960.0f}, {0.0f, 1000.0f, 540.0f}, {0.0f, 0.0f, 1.0f}};
+    cam.extrinsics.rotationMatrix = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    cam.extrinsics.toCameraSocket = CameraBoardSocket::AUTO;
+
+    data.cameraData[CameraBoardSocket::CAM_A] = cam;
+    return CalibrationHandler(data);
+}
+
+TEST_CASE("Calibration availability depends on version and camera entries", "[hasCalibrationData][hasCameraCalibration]") {
+    dai::EepromData data;
+    data.version = 3;
+    data.cameraData[CameraBoardSocket::CAM_A] = dai::CameraInfo{};
+
+    CalibrationHandler legacy(data);
+    REQUIRE_FALSE(legacy.hasCalibrationData());
+    REQUIRE_FALSE(legacy.hasCameraCalibration(CameraBoardSocket::CAM_A));
+
+    data.version = 7;
+    CalibrationHandler valid(data);
+    REQUIRE(valid.hasCalibrationData());
+    REQUIRE(valid.hasCameraCalibration(CameraBoardSocket::CAM_A));
+    REQUIRE_FALSE(valid.hasCameraCalibration(CameraBoardSocket::CAM_B));
+}
+
+TEST_CASE("Lowest camera id lookup throws for empty camera calibration", "[getCameraWithLowestId]") {
+    dai::CalibrationHandler handler;
+    REQUIRE_THROWS_WITH(handler.getCameraWithLowestId(), Catch::Matchers::ContainsSubstring("No camera data available"));
+}
+
+TEST_CASE("Legacy calibration version blocks camera-level getters", "[legacyCalibration][getFov][getLensPosition][getDistortionModel][getCameraExtrinsics]") {
+    auto handler = loadLegacyHandlerWithCamera();
+
+    REQUIRE_THROWS_WITH(handler.getFov(CameraBoardSocket::CAM_A, true),
+                        Catch::Matchers::ContainsSubstring("There is no Camera data available corresponding to the requested cameraID"));
+    REQUIRE_THROWS_WITH(handler.getLensPosition(CameraBoardSocket::CAM_A),
+                        Catch::Matchers::ContainsSubstring("There is no Camera data available corresponding to the requested cameraID"));
+    REQUIRE_THROWS_WITH(handler.getDistortionModel(CameraBoardSocket::CAM_A),
+                        Catch::Matchers::ContainsSubstring("There is no Camera data available corresponding to the requested cameraID"));
+    REQUIRE_THROWS_WITH(handler.getCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_A, false),
+                        Catch::Matchers::ContainsSubstring("requested source cameraId"));
+}
+
+TEST_CASE("Missing camera intrinsics reports calibration guidance", "[getCameraIntrinsics]") {
+    dai::EepromData data;
+    data.version = 7;
+    CalibrationHandler handler(data);
+
+    REQUIRE_THROWS_WITH(handler.getCameraIntrinsics(CameraBoardSocket::CAM_A, 640, 480),
+                        Catch::Matchers::ContainsSubstring("Camera data available for the requested cameraID"));
+}
+
+TEST_CASE("Invalid camera ID throws", "[getCameraIntrinsics]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraIntrinsics(CameraBoardSocket::CAM_E, 1280, 800), std::runtime_error);
+}
+
+TEST_CASE("Invalid camera resolution", "[getCameraIntrinsics]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraIntrinsics(CameraBoardSocket::CAM_A, -1280, -800), std::runtime_error);
+}
+
+TEST_CASE("Valid intrinsics to camera", "[getCameraIntrinsics]") {
+    auto handler = loadInvalidHandler();
+    auto intrinsics = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, 1280, 800);
+    handler.setCameraIntrinsics(CameraBoardSocket::CAM_B, intrinsics, 1280, 800);
+    REQUIRE(handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, 1280, 800) == intrinsics);
+}
+
+TEST_CASE("Valid downscale; same aspect ratio", "[getCameraIntrinsics]") {
+    // JSON shows socket 1 has width=1920, height=1200 (16:10) -> usually CAM_B
+    const int nativeW = 1920;
+    const int nativeH = 1200;
+
+    const int downW = 640;
+    const int downH = 400;
+
+    auto handler = loadInvalidHandler();
+
+    // Get native intrinsics (should exist in JSON)
+    auto K_native = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, nativeW, nativeH);
+
+    // Expected scaled intrinsics (float division, correct denominators)
+    const float sx = static_cast<float>(downW) / static_cast<float>(nativeW);
+    const float sy = static_cast<float>(downH) / static_cast<float>(nativeH);
+
+    auto K_expected = K_native;
+    K_expected[0][0] *= sx;  // fx
+    K_expected[1][1] *= sy;  // fy
+    K_expected[0][2] *= sx;  // cx
+    K_expected[1][2] *= sy;  // cy
+
+    // Ask handler directly for the downscaled size (should auto-scale or have a fallback)
+    auto K_down = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, downW, downH);
+
+    REQUIRE(K_down[0][0] == Catch::Approx(K_expected[0][0]).margin(1e-6));  // fx
+    REQUIRE(K_down[1][1] == Catch::Approx(K_expected[1][1]).margin(1e-6));  // fy
+    REQUIRE(K_down[0][2] == Catch::Approx(K_expected[0][2]).margin(1e-6));  // cx
+    REQUIRE(K_down[1][2] == Catch::Approx(K_expected[1][2]).margin(1e-6));  // cy
+}
+
+TEST_CASE("Cropping updates principal point correctly", "[getCameraIntrinsics]") {
+    auto handler = loadInvalidHandler();
+
+    int width = 1280;
+    int height = 800;
+
+    auto intrinsicsFull = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, width, height);
+
+    // Crop 100 px from left/top and 100 px from right/bottom
+    Point2f topLeft(100, 100);
+    Point2f bottomRight(width - 100, height - 100);
+
+    auto intrinsicsCropped = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, width, height, topLeft, bottomRight);
+
+    // cx and cy should be shifted left/up by the crop offset
+    REQUIRE(intrinsicsCropped[0][2] == Catch::Approx(intrinsicsFull[0][2] - 100).margin(1e-6));  // cx
+    REQUIRE(intrinsicsCropped[1][2] == Catch::Approx(intrinsicsFull[1][2] - 100).margin(1e-6));  // cy
+}
+
+TEST_CASE("Keep aspect ratio scaling", "[getCameraIntrinsics]") {
+    auto handler = loadInvalidHandler();
+
+    int srcW = 1280, srcH = 800;
+    int dstW = 640, dstH = 480;  // different aspect ratio
+
+    auto intrinsicsFull = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, srcW, srcH);
+
+    auto intrinsicsAspectKept = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, dstW, dstH, {}, {}, true);
+    auto intrinsicsAspectFree = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, dstW, dstH, {}, {}, false);
+
+    // When keeping aspect ratio, fx/fy should scale uniformly
+    float uniformScale = std::min(static_cast<float>(dstW) / srcW, static_cast<float>(dstH) / srcH);
+
+    REQUIRE(intrinsicsAspectKept[0][0] == Catch::Approx(intrinsicsFull[0][0] * uniformScale).margin(1e-5));
+    REQUIRE(intrinsicsAspectKept[1][1] == Catch::Approx(intrinsicsFull[1][1] * uniformScale).margin(1e-5));
+
+    // When not keeping aspect ratio, scaling should differ in x/y
+    float scaleX = static_cast<float>(dstW) / srcW;
+    float scaleY = static_cast<float>(dstH) / srcH;
+    REQUIRE(intrinsicsAspectFree[0][0] == Catch::Approx(intrinsicsFull[0][0] * scaleX).margin(1e-5));
+    REQUIRE(intrinsicsAspectFree[1][1] == Catch::Approx(intrinsicsFull[1][1] * scaleY).margin(1e-5));
+}
+
+/*
+ This test need to have proper redefinition of the Calibration handler for it to be viable,
+ since there is a mistake with bottomRIght crop not even being initialized and as well the topLeft is appled
+ in newly defined system instead of being defined in the origin system
+
+TEST_CASE("Crop + keep aspect ratio scales and shifts correctly", "[getCameraIntrinsics]") {
+    auto handler = loadInvalidHandler();
+
+    int srcW = 1280;
+    int srcH = 800;
+    int dstW = 640;
+    int dstH = 480;
+
+    // Original intrinsics
+    auto intrinsicsFull = handler.getCameraIntrinsics(CameraBoardSocket::CAM_B, srcW, srcH);
+
+    // Define a crop: remove 100px from left/top and 50px from right/bottom
+    Point2f topLeft(150, 150);
+    Point2f bottomRight(dstW - 150, dstH - 150);
+
+    // Get intrinsics with crop + keepAspectRatio enabled
+    auto intrinsicsCropped = handler.getCameraIntrinsics(
+        CameraBoardSocket::CAM_B,
+        dstW,
+        dstH,
+        topLeft,
+        bottomRight,
+        false // keepAspectRatio
+    );
+
+    // Expected uniform scaling (smallest scale factor to keep aspect ratio)
+    float scale = std::min(static_cast<float>(dstW) / (bottomRight.x - topLeft.x),
+                           static_cast<float>(dstH) / (bottomRight.y - topLeft.y));
+
+    // Expected principal point shift (account for crop, then scale)
+    float expectedCx = (intrinsicsFull[0][2] - topLeft.x) * scale;
+    float expectedCy = (intrinsicsFull[1][2] - topLeft.y) * scale;
+
+    // Check focal lengths (uniform scaling)
+    REQUIRE(intrinsicsCropped[0][0] == Catch::Approx(intrinsicsFull[0][0] * scale).margin(1e-5)); // fx
+    REQUIRE(intrinsicsCropped[1][1] == Catch::Approx(intrinsicsFull[1][1] * scale).margin(1e-5)); // fy
+
+    // Check principal points
+    REQUIRE(intrinsicsCropped[0][2] == Catch::Approx(expectedCx).margin(1e-5)); // cx
+    REQUIRE(intrinsicsCropped[1][2] == Catch::Approx(expectedCy).margin(1e-5)); // cy
+}
+*/
+
+TEST_CASE("Invalid camera ID throws", "[getCameraExtrinsics]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraExtrinsics(CameraBoardSocket::CAM_E, CameraBoardSocket::CAM_B, false), std::runtime_error);
+}
+
+TEST_CASE("No connection between two origins throws", "[getCameraExtrinsics]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_C, false), std::runtime_error);
+}
+
+TEST_CASE("Valid extrinsics for directly linked cameras", "[getCameraExtrinsics]") {
+    auto handler = loadInvalidHandler();
+    auto M = handler.getCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, false);
+    // Expect identity 4×4
+    std::vector<std::vector<float>> I = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+    REQUIRE(M == I);
+}
+
+TEST_CASE("Extrinsics translation scales with measurement unit", "[getCameraExtrinsics][getCameraTranslationVector][getBaselineDistance]") {
+    auto handler = loadValidHandler();
+
+    std::vector<std::vector<float>> R = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    std::vector<float> tABcm = {100.0f, -50.0f, 25.0f};
+    std::vector<float> zeros = {0.0f, 0.0f, 0.0f};
+
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, R, tABcm, zeros);
+
+    auto Mmeters = handler.getCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false, LengthUnit::METER);
+    REQUIRE(Mmeters[0][3] == Catch::Approx(1.0f).margin(1e-6));
+    REQUIRE(Mmeters[1][3] == Catch::Approx(-0.5f).margin(1e-6));
+    REQUIRE(Mmeters[2][3] == Catch::Approx(0.25f).margin(1e-6));
+
+    auto tMillimeters = handler.getCameraTranslationVector(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false, LengthUnit::MILLIMETER);
+    REQUIRE(tMillimeters[0] == Catch::Approx(1000.0f).margin(1e-6));
+    REQUIRE(tMillimeters[1] == Catch::Approx(-500.0f).margin(1e-6));
+    REQUIRE(tMillimeters[2] == Catch::Approx(250.0f).margin(1e-6));
+
+    float baselineMeters = handler.getBaselineDistance(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false, LengthUnit::METER);
+    float expectedMeters = std::sqrt(1.0f * 1.0f + 0.5f * 0.5f + 0.25f * 0.25f);
+    REQUIRE(baselineMeters == Catch::Approx(expectedMeters).margin(1e-6));
+}
+
+TEST_CASE("Same-origin cameras return identity", "[getCameraExtrinsics]") {
+    auto handler = loadInvalidHandler();
+    // A→A should also be identity
+    auto M = handler.getCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_A, false);
+    std::vector<std::vector<float>> I = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+    REQUIRE(M == I);
+}
+
+TEST_CASE("Multiple independent origins detected", "[getCameraExtrinsics]") {
+    auto handler = loadInvalidHandler();
+    // Create two separate trees: A→(root), B→A and D→C (root)
+    auto R3 = std::vector<std::vector<float>>{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    auto zeros3 = std::vector<float>{0, 0, 0};
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_D, CameraBoardSocket::CAM_B, R3, zeros3, zeros3);
+    REQUIRE_THROWS_WITH(handler.validateCalibrationHandler(), Catch::Matchers::ContainsSubstring("Missing extrinsic link"));
+}
+
+TEST_CASE("Cyclic connection throws", "[getCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+
+    auto R3 = std::vector<std::vector<float>>{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    auto zeros3 = std::vector<float>{0, 0, 0};
+
+    // A → B → C
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, R3, zeros3, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_B, CameraBoardSocket::CAM_C, R3, zeros3, zeros3);
+
+    // Closing the cycle must throw
+    REQUIRE_THROWS_WITH(handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_A, R3, zeros3, zeros3),
+                        Catch::Matchers::ContainsSubstring("Extrinsic cycle detected"));
+}
+
+TEST_CASE("Dangling extrinsic reference throws", "[setCameraExtrinsics]") {
+    dai::EepromData data;
+
+    // Only CAM_A exists
+    data.cameraData[CameraBoardSocket::CAM_A];
+
+    dai::CalibrationHandler handler(data);
+
+    std::vector<std::vector<float>> R = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    std::vector<float> zeros = {0, 0, 0};
+
+    // CAM_A → CAM_B (CAM_B does NOT exist)
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, R, zeros, zeros);
+    REQUIRE_THROWS_WITH(handler.validateCalibrationHandler(), Catch::Matchers::ContainsSubstring("Dangling extrinsic reference"));
+}
+
+TEST_CASE("Long chain extrinsics composition", "[getCameraExtrinsics]") {
+    dai::CalibrationHandler handler = loadValidHandler();
+
+    auto R3 = std::vector<std::vector<float>>{{0.4f, 0.0f, 0.0f}, {0.0f, 0.3f, 0.0f}, {0.0f, 0.0f, 1.1f}};
+
+    auto zeros3 = std::vector<float>{0.0f, 0.0f, 0.0f};
+
+    // A → D → C → B → AUTO
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, R3, {0, 2, 0}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_B, CameraBoardSocket::CAM_C, R3, {1, -1, 0}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, R3, {0, 5, 3}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_D, CameraBoardSocket::AUTO, R3, zeros3, zeros3);
+
+    auto M = handler.getCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_D, false);
+
+    std::vector<std::vector<float>> expected = {
+        {0.064000003f, 0.0f, 0.0f, 0.400000006f}, {0.0f, 0.027000003f, 0.0f, 4.879999638f}, {0.0f, 0.0f, 1.33100009f, 3.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+
+    REQUIRE(M == expected);
+}
+
+TEST_CASE("Invalid camera ID throws", "[getCameraTranslationVector]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraTranslationVector(CameraBoardSocket::CAM_E, CameraBoardSocket::CAM_B, false), std::runtime_error);
+}
+
+TEST_CASE("No connection between two origins throws", "[getCameraTranslationVector]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraTranslationVector(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_C, false), std::runtime_error);
+}
+
+TEST_CASE("Same camera translation is zero vector", "[getCameraTranslationVector]") {
+    auto handler = loadInvalidHandler();
+    auto t = handler.getCameraTranslationVector(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_A, false);
+    std::vector<float> zero = {0.0f, 0.0f, 0.0f};
+    REQUIRE(t.size() == 3);
+    REQUIRE(t[0] == Catch::Approx(zero[0]).margin(1e-6));
+    REQUIRE(t[1] == Catch::Approx(zero[1]).margin(1e-6));
+    REQUIRE(t[2] == Catch::Approx(zero[2]).margin(1e-6));
+}
+
+TEST_CASE("Directly linked cameras translation", "[getCameraTranslationVector]") {
+    auto handler = loadValidHandler();
+
+    std::vector<std::vector<float>> R = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    std::vector<float> tAB = {1.0f, 2.0f, 3.0f};
+    std::vector<float> zeros = {0.0f, 0.0f, 0.0f};
+
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, R, tAB, zeros);
+
+    auto t = handler.getCameraTranslationVector(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false);
+
+    REQUIRE(t.size() == 3);
+    REQUIRE(t[0] == Catch::Approx(tAB[0]).margin(1e-6));
+    REQUIRE(t[1] == Catch::Approx(tAB[1]).margin(1e-6));
+    REQUIRE(t[2] == Catch::Approx(tAB[2]).margin(1e-6));
+}
+
+TEST_CASE("Long chain translation composition", "[getCameraTranslationVector]") {
+    dai::CalibrationHandler handler = loadValidHandler();
+    ;
+
+    std::vector<std::vector<float>> R = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+
+    auto zeros3 = std::vector<float>{0.0f, 0.0f, 0.0f};
+
+    // A → D → C → B → AUTO
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, R, {1.0f, 0.0f, 0.0f}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_B, CameraBoardSocket::CAM_C, R, {0.0f, 2.0f, 0.0f}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, R, {0.0f, 0.0f, 3.0f}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_D, CameraBoardSocket::AUTO, R, zeros3, zeros3);
+
+    auto t = handler.getCameraTranslationVector(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_D, false);
+
+    REQUIRE(t.size() == 3);
+    REQUIRE(t[0] == Catch::Approx(1.0f).margin(1e-6));
+    REQUIRE(t[1] == Catch::Approx(2.0f).margin(1e-6));
+    REQUIRE(t[2] == Catch::Approx(3.0f).margin(1e-6));
+}
+
+TEST_CASE("Spec vs calibration translation distinction", "[getCameraTranslationVector]") {
+    auto handler = loadValidHandler();
+
+    // Suppose board spec gives 1 cm offset, calibration gives 1.1 cm offset
+    std::vector<std::vector<float>> R = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    std::vector<float> specT = {1.0f, 0.0f, 0.0f};
+    std::vector<float> calibT = {1.1f, 0.0f, 0.0f};
+
+    // Fake "setCameraExtrinsics" stores both spec and calibration translations
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, R, calibT, specT);
+
+    auto tSpec = handler.getCameraTranslationVector(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, true);
+    auto tCalib = handler.getCameraTranslationVector(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false);
+
+    REQUIRE(tSpec.size() == 3);
+    REQUIRE(tCalib.size() == 3);
+    REQUIRE(tSpec[0] == Catch::Approx(1.0f).margin(1e-6));   // from board spec
+    REQUIRE(tCalib[0] == Catch::Approx(1.1f).margin(1e-6));  // from calibration data
+}
+
+TEST_CASE("Extrinsics translation matches getCameraTranslationVector", "[getCameraTranslationVector][getCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+
+    // Simple transform setup
+    std::vector<std::vector<float>> R = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    std::vector<float> tAB = {3.2f, -1.4f, 5.0f};
+    std::vector<float> specT = {3.0f, -1.0f, 5.0f};  // just to test useSpecTranslation
+
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, R, tAB, specT);
+
+    // Get 4x4 extrinsics matrix
+    auto M = handler.getCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false);
+    REQUIRE(M.size() == 4);
+    REQUIRE(M[0].size() == 4);
+
+    // Extract translation vector from matrix (last column)
+    std::vector<float> tFromExtrinsics = {M[0][3], M[1][3], M[2][3]};
+
+    // Get translation directly
+    auto tDirect = handler.getCameraTranslationVector(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false);
+
+    REQUIRE(tDirect.size() == 3);
+
+    // Compare element-wise
+    REQUIRE(tDirect[0] == Catch::Approx(tFromExtrinsics[0]).margin(1e-6));
+    REQUIRE(tDirect[1] == Catch::Approx(tFromExtrinsics[1]).margin(1e-6));
+    REQUIRE(tDirect[2] == Catch::Approx(tFromExtrinsics[2]).margin(1e-6));
+
+    // Also check consistency for spec translation
+    auto Mspec = handler.getCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, true);
+    std::vector<float> tSpecFromMatrix = {Mspec[0][3], Mspec[1][3], Mspec[2][3]};
+    auto tSpecDirect = handler.getCameraTranslationVector(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, true);
+
+    REQUIRE(tSpecDirect[0] == Catch::Approx(tSpecFromMatrix[0]).margin(1e-6));
+    REQUIRE(tSpecDirect[1] == Catch::Approx(tSpecFromMatrix[1]).margin(1e-6));
+    REQUIRE(tSpecDirect[2] == Catch::Approx(tSpecFromMatrix[2]).margin(1e-6));
+}
+
+TEST_CASE("Invalid camera ID throws", "[getCameraRotationMatrix]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraRotationMatrix(CameraBoardSocket::CAM_E, CameraBoardSocket::CAM_B), std::runtime_error);
+}
+
+TEST_CASE("No connection between two origins throws", "[getCameraRotationMatrix]") {
+    auto handler = loadInvalidHandler();
+    REQUIRE_THROWS_AS(handler.getCameraRotationMatrix(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_C), std::runtime_error);
+}
+
+TEST_CASE("Same camera rotation is identity", "[getCameraRotationMatrix]") {
+    auto handler = loadInvalidHandler();
+    auto R = handler.getCameraRotationMatrix(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_A);
+    std::vector<std::vector<float>> I = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    REQUIRE(R == I);
+}
+
+TEST_CASE("Directly linked cameras rotation", "[getCameraRotationMatrix]") {
+    auto handler = loadValidHandler();
+
+    std::vector<std::vector<float>> Rset = {{0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    std::vector<float> t = {0.0f, 0.0f, 0.0f};
+    std::vector<float> specT = {0.0f, 0.0f, 0.0f};
+
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, Rset, t, specT);
+
+    auto R = handler.getCameraRotationMatrix(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D);
+
+    REQUIRE(R.size() == 3);
+    REQUIRE(R[0].size() == 3);
+
+    for(int i = 0; i < 3; ++i)
+        for(int j = 0; j < 3; ++j) REQUIRE(R[i][j] == Catch::Approx(Rset[i][j]).margin(1e-6));
+}
+
+TEST_CASE("Long chain rotation composition", "[getCameraRotationMatrix]") {
+    dai::CalibrationHandler handler = loadValidHandler();
+
+    std::vector<std::vector<float>> Rz90 = {{0, -1, 0}, {1, 0, 0}, {0, 0, 1}};
+
+    auto zeros3 = std::vector<float>{0, 0, 0};
+
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, Rz90, {1, 0, 0}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_B, CameraBoardSocket::CAM_C, Rz90, {0, 2, 0}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, Rz90, {0, 0, 3}, zeros3);
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_D, CameraBoardSocket::AUTO, Rz90, zeros3, zeros3);
+
+    auto R = handler.getCameraRotationMatrix(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_D);
+
+    std::vector<std::vector<float>> expected = {{0, 1, 0}, {-1, 0, 0}, {0, 0, 1}};
+
+    for(int i = 0; i < 3; ++i)
+        for(int j = 0; j < 3; ++j) REQUIRE(R[i][j] == Catch::Approx(expected[i][j]).margin(1e-6));
+}
+
+TEST_CASE("Rotation matrix matches getCameraExtrinsics", "[getCameraRotationMatrix][getCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+
+    std::vector<std::vector<float>> Rset = {{0.866f, -0.5f, 0.0f}, {0.5f, 0.866f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    std::vector<float> t = {0.0f, 0.0f, 0.0f};
+    std::vector<float> specT = {0.0f, 0.0f, 0.0f};
+
+    handler.setCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, Rset, t, specT);
+
+    auto M = handler.getCameraExtrinsics(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D, false);
+    auto R = handler.getCameraRotationMatrix(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D);
+
+    REQUIRE(R.size() == 3);
+    REQUIRE(R[0].size() == 3);
+
+    // Top-left 3x3 of extrinsics must match rotation matrix
+    for(int i = 0; i < 3; ++i)
+        for(int j = 0; j < 3; ++j) REQUIRE(R[i][j] == Catch::Approx(M[i][j]).margin(1e-6));
+}
+
+TEST_CASE("updateCameraExtrinsics overwrites calibrated pose and preserves existing link metadata", "[updateCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+
+    const auto specBefore = handler.getCameraTranslationVector(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, true);
+    const auto updatedRotation = std::vector<std::vector<float>>{{0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    const auto updatedTranslation = std::vector<float>{8.0f, -2.0f, 1.5f};
+
+    handler.updateCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, updatedRotation, updatedTranslation);
+
+    const auto calibratedAfter = handler.getCameraTranslationVector(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, false);
+    const auto specAfter = handler.getCameraTranslationVector(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, true);
+    const auto rotationAfter = handler.getCameraRotationMatrix(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B);
+
+    REQUIRE(calibratedAfter[0] == Catch::Approx(updatedTranslation[0]).margin(1e-6));
+    REQUIRE(calibratedAfter[1] == Catch::Approx(updatedTranslation[1]).margin(1e-6));
+    REQUIRE(calibratedAfter[2] == Catch::Approx(updatedTranslation[2]).margin(1e-6));
+
+    REQUIRE(specAfter[0] == Catch::Approx(specBefore[0]).margin(1e-6));
+    REQUIRE(specAfter[1] == Catch::Approx(specBefore[1]).margin(1e-6));
+    REQUIRE(specAfter[2] == Catch::Approx(specBefore[2]).margin(1e-6));
+
+    for(size_t row = 0; row < updatedRotation.size(); ++row) {
+        for(size_t col = 0; col < updatedRotation[row].size(); ++col) {
+            REQUIRE(rotationAfter[row][col] == Catch::Approx(updatedRotation[row][col]).margin(1e-6));
+        }
+    }
+}
+
+TEST_CASE("updateCameraExtrinsics rejects missing source camera", "[updateCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+    const auto identity = std::vector<std::vector<float>>{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    const auto translation = std::vector<float>{0.0f, 0.0f, 0.0f};
+
+    REQUIRE_THROWS_WITH(handler.updateCameraExtrinsics(CameraBoardSocket::CAM_E, CameraBoardSocket::CAM_B, identity, translation),
+                        Catch::Matchers::ContainsSubstring("No existing extrinsics found for the source camera socket"));
+}
+
+TEST_CASE("updateCameraExtrinsics rejects destination mismatch", "[updateCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+    const auto identity = std::vector<std::vector<float>>{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    const auto translation = std::vector<float>{0.0f, 0.0f, 0.0f};
+
+    REQUIRE_THROWS_WITH(handler.updateCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_C, identity, translation),
+                        Catch::Matchers::ContainsSubstring("has different toCameraSocket"));
+}
+
+TEST_CASE("updateCameraExtrinsics rejects sources without an existing link", "[updateCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+    const auto identity = std::vector<std::vector<float>>{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    const auto translation = std::vector<float>{0.0f, 0.0f, 0.0f};
+
+    REQUIRE_THROWS_WITH(handler.updateCameraExtrinsics(CameraBoardSocket::CAM_D, CameraBoardSocket::CAM_D, identity, translation),
+                        Catch::Matchers::ContainsSubstring("toCameraSocket is AUTO"));
+}
+
+TEST_CASE("updateCameraExtrinsics rejects ragged rotation matrices", "[updateCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+    const auto raggedRotation = std::vector<std::vector<float>>{{1.0f, 0.0f, 0.0f}, {0.0f}, {0.0f}};
+    const auto translation = std::vector<float>{0.0f, 0.0f, 0.0f};
+
+    REQUIRE_THROWS_WITH(handler.updateCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, raggedRotation, translation),
+                        Catch::Matchers::ContainsSubstring("Rotation Matrix size should always be 3x3"));
+}
+
+TEST_CASE("setCameraExtrinsics rejects ragged rotation matrices", "[setCameraExtrinsics]") {
+    auto handler = loadValidHandler();
+    const auto raggedRotation = std::vector<std::vector<float>>{{1.0f, 0.0f, 0.0f}, {0.0f}, {0.0f}};
+    const auto translation = std::vector<float>{0.0f, 0.0f, 0.0f};
+
+    REQUIRE_THROWS_WITH(handler.setCameraExtrinsics(CameraBoardSocket::CAM_A, CameraBoardSocket::CAM_B, raggedRotation, translation, translation),
+                        Catch::Matchers::ContainsSubstring("Rotation Matrix size should always be 3x3"));
+}
+
+TEST_CASE("EEPROM data default set fields are present", "[getEepromData]") {
+    auto handler = loadInvalidHandler();
+    auto eeprom = handler.getEepromData();
+
+    // Version should be nonzero and reasonable
+    REQUIRE(eeprom.version == 7);
+
+    REQUIRE(eeprom.batchTime == 0);
+    REQUIRE(eeprom.boardOptions == 0);
+    REQUIRE(eeprom.stereoEnableDistortionCorrection == false);
+    REQUIRE(eeprom.stereoUseSpecTranslation == true);
+}
+
+TEST_CASE("EEPROM data round-trip preserves basic fields", "[getEepromData]") {
+    auto handler = loadInvalidHandler();
+
+    // --- Create dummy EEPROM data ---
+    dai::EepromData data;
+    data.version = 42;
+    data.productName = "SuperCam";
+    data.boardName = "MainBoard";
+    data.boardRev = "R2.1";
+    data.deviceName = "Unit001";
+    data.batchTime = 1717171717;
+    data.boardOptions = 0xCAFEBABE;
+    data.stereoUseSpecTranslation = false;
+    data.stereoEnableDistortionCorrection = true;
+    data.verticalCameraSocket = dai::CameraBoardSocket::CAM_B;
+
+    // --- Fill camera info for CAM_A and CAM_B ---
+    dai::CameraInfo camA;
+    camA.width = 1280;
+    camA.height = 800;
+    camA.lensPosition = 150;
+    camA.specHfovDeg = 70.5f;
+    camA.cameraType = dai::CameraModel::Perspective;
+    camA.intrinsicMatrix = {{1000.0f, 0.0f, 640.0f}, {0.0f, 1000.0f, 400.0f}, {0.0f, 0.0f, 1.0f}};
+    camA.distortionCoeff = {0.1f, -0.01f, 0.0f, 0.0f, 0.001f};
+    camA.extrinsics.rotationMatrix = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    camA.extrinsics.translation = {0.0f, 0.0f, 0.0f};
+
+    dai::CameraInfo camB = camA;
+    camB.width = 1920;
+    camB.height = 1080;
+    camB.lensPosition = 200;
+    camB.specHfovDeg = 60.0f;
+    camB.extrinsics.translation = {2.5f, 0.0f, 0.0f};
+
+    data.cameraData[dai::CameraBoardSocket::CAM_A] = camA;
+    data.cameraData[dai::CameraBoardSocket::CAM_B] = camB;
+
+    // --- Stereo rectification ---
+    data.stereoRectificationData.leftCameraSocket = dai::CameraBoardSocket::CAM_A;
+    data.stereoRectificationData.rightCameraSocket = dai::CameraBoardSocket::CAM_B;
+    data.stereoRectificationData.rectifiedRotationLeft = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    data.stereoRectificationData.rectifiedRotationRight = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+
+    // --- Store to handler and retrieve ---
+    auto newHandler = dai::CalibrationHandler(data);
+    auto loaded = newHandler.getEepromData();
+
+    // --- Verify simple fields ---
+    REQUIRE(loaded.version == data.version);
+    REQUIRE(loaded.productName == data.productName);
+    REQUIRE(loaded.boardName == data.boardName);
+    REQUIRE(loaded.deviceName == data.deviceName);
+    REQUIRE(loaded.boardOptions == data.boardOptions);
+    REQUIRE(loaded.stereoUseSpecTranslation == data.stereoUseSpecTranslation);
+    REQUIRE(loaded.stereoEnableDistortionCorrection == data.stereoEnableDistortionCorrection);
+    REQUIRE(loaded.verticalCameraSocket == data.verticalCameraSocket);
+
+    // --- Verify camera data ---
+    REQUIRE(loaded.cameraData.size() == 2);
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_A).width == camA.width);
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_A).height == camA.height);
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_A).lensPosition == camA.lensPosition);
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_B).lensPosition == camB.lensPosition);
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_A).specHfovDeg == camA.specHfovDeg);
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_B).specHfovDeg == camB.specHfovDeg);
+
+    // --- Verify stereo rectification ---
+    for(int i = 0; i < 3; ++i)
+        for(int j = 0; j < 3; ++j) {
+            REQUIRE(loaded.stereoRectificationData.rectifiedRotationLeft[i][j]
+                    == Catch::Approx(data.stereoRectificationData.rectifiedRotationLeft[i][j]).margin(1e-6));
+            REQUIRE(loaded.stereoRectificationData.rectifiedRotationRight[i][j]
+                    == Catch::Approx(data.stereoRectificationData.rectifiedRotationRight[i][j]).margin(1e-6));
+        }
+}
+
+TEST_CASE("EEPROM data stereo flags consistency", "[getEepromData]") {
+    auto handler = loadInvalidHandler();
+
+    dai::EepromData data;
+    data.stereoUseSpecTranslation = true;
+    data.stereoEnableDistortionCorrection = false;
+
+    auto newHandler1 = dai::CalibrationHandler(data);
+    auto loaded = newHandler1.getEepromData();
+
+    REQUIRE(loaded.stereoUseSpecTranslation == true);
+    REQUIRE(loaded.stereoEnableDistortionCorrection == false);
+
+    // Flip flags and verify again
+    data.stereoUseSpecTranslation = false;
+    data.stereoEnableDistortionCorrection = true;
+
+    auto newHandler2 = dai::CalibrationHandler(data);
+    loaded = newHandler2.getEepromData();
+
+    REQUIRE(loaded.stereoUseSpecTranslation == false);
+    REQUIRE(loaded.stereoEnableDistortionCorrection == true);
+}
+
+TEST_CASE("IMU calibration params setters preserve accelerometer and gyroscope values", "[imuCalibration][getEepromData]") {
+    dai::CalibrationHandler handler;
+
+    const std::vector<std::vector<float>> expectedAccelerometer = {{0.1f, -0.2f, 0.3f, 1.0f}, {1.1f, 1.2f, -0.4f, 0.5f}, {-0.6f, 9.81f, 0.01f, -0.02f}};
+    const std::vector<std::vector<float>> expectedGyroscope = {{-0.7f, 0.8f, -0.9f, 0.001f}, {0.002f, 0.003f, 1.3f, 1.4f}, {1.5f, -0.03f, 0.04f, -0.05f}};
+    const auto expectedImuNoiseParameters = makeImuNoiseParams();
+
+    handler.setAccelerometerCalibration(expectedAccelerometer);
+    handler.setGyroscopeCalibration(expectedGyroscope);
+    auto eepromData = handler.getEepromData();
+    eepromData.imuCalibrationParams.noise = expectedImuNoiseParameters;
+    handler = dai::CalibrationHandler(eepromData);
+
+    requireImuNoiseParamsEqual(handler.getImuNoiseParameters(), expectedImuNoiseParameters);
+
+    const auto eeprom = handler.getEepromData();
+    REQUIRE(eeprom.imuCalibrationParams.accelerometer == expectedAccelerometer);
+    REQUIRE(eeprom.imuCalibrationParams.gyroscope == expectedGyroscope);
+    requireImuNoiseParamsEqual(eeprom.imuCalibrationParams.noise, expectedImuNoiseParameters);
+}
+
+TEST_CASE("New IMU API preserves canonical calibration matrices and noise parameters", "[imuCalibration][newApi]") {
+    dai::CalibrationHandler handler;
+
+    const auto expectedNoise = makeImuNoiseParams();
+
+    ImuCalibrationParams params;
+    params.noise = expectedNoise;
+    params.accelerometer = {{1.011f, 0.012f, -0.031f, 0.1992955f}, {0.005f, 1.023f, 0.007f, -0.4218133f}, {-0.003f, 0.009f, 0.997f, -0.19935594f}};
+    params.gyroscope = {{1.01f, 0.01f, -0.02f, -0.05f}, {0.0f, 0.99f, 0.03f, 0.06f}, {0.0f, 0.0f, 1.02f, -0.07f}};
+
+    handler.setImuParameters(params);
+
+    const auto readBack = handler.getImuParameters();
+    REQUIRE(readBack.accelerometer == params.accelerometer);
+    REQUIRE(readBack.gyroscope == params.gyroscope);
+    requireImuNoiseParamsEqual(readBack.noise, expectedNoise);
+    requireImuNoiseParamsEqual(handler.getImuNoiseParameters(), expectedNoise);
+    requireImuNoiseParamsEqual(handler.getImuNoiseParameters(), expectedNoise);
+}
+
+TEST_CASE("EEPROM constructor preserves IMU calibration params", "[imuCalibration][getEepromData]") {
+    dai::EepromData data;
+    data.imuCalibrationParams.accelerometer = {{0.25f, -0.5f, 0.75f, 1.0f}, {1.25f, 1.5f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+    data.imuCalibrationParams.gyroscope = {{-1.0f, -0.5f, 0.0f, 0.5f}, {1.0f, 1.5f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+    data.imuCalibrationParams.noise = makeImuNoiseParams();
+
+    dai::CalibrationHandler handler(data);
+    const auto loaded = handler.getEepromData();
+
+    REQUIRE(loaded.imuCalibrationParams.accelerometer == data.imuCalibrationParams.accelerometer);
+    REQUIRE(loaded.imuCalibrationParams.gyroscope == data.imuCalibrationParams.gyroscope);
+    requireImuNoiseParamsEqual(loaded.imuCalibrationParams.noise, data.imuCalibrationParams.noise);
+    requireImuNoiseParamsEqual(handler.getImuNoiseParameters(), data.imuCalibrationParams.noise);
+}
+
+TEST_CASE("EEPROM cameraData is replaced correctly when constructing CalibrationHandler", "[getEepromData]") {
+    // Load some real eeprom data to get correct board config
+    auto baseHandler = loadInvalidHandler();
+    auto baseData = baseHandler.getEepromData();
+
+    // Create minimal custom cameraData (one entry)
+    dai::EepromData modified = baseData;
+    modified.cameraData.clear();
+
+    dai::CameraInfo customCam;
+    customCam.width = 640;
+    customCam.height = 480;
+
+    modified.cameraData[dai::CameraBoardSocket::CAM_C] = customCam;
+
+    // Create new handler based on modified EEPROM
+    dai::CalibrationHandler newHandler(modified);
+    auto loaded = newHandler.getEepromData();
+
+    // Check that our custom entry was preserved
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_C).width == 640);
+    REQUIRE(loaded.cameraData.at(dai::CameraBoardSocket::CAM_C).height == 480);
+
+    // Check that all camera sockets present in the board config still exist
+    // (i.e., CalibrationHandler has filled missing ones)
+    REQUIRE(loaded.cameraData.size() >= 1);
+}
+
+TEST_CASE("Stereo rectification matrices are preserved when passed to CalibrationHandler", "[rectification]") {
+    dai::EepromData data;
+
+    // Construct custom left and right rectification matrices
+    std::vector<std::vector<float>> R_left = {{1.0f, 0.1f, 0.2f}, {0.0f, 1.0f, 0.3f}, {0.0f, 0.0f, 1.0f}};
+
+    std::vector<std::vector<float>> R_right = {{0.99f, 0.05f, 0.0f}, {0.01f, 0.98f, 0.02f}, {0.0f, 0.0f, 1.0f}};
+
+    data.stereoRectificationData.rectifiedRotationLeft = R_left;
+    data.stereoRectificationData.rectifiedRotationRight = R_right;
+
+    dai::CalibrationHandler handler(data);
+    auto loaded = handler.getEepromData();
+
+    // Check size
+    REQUIRE(loaded.stereoRectificationData.rectifiedRotationLeft.size() == 3);
+    REQUIRE(loaded.stereoRectificationData.rectifiedRotationLeft[0].size() == 3);
+    REQUIRE(loaded.stereoRectificationData.rectifiedRotationRight.size() == 3);
+    REQUIRE(loaded.stereoRectificationData.rectifiedRotationRight[0].size() == 3);
+
+    // Check values match original
+    REQUIRE(loaded.stereoRectificationData.rectifiedRotationLeft == R_left);
+    REQUIRE(loaded.stereoRectificationData.rectifiedRotationRight == R_right);
+}
+
+TEST_CASE("CalibrationHandler throws when rectification rotation is missing", "[rectification]") {
+    dai::EepromData data;  // No rectification values
+
+    dai::CalibrationHandler handler(data);
+
+    REQUIRE_THROWS_WITH(handler.getStereoLeftRectificationRotation(), Catch::Matchers::ContainsSubstring("Rectified Rotation Matrix Doesn't exist"));
+
+    REQUIRE_THROWS_WITH(handler.getStereoRightRectificationRotation(), Catch::Matchers::ContainsSubstring("Rectified Rotation Matrix Doesn't exist"));
+}
+
+TEST_CASE("Stereo left and right rectification matrices are different when provided differently", "[rectification]") {
+    dai::EepromData data;
+
+    std::vector<std::vector<float>> R_left = {{1, 0.1f, 0}, {0, 1, 0.2f}, {0, 0, 1}};
+    std::vector<std::vector<float>> R_right = {{0.99f, 0, 0}, {0.0f, 1, 0.1f}, {0, 0, 1}};
+
+    data.stereoRectificationData.rectifiedRotationLeft = R_left;
+    data.stereoRectificationData.rectifiedRotationRight = R_right;
+
+    dai::CalibrationHandler handler(data);
+
+    REQUIRE(handler.getStereoLeftRectificationRotation() != handler.getStereoRightRectificationRotation());
+}
+
+TEST_CASE("EepromData constructor throws on cyclic extrinsic graph", "[CalibrationHandler][EepromData]") {
+    dai::EepromData data;
+    data.cameraData[CameraBoardSocket::CAM_A];
+    data.cameraData[CameraBoardSocket::CAM_B];
+
+    auto R = std::vector<std::vector<float>>{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    auto z = std::vector<float>{0, 0, 0};
+
+    data.cameraData[CameraBoardSocket::CAM_A].extrinsics.rotationMatrix = R;
+    data.cameraData[CameraBoardSocket::CAM_B].extrinsics.rotationMatrix = R;
+
+    data.cameraData[CameraBoardSocket::CAM_A].extrinsics.toCameraSocket = CameraBoardSocket::CAM_B;
+    data.cameraData[CameraBoardSocket::CAM_B].extrinsics.toCameraSocket = CameraBoardSocket::CAM_A;
+
+    REQUIRE_THROWS_WITH(dai::CalibrationHandler(data, true), Catch::Matchers::ContainsSubstring("Extrinsic cycle detected"));
+}
+
+TEST_CASE("EepromData constructor throws on dangling extrinsic reference", "[CalibrationHandler][EepromData]") {
+    dai::EepromData data;
+    data.cameraData[CameraBoardSocket::CAM_A];  // only A exists
+
+    // A points to B, but B is missing => dangling
+    data.cameraData[CameraBoardSocket::CAM_A].extrinsics.toCameraSocket = CameraBoardSocket::CAM_B;
+
+    REQUIRE_THROWS_WITH(dai::CalibrationHandler(data, true), Catch::Matchers::ContainsSubstring("Dangling extrinsic reference"));
+}
+
+TEST_CASE("EepromData constructor throws with missing graph", "[CalibrationHandler][EepromData]") {
+    dai::EepromData data;
+    data.cameraData[CameraBoardSocket::CAM_A];
+    data.cameraData[CameraBoardSocket::CAM_B];
+    data.cameraData[CameraBoardSocket::CAM_C];
+    data.cameraData[CameraBoardSocket::CAM_D];
+
+    // A points to B, C to D but C to D is missing =>  not full link!
+    auto R = std::vector<std::vector<float>>{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+    auto z = std::vector<float>{0, 0, 0};
+
+    data.cameraData[CameraBoardSocket::CAM_A].extrinsics.rotationMatrix = R;
+    data.cameraData[CameraBoardSocket::CAM_C].extrinsics.rotationMatrix = R;
+    data.cameraData[CameraBoardSocket::CAM_A].extrinsics.toCameraSocket = CameraBoardSocket::CAM_B;
+    data.cameraData[CameraBoardSocket::CAM_C].extrinsics.toCameraSocket = CameraBoardSocket::CAM_D;
+
+    REQUIRE_THROWS_WITH(dai::CalibrationHandler(data, true), Catch::Matchers::ContainsSubstring("Missing extrinsic link in calibration chain"));
+}
+
+// Helper function to compare 4x4 transformation matrices
+static void requireMatrixApproxEqual(const std::vector<std::vector<float>>& result, const std::vector<std::vector<float>>& expected, float margin = 1e-5) {
+    REQUIRE(result.size() == 4);
+    for(int i = 0; i < 4; i++) {
+        REQUIRE(result[i].size() == 4);
+        for(int j = 0; j < 4; j++) {
+            REQUIRE(result[i][j] == Catch::Approx(expected[i][j]).margin(margin));
+        }
+    }
+}
+
+TEST_CASE("getHousingCalibration - all cameras with specTranslation", "[housingDatabase]") {
+    auto handler = loadHandlerWithHousing();
+
+    // Expected transformations for CAM_A to housing systems
+    std::map<CameraBoardSocket, std::map<HousingCoordinateSystem, std::vector<std::vector<float>>>> expectedTransforms = {
+        {CameraBoardSocket::CAM_A,
+         {{HousingCoordinateSystem::CAM_A, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.32f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::CAM_B, {{1.0f, 0.0f, 0.0f, 3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::CAM_C, {{1.0f, 0.0f, 0.0f, -3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_A, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_B, {{1.0f, 0.0f, 0.0f, 3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_C, {{1.0f, 0.0f, 0.0f, -3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::VESA_A, {{1.0f, 0.0f, 0.0f, 3.75f}, {0.0f, 1.0f, 0.0f, 1.123f}, {0.0f, 0.0f, 1.0f, 6.083f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::VESA_B, {{1.0f, 0.0f, 0.0f, -3.75f}, {0.0f, 1.0f, 0.0f, 1.123f}, {0.0f, 0.0f, 1.0f, 6.083f}, {0.0f, 0.0f, 0.0f, 1.0f}}}}},
+        {CameraBoardSocket::CAM_B,
+         {{HousingCoordinateSystem::CAM_A, {{1.0f, 0.0f, 0.0f, -3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.32f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::CAM_B, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::CAM_C, {{1.0f, 0.0f, 0.0f, -7.5f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_A, {{1.0f, 0.0f, 0.0f, -3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_B, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_C, {{1.0f, 0.0f, 0.0f, -7.5f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::VESA_A, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.123f}, {0.0f, 0.0f, 1.0f, 6.083f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::VESA_B, {{1.0f, 0.0f, 0.0f, -7.5f}, {0.0f, 1.0f, 0.0f, 1.123f}, {0.0f, 0.0f, 1.0f, 6.083f}, {0.0f, 0.0f, 0.0f, 1.0f}}}}},
+        {CameraBoardSocket::CAM_C,
+         {{HousingCoordinateSystem::CAM_A, {{1.0f, 0.0f, 0.0f, 3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.32f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::CAM_B, {{1.0f, 0.0f, 0.0f, 7.5f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::CAM_C, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_A, {{1.0f, 0.0f, 0.0f, 3.75f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_B, {{1.0f, 0.0f, 0.0f, 7.5f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::FRONT_CAM_C, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::VESA_A, {{1.0f, 0.0f, 0.0f, 7.5f}, {0.0f, 1.0f, 0.0f, 1.123f}, {0.0f, 0.0f, 1.0f, 6.083f}, {0.0f, 0.0f, 0.0f, 1.0f}}},
+          {HousingCoordinateSystem::VESA_B, {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.123f}, {0.0f, 0.0f, 1.0f, 6.083f}, {0.0f, 0.0f, 0.0f, 1.0f}}}}}};
+
+    // Test all cameras and housing coordinate systems
+    for(const auto& [camera, housingSystems] : expectedTransforms) {
+        for(const auto& [housingCS, expected] : housingSystems) {
+            auto result = handler.getHousingCalibration(camera, housingCS, true);
+            requireMatrixApproxEqual(result, expected);
+        }
+    }
+}
+
+TEST_CASE("getHousingCalibration - database with non-identity housing rotation", "[housingDatabase]") {
+    auto handler = loadHandlerWithHousingRotationAndDB();
+
+    // Housing rotation is Rz(90°), so the database translations must be rotated
+    // into the housing-origin frame. Without the rotation, translations would be wrong.
+
+    // CAM_A → FRONT_CAM_A
+    auto camAResult = handler.getHousingCalibration(CameraBoardSocket::CAM_A, dai::HousingCoordinateSystem::FRONT_CAM_A, true);
+    std::vector<std::vector<float>> expectedCamA = {
+        {0.0f, 1.0f, 0.0f, 3.75f}, {-1.0f, 0.0f, 0.0f, 3.75f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+    requireMatrixApproxEqual(camAResult, expectedCamA, 1e-3);
+
+    // CAM_C → FRONT_CAM_A
+    auto camCResult = handler.getHousingCalibration(CameraBoardSocket::CAM_C, dai::HousingCoordinateSystem::FRONT_CAM_A, true);
+    std::vector<std::vector<float>> expectedCamC = {
+        {0.0f, 1.0f, 0.0f, 3.75f}, {-1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+    requireMatrixApproxEqual(camCResult, expectedCamC, 1e-3);
+
+    // CAM_B → FRONT_CAM_A
+    auto camBResult = handler.getHousingCalibration(CameraBoardSocket::CAM_B, dai::HousingCoordinateSystem::FRONT_CAM_A, true);
+    std::vector<std::vector<float>> expectedCamB = {
+        {0.0f, 1.0f, 0.0f, 3.75f}, {-1.0f, 0.0f, 0.0f, 7.5f}, {0.0f, 0.0f, 1.0f, -0.567f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+    requireMatrixApproxEqual(camBResult, expectedCamB, 1e-3);
+}
+
+TEST_CASE("getHousingCalibration - All cameras to housing with specTranslation", "[getHousingCalibration]") {
+    auto handler = loadHandlerWithHousingRotation();
+
+    // Test CAM_C
+    auto camCToHousing = handler.getHousingCalibration(CameraBoardSocket::CAM_C, dai::HousingCoordinateSystem::FRONT_CAM_A, true);
+
+    std::vector<std::vector<float>> expectedCamC = {
+        {0.707107f, 0.707107f, 0.0f, -2.82843f}, {-0.707107f, 0.707107f, 0.0f, -0.707107f}, {0.0f, 0.0f, 1.0f, -3.5f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+
+    requireMatrixApproxEqual(camCToHousing, expectedCamC, 1e-6);
+
+    // Test CAM_B
+    auto camBToHousing = handler.getHousingCalibration(CameraBoardSocket::CAM_B, dai::HousingCoordinateSystem::FRONT_CAM_A, true);
+
+    std::vector<std::vector<float>> expectedCamB = {
+        {0.0f, 0.707107f, 0.707107f, -3.46482f}, {0.0f, 0.707107f, -0.707107f, 0.353553f}, {-1.0f, 0.0f, 0.0f, -3.4f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+
+    requireMatrixApproxEqual(camBToHousing, expectedCamB, 1e-6);
+
+    // Test CAM_A
+    auto camAToHousing = handler.getHousingCalibration(CameraBoardSocket::CAM_A, dai::HousingCoordinateSystem::FRONT_CAM_A, true);
+
+    std::vector<std::vector<float>> expectedCamA = {
+        {-0.707107f, 0.707107f, 0.0f, -2.12132f}, {-0.707107f, -0.707107f, 0.0f, 0.707107f}, {0.0f, 0.0f, 1.0f, -3.7f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+
+    requireMatrixApproxEqual(camAToHousing, expectedCamA, 1e-6);
+}
+
+TEST_CASE("getHousingCalibration - All cameras to housing with regular translation", "[getHousingCalibration]") {
+    auto handler = loadHandlerWithHousingRotation();
+
+    // Test CAM_C
+    auto camCToHousing = handler.getHousingCalibration(CameraBoardSocket::CAM_C, dai::HousingCoordinateSystem::FRONT_CAM_A, false);
+
+    std::vector<std::vector<float>> expectedCamC = {
+        {0.707107f, 0.707107f, 0.0f, -2.12132f}, {-0.707107f, 0.707107f, 0.0f, -0.707107f}, {0.0f, 0.0f, 1.0f, -3.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+
+    requireMatrixApproxEqual(camCToHousing, expectedCamC, 1e-6);
+
+    // Test CAM_B
+    auto camBToHousing = handler.getHousingCalibration(CameraBoardSocket::CAM_B, dai::HousingCoordinateSystem::FRONT_CAM_A, false);
+
+    std::vector<std::vector<float>> expectedCamB = {
+        {0.0f, 0.707107f, 0.707107f, -2.82843f}, {0.0f, 0.707107f, -0.707107f, 0.0f}, {-1.0f, 0.0f, 0.0f, -3.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+
+    requireMatrixApproxEqual(camBToHousing, expectedCamB, 1e-6);
+
+    // Test CAM_A
+    auto camAToHousing = handler.getHousingCalibration(CameraBoardSocket::CAM_A, dai::HousingCoordinateSystem::FRONT_CAM_A, false);
+
+    std::vector<std::vector<float>> expectedCamA = {
+        {-0.707107f, 0.707107f, 0.0f, -1.41421f}, {-0.707107f, -0.707107f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, -3.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+
+    requireMatrixApproxEqual(camAToHousing, expectedCamA, 1e-6);
+}
+
+TEST_CASE("getHousingCalibration - Invalid source camera throws", "[getHousingCalibration]") {
+    auto handler = loadHandlerWithHousingRotation();
+
+    // Try to get housing calibration for a camera that doesn't exist
+    REQUIRE_THROWS_WITH(handler.getHousingCalibration(CameraBoardSocket::CAM_E, dai::HousingCoordinateSystem::FRONT_CAM_A, true),
+                        Catch::Matchers::ContainsSubstring("There is no Camera data available corresponding to the requested source cameraId"));
+}
+
+TEST_CASE("getHousingCalibration - Disconnected origin cameras throw", "[getHousingCalibration]") {
+    // Create handler with disconnected camera trees
+    nlohmann::json calibJson = {{"cameraData",
+                                 {// Camera 0 - one origin tree
+                                  {0,
+                                   {{"cameraType", 0},
+                                    {"distortionCoeff", {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+                                    {"extrinsics",
+                                     {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+                                      {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+                                      {"toCameraSocket", -1},  // origin
+                                      {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+                                    {"height", 100},
+                                    {"intrinsicMatrix", {{100.0, 0.0, 50.0}, {0.0, 100.0, 50.0}, {0.0, 0.0, 1.0}}},
+                                    {"lensPosition", 0},
+                                    {"specHfovDeg", 90.0},
+                                    {"width", 100}}},
+
+                                  // Camera 1 - different origin tree
+                                  {1,
+                                   {{"cameraType", 0},
+                                    {"distortionCoeff", {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+                                    {"extrinsics",
+                                     {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+                                      {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+                                      {"toCameraSocket", -1},  // different origin
+                                      {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}},
+                                    {"height", 100},
+                                    {"intrinsicMatrix", {{100.0, 0.0, 50.0}, {0.0, 100.0, 50.0}, {0.0, 0.0, 1.0}}},
+                                    {"lensPosition", 0},
+                                    {"specHfovDeg", 90.0},
+                                    {"width", 100}}}}},
+
+                                // Housing extrinsics points to camera 1
+                                {"housingExtrinsics",
+                                 {{"rotationMatrix", {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}},
+                                  {"specTranslation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
+                                  {"toCameraSocket", 1},
+                                  {"translation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}}}}};
+
+    auto handler = CalibrationHandler::fromJson(calibJson);
+
+    // Try to get housing calibration from CAM_A (origin 0) when housing points to origin 1
+    REQUIRE_THROWS_WITH(handler.getHousingCalibration(CameraBoardSocket::CAM_A, dai::HousingCoordinateSystem::FRONT_CAM_A, true),
+                        Catch::Matchers::ContainsSubstring("Missing extrinsic link from source camera to destination camera"));
+}
+
+TEST_CASE("getHousingCalibration scales translation for all units", "[getHousingCalibration][units]") {
+    auto handler = loadHandlerWithHousingRotation();
+    auto base = handler.getHousingCalibration(CameraBoardSocket::CAM_C, dai::HousingCoordinateSystem::FRONT_CAM_A, false, LengthUnit::CENTIMETER);
+
+    for(const auto& [unit, scale] : getAllUnitScales(LengthUnit::CENTIMETER)) {
+        auto result = handler.getHousingCalibration(CameraBoardSocket::CAM_C, dai::HousingCoordinateSystem::FRONT_CAM_A, false, unit);
+        auto expected = base;
+        expected[0][3] *= scale;
+        expected[1][3] *= scale;
+        expected[2][3] *= scale;
+        requireMatrixApproxEqual(result, expected);
+    }
+}
+
+TEST_CASE("getHousingCalibration scales spec translation for all units", "[getHousingCalibration][units]") {
+    auto handler = loadHandlerWithHousing();
+    auto base = handler.getHousingCalibration(CameraBoardSocket::CAM_C, dai::HousingCoordinateSystem::FRONT_CAM_A, true, LengthUnit::CENTIMETER);
+
+    for(const auto& [unit, scale] : getAllUnitScales(LengthUnit::CENTIMETER)) {
+        auto result = handler.getHousingCalibration(CameraBoardSocket::CAM_C, dai::HousingCoordinateSystem::FRONT_CAM_A, true, unit);
+        auto expected = base;
+        expected[0][3] *= scale;
+        expected[1][3] *= scale;
+        expected[2][3] *= scale;
+        requireMatrixApproxEqual(result, expected);
+    }
+}
+
+TEST_CASE("getImuToCameraExtrinsics scales translation for all units", "[getImuToCameraExtrinsics][units]") {
+    auto handler = loadHandlerWithImuExtrinsics();
+    auto base = handler.getImuToCameraExtrinsics(CameraBoardSocket::CAM_A, false, LengthUnit::CENTIMETER);
+
+    for(const auto& [unit, scale] : getAllUnitScales(LengthUnit::CENTIMETER)) {
+        auto result = handler.getImuToCameraExtrinsics(CameraBoardSocket::CAM_A, false, unit);
+        auto expected = base;
+        expected[0][3] *= scale;
+        expected[1][3] *= scale;
+        expected[2][3] *= scale;
+        requireMatrixApproxEqual(result, expected);
+    }
+}
+
+TEST_CASE("getCameraToImuExtrinsics scales translation for all units", "[getCameraToImuExtrinsics][units]") {
+    auto handler = loadHandlerWithImuExtrinsics();
+    auto base = handler.getCameraToImuExtrinsics(CameraBoardSocket::CAM_A, false, LengthUnit::CENTIMETER);
+
+    for(const auto& [unit, scale] : getAllUnitScales(LengthUnit::CENTIMETER)) {
+        auto result = handler.getCameraToImuExtrinsics(CameraBoardSocket::CAM_A, false, unit);
+        auto expected = base;
+        expected[0][3] *= scale;
+        expected[1][3] *= scale;
+        expected[2][3] *= scale;
+        requireMatrixApproxEqual(result, expected);
+    }
+}
+
+TEST_CASE("getCameraZAxisAngle returns angle between camera optical axes", "[getCameraZAxisAngle]") {
+    CalibrationHandlerTestAccess identityHandler(loadHandlerWithHousing().getEepromData());
+    REQUIRE(identityHandler.getCameraZAxisAngle(CameraBoardSocket::CAM_B, CameraBoardSocket::CAM_C) == Catch::Approx(0.0f).margin(1e-6));
+
+    CalibrationHandlerTestAccess rotatedHandler(CalibrationHandler::fromJson(loadValidCalibJson()).getEepromData());
+    const auto angle = rotatedHandler.getCameraZAxisAngle(CameraBoardSocket::CAM_C, CameraBoardSocket::CAM_D);
+    REQUIRE(angle == Catch::Approx(std::acos(0.9999464154243469f)).margin(1e-6));
+}
+
+TEST_CASE("CBA calibration handler updates a legacy single camera socket to a CBA socket", "[CBACalibrationHandler]") {
+    dai::EepromData data;
+
+    dai::CameraInfo cam;
+    cam.width = 640;
+    cam.height = 480;
+    cam.lensPosition = 42;
+    cam.specHfovDeg = 72.0f;
+
+    data.cameraData[CameraBoardSocket::CAM_B] = cam;
+
+    CBACalibrationHandler handler(data);
+    const auto loaded = handler.getEepromData();
+
+    REQUIRE(loaded.cameraData.size() == 1);
+    auto cbaCameraData = loaded.cameraData.find(CameraBoardSocket::CBA);
+    REQUIRE(cbaCameraData != loaded.cameraData.end());
+
+    const auto& loadedCam = cbaCameraData->second;
+    REQUIRE(loadedCam.width == cam.width);
+    REQUIRE(loadedCam.height == cam.height);
+    REQUIRE(loadedCam.lensPosition == cam.lensPosition);
+    REQUIRE(loadedCam.specHfovDeg == cam.specHfovDeg);
+}
+
+TEST_CASE("CBA calibration handler requires exactly one cameraData entry", "[CBACalibrationHandler]") {
+    dai::EepromData empty;
+    REQUIRE_THROWS_WITH(CBACalibrationHandler(empty), Catch::Matchers::ContainsSubstring("exactly one cameraData entry"));
+
+    dai::EepromData data;
+    data.cameraData[CameraBoardSocket::CAM_B] = dai::CameraInfo{};
+    data.cameraData[CameraBoardSocket::CAM_C] = dai::CameraInfo{};
+
+    REQUIRE_THROWS_WITH(CBACalibrationHandler(data), Catch::Matchers::ContainsSubstring("exactly one cameraData entry"));
+}

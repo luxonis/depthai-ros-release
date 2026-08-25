@@ -1,0 +1,75 @@
+{
+    "board_config":
+    {
+        "name": "OAK-D-SR-POE",
+        "revision": "R0M0E0",
+        "cameras":{
+            "CAM_B": {
+                "name": "left",
+                "hfov": 71.86,
+                "type": "color",
+                "extrinsics": {
+                    "to_cam": "CAM_C",
+                    "specTranslation": {
+                        "x": -2.0,
+                        "y": 0,
+                        "z": 0
+                    },
+                    "rotation":{
+                        "r": 0,
+                        "p": 0,
+                        "y": 0
+                    }
+                }
+            },
+            "CAM_C": {
+                "name": "right",
+                "hfov": 71.86,
+                "type": "color",
+                "extrinsics": {
+                    "to_cam": "CAM_A",
+                    "specTranslation": {
+                        "x": -1.7382,
+                        "y": 0,
+                        "z": 0
+                    },
+                    "rotation":{
+                        "r": 0,
+                        "p": 0,
+                        "y": 0
+                    }
+                }
+            },
+            "CAM_A": {
+                "name": "tof",
+                "hfov": 71.86,
+                "type": "tof"
+            }
+        },
+        "stereo_config":{
+            "left_cam": "CAM_B",
+            "right_cam": "CAM_C"
+        },
+        "imuExtrinsics":
+        {   
+            "sensors":{ 
+                "BNO": {
+                    "name" : "BNO086",
+                    "extrinsics": {
+                        "to_cam": "LEFT",
+                        "specTranslation": {
+                            "x": 0.2915,
+                            "y": -0.069,
+                            "z": 0.2832
+                            },
+                        "rotation":{
+                            "r": 180,
+                            "p": 0,
+                            "y": 270
+                            }
+                    }
+                }
+            }
+        }
+    }
+}

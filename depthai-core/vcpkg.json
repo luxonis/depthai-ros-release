@@ -1,0 +1,175 @@
+{
+    "name": "depthai",
+    "version": "3.0.0",
+    "dependencies": [
+        {
+            "name": "cpp-httplib",
+            "default-features": false
+        },
+        "yaml-cpp",
+        "zlib",
+        "bzip2",
+        "lz4",
+        "liblzma",
+        "fp16",
+        "neargye-semver",
+        "magic-enum",
+        "eigen3",
+        "argparse",
+        {
+            "name": "libarchive",
+            "default-features": false
+        },
+        {
+          "name": "vcpkg-cmake",
+          "host": true
+        },
+        {
+          "name": "vcpkg-cmake-config",
+          "host": true
+        }
+    ],
+    "overrides": [
+    {
+        "name": "vcpkg-tool-meson",
+        "version": "1.9.0"
+    }
+    ],
+    "features": {
+        "pcl-support": {
+            "description": "Enable PCL support",
+            "dependencies": [
+                {
+                    "name": "pcl",
+                    "default-features": false
+                }
+            ]
+        },
+        "curl-support": {
+            "description": "Enable CURL support",
+            "dependencies": [
+                "cpr"
+            ]
+        },
+        "kompute-support": {
+            "description": "Enable Kompute support",
+            "dependencies": [
+                "kompute",
+                {
+                    "name": "glslang",
+                    "default-features": false,
+                    "features": [
+                        "tools"
+                    ]
+                }
+            ]
+        },
+        "protobuf-support": {
+            "description": "Enable Protobuf support",
+            "dependencies": [
+                "protobuf"
+            ]
+        },
+        "python-bindings": {
+            "description": "Enable Python bindings",
+            "dependencies": [
+                "pybind11"
+            ]
+        },
+        "remote-connection-support": {
+            "description": "Enable remote connection support",
+            "dependencies": [
+                "websocketpp"
+            ]
+        },
+        "rtabmap": {
+            "description": "Enable RTAB-Map support",
+            "dependencies": [
+                {
+                    "name": "pcl",
+                    "default-features": false
+                },
+                {
+                    "name": "rtabmap",
+                    "default-features": false
+                }
+            ]
+        },
+        "apriltag": {
+            "description": "Enable AprilTag support",
+            "dependencies": [
+                {
+                    "name": "apriltag"
+                }
+            ]
+        },
+        "backward": {
+            "description": "Enable backward-cpp support",
+            "dependencies": [
+                {
+                    "name": "backward-cpp"
+                }
+            ]
+        },
+        "basalt": {
+            "description": "Enable Basalt support",
+            "dependencies": [
+                {
+                    "name": "basalt"
+                }
+            ]
+        },
+        "tests": {
+            "description": "Enable tests",
+            "dependencies": [
+                {
+                    "name": "catch2"
+                }
+            ]
+        },
+        "recording": {
+            "description": "Enable recording support",
+            "dependencies": [
+                {
+                    "name": "mp4v2"
+                }
+            ]
+        },
+        "xtensor-support": {
+            "description": "Enable xtensor support",
+            "dependencies": [
+                {
+                    "name": "xtensor"
+                },
+                {
+                    "name": "xtl"
+                }
+            ]
+        },
+        "public-deps": {
+            "description": "Enable public dependencies",
+            "dependencies": [
+                {
+                    "name": "libnop"
+                }
+            ]
+        },
+        "rerun-sdk": {
+            "description": "Enable Rerun SDK support",
+            "dependencies": [
+                {
+                    "name": "rerun-sdk"
+                }
+            ]
+        },
+        "zoo-helper": {
+            "description": "Enable Zoo helper build",
+            "dependencies": [
+                {
+                    "name": "argparse"
+                }
+            ]
+        }
+    },
+    "builtin-baseline": "6fa128f2b6e1dd260ebfb30fdb1c38a191369812"
+}

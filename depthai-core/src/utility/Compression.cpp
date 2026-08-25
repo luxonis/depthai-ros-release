@@ -1,0 +1,213 @@
+#include "depthai/utility/Compression.hpp"
+
+#include <fmt/format.h>
+#include "utility/FmtCompatibility.hpp"
+
+#include <cassert>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+
+#include "archive.h"
+#include "archive_entry.h"
+
+namespace dai {
+namespace utility {
+
+static void archiveFilesImpl(const std::filesystem::path& archivePath,
+                             const std::vector<std::filesystem::path>& filesOnDisk,
+                             const std::vector<std::string>& filesInArchive,
+                             bool gzip) {
+    if(filesOnDisk.size() != filesInArchive.size()) {
+        throw std::invalid_argument("filesOnDisk and filesInArchive must have the same size");
+    }
+
+    struct archive* a = nullptr;
+    struct archive_entry* entry = nullptr;
+    char buff[8192];
+    std::ifstream fileStream;
+
+    a = archive_write_new();
+    if(gzip) archive_write_add_filter_gzip(a);  // add gzip filter if requested
+    archive_write_set_format_pax_restricted(a);
+#ifdef _WIN32
+    archive_write_open_filename_w(a, archivePath.c_str());
+#else
+    archive_write_open_filename(a, archivePath.c_str());
+#endif
+    for(size_t i = 0; i < filesOnDisk.size(); i++) {
+        const auto& file = filesOnDisk[i];
+        const std::string& outFile = filesInArchive[i];
+        entry = archive_entry_new();
+        archive_entry_set_pathname(entry, outFile.c_str());
+        archive_entry_set_filetype(entry, AE_IFREG);
+        archive_entry_set_perm(entry, 0644);
+
+        auto entrysize = static_cast<la_int64_t>(std::filesystem::file_size(file));
+        archive_entry_set_size(entry, entrysize);
+
+        archive_write_header(a, entry);
+        fileStream.open(file, std::ios::binary);
+        while(fileStream.read(buff, sizeof(buff))) {
+            archive_write_data(a, buff, fileStream.gcount());
+        }
+        if(fileStream.gcount() > 0) {
+            archive_write_data(a, buff, fileStream.gcount());
+        }
+        fileStream.close();
+        archive_entry_free(entry);
+    }
+    archive_write_close(a);
+    archive_write_free(a);
+}
+
+void archiveFiles(const std::filesystem::path& archivePath,
+                  const std::vector<std::filesystem::path>& filesOnDisk,
+                  const std::vector<std::string>& filesInArchive) {
+    archiveFilesImpl(archivePath, filesOnDisk, filesInArchive, false);
+}
+
+void archiveFilesCompressed(const std::filesystem::path& archivePath,
+                            const std::vector<std::filesystem::path>& filesOnDisk,
+                            const std::vector<std::string>& filesInArchive) {
+    archiveFilesImpl(archivePath, filesOnDisk, filesInArchive, true);
+}
+
+std::vector<std::string> filenamesInArchive(const std::filesystem::path& archivePath) {
+    std::vector<std::string> result;
+
+    struct archive* a = nullptr;
+    struct archive_entry* entry = nullptr;
+
+    a = archive_read_new();
+    if(a == nullptr) {
+        throw std::runtime_error("Could not initialize archive.");
+    }
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+#if defined(_WIN32)
+    int r = archive_read_open_filename_w(a, archivePath.c_str(), 10240);
+#else
+    int r = archive_read_open_filename(a, archivePath.c_str(), 10240);
+#endif
+    if(r != ARCHIVE_OK) {
+        throw std::runtime_error("Could not open archive.");
+    }
+    while(archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+        result.emplace_back(archive_entry_pathname(entry));
+        archive_read_data_skip(a);
+    }
+    r = archive_read_free(a);
+    if(r != ARCHIVE_OK) {
+        throw std::runtime_error("Could not free archive.");
+    }
+
+    return result;
+}
+
+std::vector<uint8_t> readFileInArchive(const std::filesystem::path& archivePath, const std::string& fileInArchive) {
+    struct archive* a = nullptr;
+    struct archive_entry* entry = nullptr;
+
+    a = archive_read_new();
+    if(a == nullptr) {
+        throw std::runtime_error("Could not initialize archive.");
+    }
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+#if defined(_WIN32)
+    int r = archive_read_open_filename_w(a, archivePath.c_str(), 10240);
+#else
+    int r = archive_read_open_filename(a, archivePath.c_str(), 10240);
+#endif
+
+    bool archiveOpened = false;
+    if(r == ARCHIVE_OK) {
+        archiveOpened = true;
+        while(archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+            if(fileInArchive == archive_entry_pathname(entry)) {
+                std::vector<uint8_t> result;
+                char buff[8192];
+                la_ssize_t bytesRead = 0;
+                while((bytesRead = archive_read_data(a, buff, sizeof(buff))) > 0) {
+                    result.insert(result.end(), buff, buff + bytesRead);
+                }
+                if(bytesRead < 0) {
+                    archive_read_free(a);
+                    throw std::runtime_error(fmt::format("Could not read file {} from archive {}.", fileInArchive, archivePath));
+                }
+
+                r = archive_read_free(a);
+                if(r != ARCHIVE_OK) {
+                    throw std::runtime_error("Could not free archive.");
+                }
+                return result;
+            }
+            archive_read_data_skip(a);
+        }
+    }
+
+    r = archive_read_free(a);
+
+    if(!archiveOpened) {
+        throw std::runtime_error("Could not open archive.");
+    }
+    if(r != ARCHIVE_OK) {
+        throw std::runtime_error("Could not free archive.");
+    }
+    throw std::runtime_error(fmt::format("File {} not found in archive {}.", fileInArchive, archivePath));
+}
+
+void extractFiles(const std::filesystem::path& archivePath,
+                  const std::vector<std::string>& filesInArchive,
+                  const std::vector<std::filesystem::path>& filesOnDisk) {
+    if(filesInArchive.size() != filesOnDisk.size()) {
+        throw std::invalid_argument("filesInArchive and filesOnDisk must have the same size");
+    }
+
+    struct archive* a = nullptr;
+    struct archive_entry* entry = nullptr;
+    std::ofstream outFileStream;
+
+    a = archive_read_new();
+    if(a == nullptr) {
+        throw std::runtime_error("Could not initialize archive.");
+    }
+    archive_read_support_filter_all(a);
+    archive_read_support_format_all(a);
+#if defined(_WIN32)
+    int r = archive_read_open_filename_w(a, archivePath.c_str(), 10240);
+#else
+    int r = archive_read_open_filename(a, archivePath.c_str(), 10240);
+#endif
+    if(r != ARCHIVE_OK) {
+        throw std::runtime_error("Could not open archive.");
+    }
+    while(archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+        for(size_t i = 0; i < filesInArchive.size(); i++) {
+            const auto& file = filesInArchive[i];
+            if(file == archive_entry_pathname(entry)) {
+                const auto& outFile = filesOnDisk[i];
+                outFileStream.open(outFile, std::ios::binary);
+                if(!outFileStream) {
+                    throw std::runtime_error(fmt::format("Could not open file {} for writing.", outFile));
+                }
+                size_t size = archive_entry_size(entry);
+                std::vector<uint8_t> buff(size);
+                archive_read_data(a, buff.data(), size);
+                outFileStream.write(reinterpret_cast<char*>(buff.data()), size);
+                outFileStream.close();
+                break;
+            }
+        }
+        archive_read_data_skip(a);
+    }
+
+    r = archive_read_free(a);
+    if(r != ARCHIVE_OK) {
+        throw std::runtime_error("Could not free archive.");
+    }
+}
+
+}  // namespace utility
+}  // namespace dai

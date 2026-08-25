@@ -1,0 +1,15 @@
+name: xtensor-python
+channels:
+  - conda-forge
+dependencies:
+  # Build dependencies
+  - cmake
+  - ninja
+  # Host dependencies
+  - xtensor>=0.26,<0.27
+  - numpy>=2.0
+  - pybind11>=2.12.0,<3
+  # Test dependencies
+  - setuptools
+  - pytest
+
