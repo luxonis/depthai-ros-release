@@ -1,3 +1,36 @@
+## depthai-ros (lyrical) - 3.4.0-1
+
+The packages in the `depthai-ros` repository were released into the `lyrical` distro by running `/usr/bin/bloom-release --new-track --rosdistro lyrical --track lyrical depthai-ros` on `Tue, 25 Aug 2026 06:05:49 -0000`
+
+These packages were released:
+- `depthai-ros`
+- `depthai_bridge`
+- `depthai_descriptions`
+- `depthai_examples`
+- `depthai_filters`
+- `depthai_ros_driver`
+- `depthai_ros_msgs`
+
+These packages were explicitly ignored:
+- `depthai`
+
+Version of package(s) in repository `depthai-ros`:
+
+- upstream repository: https://github.com/luxonis/depthai-ros.git
+- release repository: unknown
+- rosdistro version: `null`
+- old version: `null`
+- new version: `3.4.0-1`
+
+Versions of tools used:
+
+- bloom version: `0.14.3`
+- catkin_pkg version: `1.1.0`
+- rosdep version: `0.26.0`
+- rosdistro version: `1.0.1`
+- vcstools version: `0.1.42`
+
+
 ## depthai-ros (kilted) - 3.3.0-1
 
 The packages in the `depthai-ros` repository were released into the `kilted` distro by running `/usr/bin/bloom-release --edit-track --rosdistro kilted depthai-ros` on `Thu, 11 Jun 2026 08:26:49 -0000`
