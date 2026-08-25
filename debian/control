@@ -1,0 +1,12 @@
+Source: ros-lyrical-depthai-filters
+Section: misc
+Priority: optional
+Maintainer: "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), libopencv-dev, ros-lyrical-ament-cmake-auto, ros-lyrical-cv-bridge, ros-lyrical-depthai-ros-msgs, ros-lyrical-image-transport, ros-lyrical-message-filters, ros-lyrical-rclcpp, ros-lyrical-rclcpp-components, ros-lyrical-sensor-msgs, ros-lyrical-vision-msgs, ros-lyrical-visualization-msgs, ros-lyrical-ros-workspace
+Homepage: https://index.ros.org/p/depthai_filters/#lyrical
+Standards-Version: 3.9.2
+
+Package: ros-lyrical-depthai-filters
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libopencv-dev, ros-lyrical-cv-bridge, ros-lyrical-depthai-ros-msgs, ros-lyrical-image-transport, ros-lyrical-message-filters, ros-lyrical-rclcpp, ros-lyrical-rclcpp-components, ros-lyrical-sensor-msgs, ros-lyrical-vision-msgs, ros-lyrical-visualization-msgs, ros-lyrical-ros-workspace
+Description: Depthai filters package
