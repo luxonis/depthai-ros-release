@@ -1,4 +1,0 @@
-vision_msgs/Pose2D top_left
-vision_msgs/Pose2D bottom_right
----
-int64 status
