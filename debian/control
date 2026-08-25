@@ -1,0 +1,12 @@
+Source: ros-lyrical-depthai-ros
+Section: misc
+Priority: optional
+Maintainer: "Aljaž Sebastjan Ahtik" <sebastjan.ahtik@luxonis.com>
+Build-Depends: debhelper (>= 9.0.0), ros-lyrical-ament-cmake, ros-lyrical-ros-workspace
+Homepage: https://index.ros.org/p/depthai-ros/#lyrical
+Standards-Version: 3.9.2
+
+Package: ros-lyrical-depthai-ros
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ros-lyrical-depthai (>= 3.7.1), ros-lyrical-depthai-bridge, ros-lyrical-depthai-descriptions, ros-lyrical-depthai-examples, ros-lyrical-depthai-filters, ros-lyrical-depthai-ros-driver, ros-lyrical-depthai-ros-msgs, ros-lyrical-ros-workspace
+Description: The depthai-ros package
