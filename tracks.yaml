@@ -125,8 +125,8 @@ tracks:
     - git-bloom-generate -y rosdynrpm --prefix release/:{ros_distro} :{ros_distro}
       -i :{release_inc} --require-os fedora rhel
     devel_branch: jazzy
-    last_release: v2.12.2-jazzy
-    last_version: 2.12.2
+    last_release: v2.13.0-jazzy
+    last_version: 2.13.0
     name: depthai-ros
     patches: null
     release_inc: '1'
