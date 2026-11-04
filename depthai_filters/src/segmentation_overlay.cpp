@@ -1,10 +1,6 @@
 #include "depthai_filters/segmentation_overlay.hpp"
 
-#if __has_include("cv_bridge/cv_bridge.hpp")
-    #include "cv_bridge/cv_bridge.hpp"
-#else
-    #include "cv_bridge/cv_bridge.h"
-#endif
+#include "cv_bridge/cv_bridge.hpp"
 #include "depthai_filters/utils.hpp"
 
 namespace depthai_filters {
@@ -13,8 +9,8 @@ SegmentationOverlay::SegmentationOverlay(const rclcpp::NodeOptions& options) : r
     onInit();
 }
 void SegmentationOverlay::onInit() {
-    previewSub.subscribe(this, "rgb/preview/image_raw", rclcpp::QoS(10));
-    segSub.subscribe(this, "nn/image_raw", rclcpp::QoS(10));
+    previewSub.subscribe(this, "rgb/preview/image_raw");
+    segSub.subscribe(this, "nn/image_raw");
     sync = std::make_unique<message_filters::Synchronizer<syncPolicy>>(syncPolicy(10), previewSub, segSub);
     sync->registerCallback(std::bind(&SegmentationOverlay::overlayCB, this, std::placeholders::_1, std::placeholders::_2));
     overlayPub = this->create_publisher<sensor_msgs::msg::Image>("overlay", 10);

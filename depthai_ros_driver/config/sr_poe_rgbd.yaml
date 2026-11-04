@@ -1,14 +1,15 @@
+
 /oak:
   ros__parameters:
-    driver:
+    camera:
+      i_enable_imu: true
       i_enable_ir: false
-    pipeline_gen:
-      i_enable_imu: false
       i_nn_type: none
       i_pipeline_type: rgbtof
-      i_enable_rgbd: true
-    left:
-      i_enable_default_output: false
-      i_publish_topic: false
+    pipeline_gen:
+      i_enable_sync: true
+    right:
+      i_low_bandwidth: true
+      i_synced: true
     tof:
-      i_fps: 30.0
+      i_synced: true

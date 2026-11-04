@@ -1,16 +1,18 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>depthai_descriptions</name>
-  <version>3.4.0</version>
+  <version>2.13.0</version>
   <description>The depthai_descriptions package</description>
 
   <author>Adam Serafin</author>
 
-  <maintainer email="sebastjan.ahtik@luxonis.com">Aljaž Sebastjan Ahtik</maintainer>
+  <!-- temporary -->
+  <maintainer email="matevz.morato@luxonis.com">Matevz Morato</maintainer>
 
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <build_depend>ros_environment</build_depend>
 
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>xacro</exec_depend>

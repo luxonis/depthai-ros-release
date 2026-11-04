@@ -1,9 +1,10 @@
 #pragma once
 
-#include <depthai/pipeline/datatype/ImageFiltersConfig.hpp>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "depthai/pipeline/datatype/CameraControl.hpp"
 #include "depthai/pipeline/datatype/ToFConfig.hpp"
 #include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
 
@@ -24,11 +25,11 @@ namespace param_handlers {
 
 class ToFParamHandler : public BaseParamHandler {
    public:
-    explicit ToFParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name, const std::string& deviceName, bool rsCompat);
+    explicit ToFParamHandler(std::shared_ptr<rclcpp::Node> node, const std::string& name);
     ~ToFParamHandler();
-    void declareParams(std::shared_ptr<dai::node::ToF> tof, dai::CameraBoardSocket socket);
-    std::unordered_map<std::string, dai::MedianFilterParams> medianFilterMap;
-    std::unordered_map<std::string, dai::ImageFiltersPresetMode> presetModeMap;
+    void declareParams(std::shared_ptr<dai::node::Camera> cam, std::shared_ptr<dai::node::ToF> tof);
+    dai::CameraControl setRuntimeParams(const std::vector<rclcpp::Parameter>& params) override;
+    std::unordered_map<std::string, dai::MedianFilter> medianFilterMap;
 };
 }  // namespace param_handlers
 }  // namespace depthai_ros_driver

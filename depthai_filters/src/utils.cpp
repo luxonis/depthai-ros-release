@@ -1,10 +1,6 @@
 #include "depthai_filters/utils.hpp"
 
-#if __has_include("cv_bridge/cv_bridge.hpp")
-    #include "cv_bridge/cv_bridge.hpp"
-#else
-    #include "cv_bridge/cv_bridge.h"
-#endif
+#include "cv_bridge/cv_bridge.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace depthai_filters {

@@ -1,17 +1,42 @@
 #include "depthai_bridge/TrackSpatialDetectionConverter.hpp"
 
-namespace depthai_bridge {
+#include "depthai/depthai.hpp"
+#include "depthai_bridge/depthaiUtility.hpp"
+
+namespace dai {
+
+namespace ros {
 
 TrackSpatialDetectionConverter::TrackSpatialDetectionConverter(
     std::string frameName, int width, int height, bool normalized, float thresh, bool getBaseDeviceTimestamp)
-    : BaseConverter(std::move(frameName), getBaseDeviceTimestamp), width(width), height(height), normalized(normalized), thresh(thresh) {}
+    : _frameName(frameName),
+      _width(width),
+      _height(height),
+      _normalized(normalized),
+      _thresh(thresh),
+      _steadyBaseTime(std::chrono::steady_clock::now()),
+      _getBaseDeviceTimestamp(getBaseDeviceTimestamp) {
+    _rosBaseTime = rclcpp::Clock().now();
+}
 
 TrackSpatialDetectionConverter::~TrackSpatialDetectionConverter() = default;
 
+void TrackSpatialDetectionConverter::updateRosBaseTime() {
+    updateBaseTime(_steadyBaseTime, _rosBaseTime, _totalNsChange);
+}
+
 void TrackSpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::Tracklets> trackData,
                                               std::deque<depthai_ros_msgs::msg::TrackDetection2DArray>& opDetectionMsgs) {
+    // setting the header
+    std::chrono::_V2::steady_clock::time_point tstamp;
+    if(_getBaseDeviceTimestamp)
+        tstamp = trackData->getTimestampDevice();
+    else
+        tstamp = trackData->getTimestamp();
+
     depthai_ros_msgs::msg::TrackDetection2DArray opDetectionMsg;
-    opDetectionMsg.header = getRosHeader(trackData);
+    opDetectionMsg.header.stamp = getFrameTime(_rosBaseTime, _steadyBaseTime, tstamp);
+    opDetectionMsg.header.frame_id = _frameName;
     opDetectionMsg.detections.resize(trackData->tracklets.size());
 
     // publishing
@@ -20,10 +45,10 @@ void TrackSpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::Tracklets> tr
         dai::Rect roi;
         float xMin, yMin, xMax, yMax;
 
-        if(normalized)
+        if(_normalized)
             roi = t.roi;
         else
-            roi = t.roi.denormalize(width, height);
+            roi = t.roi.denormalize(_width, _height);
 
         xMin = roi.topLeft().x;
         yMin = roi.topLeft().y;
@@ -38,7 +63,7 @@ void TrackSpatialDetectionConverter::toRosMsg(std::shared_ptr<dai::Tracklets> tr
         opDetectionMsg.detections[i].results.resize(1);
 
         opDetectionMsg.detections[i].results[0].hypothesis.class_id = std::to_string(t.label);
-        opDetectionMsg.detections[i].results[0].hypothesis.score = thresh;
+        opDetectionMsg.detections[i].results[0].hypothesis.score = _thresh;
 
         opDetectionMsg.detections[i].bbox.center.position.x = xCenter;
         opDetectionMsg.detections[i].bbox.center.position.y = yCenter;
@@ -71,4 +96,6 @@ depthai_ros_msgs::msg::TrackDetection2DArray::SharedPtr TrackSpatialDetectionCon
     return ptr;
 }
 
-}  // namespace depthai_bridge
+}  // namespace ros
+
+}  // namespace dai

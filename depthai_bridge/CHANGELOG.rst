@@ -2,31 +2,6 @@
 Changelog for package depthai_bridge
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-3.4.0 (2026-08-18)
-------------------
-* Fixes for ROS lyrical
-* Add OAK-4-PRO-W to tf mappings
-* Bringing to parity with develop-old
-
-3.3.0 (2026-06-10)
-------------------
-* Require DepthAI 3.7.1 packages.
-  * Adds telemetry to help us understand how the library is used so we can improve it
-  * To opt out set `DEPTHAI_TELEMETRY=0` in the environment
-
-3.2.1 (2026-05-15)
-------------------
-* Add support for RVC4 IMU magnetometer and rotation vector data.
-
-3.2.0 (2026-05-06)
-------------------
-* Expose pipeline auto calibration mode through the ROS driver.
-
-3.1.2 (2026-05-05)
-------------------
-* Require DepthAI 3.6.1 packages.
-* Update release preparation defaults for DepthAI 3.6.1.
-
 2.5.3 (2022-08-21)
 -----------
 * Updated release version
@@ -57,3 +32,4 @@ Changelog for package depthai_bridge
 * Release 2.5.0
 * add ament package:
 * created Bridge and Coverters to handle images, IMU and camera Info
+

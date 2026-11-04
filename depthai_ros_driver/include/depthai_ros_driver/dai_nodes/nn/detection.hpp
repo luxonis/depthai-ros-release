@@ -1,23 +1,21 @@
 #pragma once
 
-#include <depthai/modelzoo/Zoo.hpp>
-#include <depthai/nn_archive/NNArchive.hpp>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "depthai/common/CameraBoardSocket.hpp"
+#include "depthai-shared/common/CameraBoardSocket.hpp"
+#include "depthai/device/DataQueue.hpp"
 #include "depthai/device/Device.hpp"
-#include "depthai/pipeline/MessageQueue.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/node/DetectionNetwork.hpp"
 #include "depthai/pipeline/node/ImageManip.hpp"
+#include "depthai/pipeline/node/XLinkOut.hpp"
 #include "depthai_bridge/ImageConverter.hpp"
 #include "depthai_bridge/ImgDetectionConverter.hpp"
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/img_pub.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
-#include "depthai_ros_driver/dai_nodes/sensors/sensor_wrapper.hpp"
 #include "depthai_ros_driver/param_handlers/nn_param_handler.hpp"
 #include "rclcpp/node.hpp"
 
@@ -25,6 +23,7 @@ namespace depthai_ros_driver {
 
 namespace dai_nodes {
 namespace nn {
+template <typename T>
 class Detection : public BaseNode {
    public:
     /**
@@ -38,26 +37,19 @@ class Detection : public BaseNode {
     Detection(const std::string& daiNodeName,
               std::shared_ptr<rclcpp::Node> node,
               std::shared_ptr<dai::Pipeline> pipeline,
-              const std::string& deviceName,
-              bool rsCompat,
-              dai_nodes::SensorWrapper& camNode,
               const dai::CameraBoardSocket& socket = dai::CameraBoardSocket::CAM_A)
-        : BaseNode(daiNodeName, node, pipeline, deviceName, rsCompat) {
+        : BaseNode(daiNodeName, node, pipeline) {
         RCLCPP_DEBUG(getLogger(), "Creating node %s", daiNodeName.c_str());
         setNames();
-        detectionNode = pipeline->create<dai::node::DetectionNetwork>();
-        ph = std::make_unique<param_handlers::NNParamHandler>(node, daiNodeName, deviceName, rsCompat, socket);
-        ph->declareParams(detectionNode);
-        dai::NNModelDescription description;
-        description.model = ph->getParam<std::string>("i_nn_model");
-        detectionNode->build(camNode.getUnderlyingNode(), description);
-
+        detectionNode = pipeline->create<T>();
+        imageManip = pipeline->create<dai::node::ImageManip>();
+        ph = std::make_unique<param_handlers::NNParamHandler>(node, daiNodeName, socket);
+        ph->declareParams(detectionNode, imageManip);
         RCLCPP_DEBUG(getLogger(), "Node %s created", daiNodeName.c_str());
-        setInOut(pipeline);
+        imageManip->out.link(detectionNode->input);
+        setXinXout(pipeline);
     }
-    ~Detection() {
-        closeQueues();
-    };
+    ~Detection() = default;
     /**
      * @brief      Sets up the queues for the DetectionNetwork node and the ImageManip node. Also sets up the publishers for the DetectionNetwork node and the
      * ImageManip node.
@@ -65,11 +57,23 @@ class Detection : public BaseNode {
      * @param      device  The device
      */
     void setupQueues(std::shared_ptr<dai::Device> device) override {
-        nnQ = detectionNode->out.createOutputQueue(ph->getParam<int>("i_max_q_size"), false);
+        nnQ = device->getOutputQueue(nnQName, ph->getParam<int>("i_max_q_size"), false);
         std::string socketName = getSocketName(static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id")));
-        auto tfPrefix = getOpticalFrameName(socketName);
+        auto tfPrefix = getOpticalTFPrefix(socketName);
+        int width;
+        int height;
+        if(ph->getParam<bool>("i_disable_resize")) {
+            width = ph->getOtherNodeParam<int>(socketName, "i_preview_width");
+            height = ph->getOtherNodeParam<int>(socketName, "i_preview_height");
+        } else if(ph->getParam<bool>("i_desqueeze_output")) {
+            width = ph->getOtherNodeParam<int>(socketName, "i_width");
+            height = ph->getOtherNodeParam<int>(socketName, "i_height");
+        } else {
+            width = imageManip->initialConfig.getResizeConfig().width;
+            height = imageManip->initialConfig.getResizeConfig().height;
+        }
 
-        detConverter = std::make_unique<depthai_bridge::ImgDetectionConverter>(tfPrefix, false, ph->getParam<bool>("i_get_base_device_timestamp"));
+        detConverter = std::make_unique<dai::ros::ImgDetectionConverter>(tfPrefix, width, height, false, ph->getParam<bool>("i_get_base_device_timestamp"));
         detConverter->setUpdateRosBaseTimeOnToRosMsg(ph->getParam<bool>("i_update_ros_base_time_on_ros_msg"));
         rclcpp::PublisherOptions options;
         options.qos_overriding_options = rclcpp::QosOverridingOptions();
@@ -83,6 +87,8 @@ class Detection : public BaseNode {
             convConf.updateROSBaseTimeOnRosMsg = ph->getParam<bool>("i_update_ros_base_time_on_ros_msg");
 
             utils::ImgPublisherConfig pubConf;
+            pubConf.width = width;
+            pubConf.height = height;
             pubConf.daiNodeName = getName();
             pubConf.topicName = "~/" + getName() + "/passthrough";
             pubConf.infoSuffix = "/passthrough";
@@ -97,7 +103,7 @@ class Detection : public BaseNode {
      * @param[in]  in        The input of the DetectionNetwork node
      * @param[in]  linkType  The link type (not used)
      */
-    void link(dai::Node::Input& in, int /*linkType*/) override {
+    void link(dai::Node::Input in, int /*linkType*/) override {
         detectionNode->out.link(in);
     };
     /**
@@ -107,7 +113,7 @@ class Detection : public BaseNode {
      *
      * @return     The input of the DetectionNetwork node.
      */
-    dai::Node::Input& getInput(int /*linkType*/) override {
+    dai::Node::Input getInput(int /*linkType*/) override {
         if(ph->getParam<bool>("i_disable_resize")) {
             return detectionNode->input;
         }
@@ -123,9 +129,12 @@ class Detection : public BaseNode {
      *
      * @param      pipeline  The pipeline
      */
-    void setInOut(std::shared_ptr<dai::Pipeline> pipeline) override {
+    void setXinXout(std::shared_ptr<dai::Pipeline> pipeline) override {
+        xoutNN = pipeline->create<dai::node::XLinkOut>();
+        xoutNN->setStreamName(nnQName);
+        detectionNode->out.link(xoutNN->input);
         if(ph->getParam<bool>("i_enable_passthrough")) {
-            ptPub = setupOutput(pipeline, ptQName, &detectionNode->passthrough);
+            ptPub = setupOutput(pipeline, ptQName, [&](dai::Node::Input input) { detectionNode->passthrough.link(input); });
         }
     };
     /**
@@ -136,6 +145,10 @@ class Detection : public BaseNode {
         if(ph->getParam<bool>("i_enable_passthrough")) {
             ptQ->close();
         }
+    };
+
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override {
+        ph->setRuntimeParams(params);
     };
 
    private:
@@ -155,14 +168,15 @@ class Detection : public BaseNode {
             deq.pop_front();
         }
     };
-    std::unique_ptr<depthai_bridge::ImgDetectionConverter> detConverter;
+    std::unique_ptr<dai::ros::ImgDetectionConverter> detConverter;
     std::vector<std::string> labelNames;
     rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr detPub;
     std::shared_ptr<sensor_helpers::ImagePublisher> ptPub;
-    std::shared_ptr<dai::node::DetectionNetwork> detectionNode;
+    std::shared_ptr<T> detectionNode;
     std::shared_ptr<dai::node::ImageManip> imageManip;
     std::unique_ptr<param_handlers::NNParamHandler> ph;
-    std::shared_ptr<dai::MessageQueue> nnQ, ptQ;
+    std::shared_ptr<dai::DataOutputQueue> nnQ, ptQ;
+    std::shared_ptr<dai::node::XLinkOut> xoutNN;
     std::string nnQName, ptQName;
 };
 

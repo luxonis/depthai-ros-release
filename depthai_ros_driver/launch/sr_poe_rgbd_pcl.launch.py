@@ -19,7 +19,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, 'launch', 'driver.launch.py')),
+                os.path.join(depthai_prefix, 'launch', 'camera.launch.py')),
             launch_arguments={"name": name,
                               "params_file": params_file,
                               "parent_frame": LaunchConfiguration("parent_frame"),
@@ -30,8 +30,38 @@ def launch_setup(context, *args, **kwargs):
                                "cam_pitch": LaunchConfiguration("cam_pitch"),
                                "cam_yaw": LaunchConfiguration("cam_yaw"),
                                "use_rviz": LaunchConfiguration("use_rviz"),
+                               "rectify_rgb": "false"
                                }.items()),
 
+        LoadComposableNodes(
+            target_container=name+"_container",
+            composable_node_descriptions=[
+                    ComposableNode(
+                        package="image_proc",
+                        plugin="image_proc::RectifyNode",
+                        name="rectify_color_node_right",
+                        remappings=[('image', name+'/right/image_raw'),
+                                    ('camera_info', name+'/right/camera_info'),
+                                    ('image_rect', name+'/right/image_rect'),
+                                    ('image_rect/compressed', name+'/right/image_rect/compressed'),
+                                    ('image_rect/compressedDepth', name+'/right/image_rect/compressedDepth'),
+                                    ('image_rect/theora', name+'/right/image_rect/theora')]
+                    )
+            ]),
+        LoadComposableNodes(
+            target_container=name+"_container",
+            composable_node_descriptions=[
+                    ComposableNode(
+                    package='depth_image_proc',
+                    plugin='depth_image_proc::PointCloudXyzrgbNode',
+                    name='point_cloud_xyzright_node',
+                    remappings=[('depth_registered/image_rect', name+'/tof/image_raw'),
+                                ('rgb/image_rect_color', name+'/right/image_rect'),
+                                ('rgb/camera_info', name+'/right/camera_info'),
+                                ('points', name+'/points')]
+                    ),
+            ],
+        ),
     ]
 
 
@@ -40,7 +70,7 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),
         DeclareLaunchArgument("camera_model", default_value="OAK-D-SR-POE"),
-        DeclareLaunchArgument("parent_frame", default_value="oak_parent_frame"),
+        DeclareLaunchArgument("parent_frame", default_value="oak-d-base-frame"),
         DeclareLaunchArgument("cam_pos_x", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_y", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_z", default_value="0.0"),

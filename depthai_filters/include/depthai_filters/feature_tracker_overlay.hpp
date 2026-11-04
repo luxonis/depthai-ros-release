@@ -1,15 +1,11 @@
 #pragma once
 
-#if __has_include("cv_bridge/cv_bridge.hpp")
-    #include "cv_bridge/cv_bridge.hpp"
-#else
-    #include "cv_bridge/cv_bridge.h"
-#endif
+#include "cv_bridge/cv_bridge.hpp"
 #include "depthai_ros_msgs/msg/tracked_features.hpp"
 #include "geometry_msgs/msg/point.hpp"
-#include "message_filters/subscriber.hpp"
-#include "message_filters/sync_policies/approximate_time.hpp"
-#include "message_filters/synchronizer.hpp"
+#include "message_filters/subscriber.h"
+#include "message_filters/sync_policies/approximate_time.h"
+#include "message_filters/synchronizer.h"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
 

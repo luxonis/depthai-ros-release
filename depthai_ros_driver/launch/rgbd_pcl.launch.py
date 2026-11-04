@@ -19,7 +19,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, "launch", "driver.launch.py")
+                os.path.join(depthai_prefix, "launch", "camera.launch.py")
             ),
             launch_arguments={
                 "name": name,
@@ -32,6 +32,7 @@ def launch_setup(context, *args, **kwargs):
                 "cam_pitch": LaunchConfiguration("cam_pitch"),
                 "cam_yaw": LaunchConfiguration("cam_yaw"),
                 "use_rviz": LaunchConfiguration("use_rviz"),
+                "pointcloud.enable": "true",
                 "rs_compat": LaunchConfiguration("rs_compat"),
             }.items(),
         ),
@@ -43,7 +44,7 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),
         DeclareLaunchArgument("camera_model", default_value="OAK-D"),
-        DeclareLaunchArgument("parent_frame", default_value="oak_parent_frame"),
+        DeclareLaunchArgument("parent_frame", default_value="oak-d-base-frame"),
         DeclareLaunchArgument("cam_pos_x", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_y", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_z", default_value="0.0"),
@@ -55,10 +56,7 @@ def generate_launch_description():
             default_value=os.path.join(depthai_prefix, "config", "rgbd.yaml"),
         ),
         DeclareLaunchArgument("use_rviz", default_value="False"),
-        DeclareLaunchArgument(
-            "rviz_config",
-            default_value=os.path.join(depthai_prefix, "config", "rviz", "rgbd.rviz"),
-        ),
+        DeclareLaunchArgument("rectify_rgb", default_value="True"),
         DeclareLaunchArgument("rs_compat", default_value="False"),
     ]
 

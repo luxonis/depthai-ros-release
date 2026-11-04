@@ -1,12 +1,16 @@
 /oak:
   ros__parameters:
-    pipeline_gen:
+    camera:
       i_nn_type: spatial
-      i_enable_rgbd: true
-    stereo:
-      i_subpixel: true
-      i_publish_topic: false
+    rgb:
+      i_enable_preview: true
+      i_keep_preview_aspect_ratio: false
     nn:
       i_enable_passthrough: true
-      i_enable_passthrough_depth: true
+      i_disable_resize: true
+    stereo:
+      i_subpixel: true
+/spatial_bb_node:
+  ros__parameters:
+    desqueeze: true
 

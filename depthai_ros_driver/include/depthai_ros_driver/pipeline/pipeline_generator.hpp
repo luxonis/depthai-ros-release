@@ -1,13 +1,11 @@
 #pragma once
 
 #include <memory>
-#include <pluginlib/class_loader.hpp>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
-#include "depthai_ros_driver/pipeline/base_pipeline.hpp"
 
 namespace dai {
 class Pipeline;
@@ -51,18 +49,18 @@ class PipelineGenerator {
      *
      * @return     Vector BaseNodes created.
      */
-    void createPipeline(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<dai::Device> device, std::shared_ptr<dai::Pipeline> pipeline, bool rsCompat);
-
-    void updateParams(const std::vector<rclcpp::Parameter>& params);
+    std::vector<std::unique_ptr<dai_nodes::BaseNode>> createPipeline(std::shared_ptr<rclcpp::Node> node,
+                                                                     std::shared_ptr<dai::Device> device,
+                                                                     std::shared_ptr<dai::Pipeline> pipeline,
+                                                                     const std::string& pipelineType,
+                                                                     const std::string& nnType);
 
    protected:
     std::unordered_map<std::string, std::string> pluginTypeMap;
     std::unordered_map<std::string, PipelineType> pipelineTypeMap;
 
    private:
-    std::shared_ptr<param_handlers::PipelineGenParamHandler> ph;
-    std::shared_ptr<pluginlib::ClassLoader<BasePipeline>> pipelineLoader;
-    std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
+    std::unique_ptr<param_handlers::PipelineGenParamHandler> ph;
 };
 }  // namespace pipeline_gen
 }  // namespace depthai_ros_driver

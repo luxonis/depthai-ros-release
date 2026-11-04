@@ -22,7 +22,7 @@ def launch_setup(context, *args, **kwargs):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(depthai_prefix, "launch", "driver.launch.py")
+                os.path.join(depthai_prefix, "launch", "camera.launch.py")
             ),
             launch_arguments={
                 "name": name,
@@ -42,9 +42,12 @@ def launch_setup(context, *args, **kwargs):
             composable_node_descriptions=[
                 ComposableNode(
                     package="depth_image_proc",
-                    plugin="depth_image_proc::PointCloudXyzNode",
-                    name="point_cloud_xyz",
-                    remappings=[ ("image_rect", name + "/stereo/image_raw"),
+                    plugin="depth_image_proc::PointCloudXyziNode",
+                    name="point_cloud_xyzi",
+                    remappings=[
+                        ("depth/image_rect", name + "/stereo/image_raw"),
+                        ("intensity/image_rect", name + "/right/image_rect"),
+                        ("intensity/camera_info", name + "/stereo/camera_info"),
                         ("points", name + "/points"),
                     ],
                 ),
@@ -57,7 +60,7 @@ def generate_launch_description():
     depthai_prefix = get_package_share_directory("depthai_ros_driver")
     declared_arguments = [
         DeclareLaunchArgument("name", default_value="oak"),
-        DeclareLaunchArgument("parent_frame", default_value="oak_parent_frame"),
+        DeclareLaunchArgument("parent_frame", default_value="oak-d-base-frame"),
         DeclareLaunchArgument("cam_pos_x", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_y", default_value="0.0"),
         DeclareLaunchArgument("cam_pos_z", default_value="0.0"),

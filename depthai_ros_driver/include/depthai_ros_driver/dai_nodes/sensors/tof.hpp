@@ -1,7 +1,5 @@
 #pragma once
 
-#include <depthai/common/CameraBoardSocket.hpp>
-
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 
@@ -11,8 +9,10 @@ class Device;
 class DataInputQueue;
 class ADatatype;
 namespace node {
+class Camera;
 class ToF;
 class ImageAlign;
+class XLinkIn;
 }  // namespace node
 }  // namespace dai
 
@@ -35,31 +35,25 @@ class ToF : public BaseNode {
     explicit ToF(const std::string& daiNodeName,
                  std::shared_ptr<rclcpp::Node> node,
                  std::shared_ptr<dai::Pipeline> pipeline,
-                 const std::string& deviceName,
-                 bool rsCompat,
                  dai::CameraBoardSocket boardSocket = dai::CameraBoardSocket::CAM_A);
     ~ToF();
+    void updateParams(const std::vector<rclcpp::Parameter>& params) override;
     void setupQueues(std::shared_ptr<dai::Device> device) override;
-    void link(dai::Node::Input& in, int linkType = 0) override;
+    void link(dai::Node::Input in, int linkType = 0) override;
+    dai::Node::Input getInput(int linkType = 0) override;
     void setNames() override;
-    void setInOut(std::shared_ptr<dai::Pipeline> pipeline) override;
-    dai::Node::Input& getInput(int linkType = 0) override;
+    void setXinXout(std::shared_ptr<dai::Pipeline> pipeline) override;
     std::vector<std::shared_ptr<sensor_helpers::ImagePublisher>> getPublishers() override;
     void closeQueues() override;
-    std::shared_ptr<dai::node::ToF> getUnderlyingNode();
-    dai::CameraBoardSocket getSocketID();
-    dai::CameraBoardSocket getAlignedSocketID();
-    bool isAligned();
 
    private:
     std::shared_ptr<sensor_helpers::ImagePublisher> tofPub;
+    std::shared_ptr<dai::node::Camera> camNode;
     std::shared_ptr<dai::node::ToF> tofNode;
     std::shared_ptr<dai::node::ImageAlign> alignNode;
     std::unique_ptr<param_handlers::ToFParamHandler> ph;
     dai::CameraBoardSocket boardSocket;
-    dai::CameraBoardSocket alignedSocket;
     std::string tofQName;
-    bool aligned;
 };
 
 }  // namespace dai_nodes
