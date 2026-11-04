@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(depthai_ros_driver VERSION 2.12.2)
+project(depthai_ros_driver VERSION 2.13.0)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_BUILD_SHARED_LIBS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -40,6 +40,7 @@ depthai
 depthai_bridge 
 rclcpp  
 std_msgs 
+std_srvs 
 sensor_msgs 
 image_transport)
 
@@ -133,6 +134,16 @@ add_executable(
 	src/camera_node.cpp)
 ament_target_dependencies(camera_node ${CAM_DEPS} ${COMMON_DEPS} ${SENSOR_DEPS} ${NN_DEPS})
 target_link_libraries(camera_node ${PROJECT_NAME} ${SENSOR_LIB_NAME} ${NN_LIB_NAME} ${COMMON_LIB_NAME})
+
+# Dependencies such as diagnostic_updater export the entire ROS include directory.
+# Search the selected SDK first so a co-installed DepthAI v3 cannot shadow v2.
+foreach(target ${COMMON_LIB_NAME} ${SENSOR_LIB_NAME} ${NN_LIB_NAME} ${PROJECT_NAME})
+  target_include_directories(${target} SYSTEM BEFORE PUBLIC
+    $<TARGET_PROPERTY:depthai::core,INTERFACE_INCLUDE_DIRECTORIES>)
+endforeach()
+target_include_directories(camera_node SYSTEM BEFORE PRIVATE
+  $<TARGET_PROPERTY:depthai::core,INTERFACE_INCLUDE_DIRECTORIES>)
+
 rclcpp_components_register_nodes(${PROJECT_NAME} "${PROJECT_NAME}::Camera")
 pluginlib_export_plugin_description_file(${PROJECT_NAME} plugins.xml)
 ament_export_include_directories(include)
